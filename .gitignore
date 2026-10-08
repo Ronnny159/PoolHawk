@@ -1,0 +1,139 @@
+# ══════════════════════════════════════════════════════════
+# PoolHawk - .gitignore
+# Cubre: Java, Maven, Python, Node, Vue, IDE, OS, Docker
+# ══════════════════════════════════════════════════════════
+
+# ────────────── JAVA / MAVEN ──────────────
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# ────────────── PYTHON ──────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ────────────── NODE / VUE ──────────────
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+.npm/
+.yarn/
+.pnp.*
+.npmrc
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ────────────── IDE ──────────────
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# NetBeans
+nbproject/private/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+
+# ────────────── OS ──────────────
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# ────────────── DOCKER ──────────────
+*.pid
+*.seed
+*.pid.lock
+
+# ────────────── ENV / SECRETS ──────────────
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ────────────── DATOS / STORAGE LOCAL ──────────────
+data/
+logs/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# ────────────── BUILD OUTPUTS VARIOS ──────────────
+*.tmp
+*.bak
+*.swp
+*~
+.cache/
