@@ -1,4 +1,4 @@
-package main.java.com.poolhawk.domain.table;
+package com.poolhawk.domain.table;
 
 import java.util.Objects;
 
