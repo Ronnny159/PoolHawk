@@ -229,4 +229,37 @@ class ResultadoTiroTest {
             assertFalse(victoria.fueNeutro());
         }
     }
+
+    @Test
+    @DisplayName("Las cuatro categorías son mutuamente excluyentes")
+    void categoriasExcluyentes() {
+        ResultadoTiro neutro = ResultadoTiro.tiroLegalSinPuntos();
+        ResultadoTiro exitoso = ResultadoTiro.tiroLegalConPuntos(3);
+        ResultadoTiro falta = ResultadoTiro.falta(FaltaMotivo.NO_TOCAR_BOLA);
+        ResultadoTiro victoria = ResultadoTiro.victoria(2);
+
+        // Neutro: solo fueNeutro
+        assertTrue(neutro.fueNeutro());
+        assertFalse(neutro.fueExitoso());
+        assertFalse(neutro.esFalta());
+        assertFalse(neutro.esVictoria());
+
+        // Exitoso: solo fueExitoso
+        assertFalse(exitoso.fueNeutro());
+        assertTrue(exitoso.fueExitoso());
+        assertFalse(exitoso.esFalta());
+        assertFalse(exitoso.esVictoria());
+
+        // Falta: solo esFalta
+        assertFalse(falta.fueNeutro());
+        assertFalse(falta.fueExitoso());
+        assertTrue(falta.esFalta());
+        assertFalse(falta.esVictoria());
+
+        // Victoria: solo esVictoria
+        assertFalse(victoria.fueNeutro());
+        assertFalse(victoria.fueExitoso());
+        assertFalse(victoria.esFalta());
+        assertTrue(victoria.esVictoria());
+    }
 }

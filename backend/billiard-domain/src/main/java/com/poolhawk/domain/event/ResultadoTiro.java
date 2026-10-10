@@ -180,7 +180,7 @@ public record ResultadoTiro(
      * @return {@code true} si no fue falta y sumó al menos 1 punto
      */
     public boolean fueExitoso() {
-        return !esFalta && puntos > 0;
+        return !esFalta && !esVictoria && puntos > 0;
     }
 
     /**
@@ -189,6 +189,6 @@ public record ResultadoTiro(
      * @return {@code true} si no fue falta y sumó 0 puntos
      */
     public boolean fueNeutro() {
-        return !esFalta && puntos == 0;
+        return !esFalta && !esVictoria && puntos == 0;
     }
 }
