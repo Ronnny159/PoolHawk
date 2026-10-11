@@ -275,4 +275,66 @@ class ReglasBola8Test {
             assertEquals(ANA, reglas.determinarGanador(estado));
         }
     }
+
+    @Nested
+    @DisplayName("Casos borde adicionales")
+    class CasosBorde {
+
+        @Test
+        @DisplayName("Falta por tiro fuera de shot clock")
+        void faltaPorShotClock() {
+            ReglasConfig config = new ReglasConfig(
+                false, Duration.ofSeconds(10), false, 50);
+            ReglasBola8 reglasConClock = new ReglasBola8(config);
+
+            TiroEvent tiroLargo = new TiroEvent(
+                "evt-largo", PARTIDA_ID, ANA, bola(1),
+                List.of(), List.of(), Instant.now(), Duration.ofSeconds(20));
+
+            ResultadoTiro r = reglasConClock.evaluar(estado, tiroLargo);
+            assertTrue(r.esFalta());
+            assertEquals(FaltaMotivo.TIEMPO_EXCEDIDO, r.motivo());
+        }
+
+        @Test
+        @DisplayName("Tiro legal con múltiples bolas embolsadas")
+        void tiroConMultiplesEmbolsadas() {
+            estado.asignarGrupo(ANA, Grupo.LISAS);
+            estado.asignarGrupo(BETO, Grupo.RAYADAS);
+
+            TiroEvent t = tiro(ANA, bola(1),
+                List.of(bola(1), bola(2), bola(3)),
+                List.of(TroneraNombre.TOP_LEFT, TroneraNombre.TOP_RIGHT,
+                    TroneraNombre.MIDDLE_LEFT));
+
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            assertFalse(r.esFalta());
+            assertFalse(r.cambiaTurno());  // sigue tirando
+        }
+
+        @Test
+        @DisplayName("Partida terminada sin ganador (abandonada)")
+        void partidaAbandonada() {
+            estado.abandonar();
+            assertTrue(reglas.partidaTerminada(estado));
+            assertNull(reglas.determinarGanador(estado));
+        }
+
+        @Test
+        @DisplayName("Victoria se detecta correctamente")
+        void victoriaDetectada() {
+            estado.asignarGrupo(ANA, Grupo.LISAS);
+            estado.asignarGrupo(BETO, Grupo.RAYADAS);
+            for (int i = 1; i <= 7; i++) {
+                mesa.embolsarBola(i);
+            }
+
+            TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+
+            assertTrue(r.esVictoria());
+            assertFalse(r.esFalta());
+            assertFalse(r.fueExitoso());  // victoria no es "tiro exitoso normal"
+        }
+    }
 }
