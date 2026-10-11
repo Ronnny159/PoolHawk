@@ -15,28 +15,42 @@ import java.util.Objects;
  *   <li><b>Call shot:</b> obliga a cantar bola y tronera en cada tiro.</li>
  *   <li><b>Shot clock:</b> límite de tiempo por tiro.</li>
  *   <li><b>Three fouls penalty:</b> penalización por tres faltas consecutivas.</li>
+ *   <li><b>Puntaje objetivo:</b> puntos necesarios para ganar en la modalidad
+ *       Por Puntos.</li>
  * </ul>
  *
  * @param callShot          si {@code true}, se debe cantar la tronera
  * @param shotClock         duración máxima por tiro, o {@code null} si no hay límite
  * @param threeFoulsPenalty si {@code true}, tres faltas consecutivas penalizan
+ * @param puntajeObjetivo   puntos necesarios para ganar en Por Puntos
  * @author PoolHawk Team
  * @since 0.1.0
  */
 public record ReglasConfig(
         boolean callShot,
         Duration shotClock,
-        boolean threeFoulsPenalty) {
+        boolean threeFoulsPenalty,
+        int puntajeObjetivo) {
+
+    /** Puntaje objetivo por defecto para la modalidad Por Puntos. */
+    public static final int PUNTAJE_OBJETIVO_DEFECTO = 50;
 
     /**
      * Constructor compacto con validaciones.
      *
      * @throws IllegalArgumentException si el shotClock es negativo
+     *                                  o el puntaje objetivo es menor a 1
      */
     public ReglasConfig {
         if (shotClock != null && shotClock.isNegative()) {
             throw new IllegalArgumentException(
                 "El shot clock no puede ser negativo. Valor recibido: " + shotClock
+            );
+        }
+        if (puntajeObjetivo < 1) {
+            throw new IllegalArgumentException(
+                "El puntaje objetivo debe ser al menos 1. " +
+                "Valor recibido: " + puntajeObjetivo
             );
         }
     }
@@ -47,7 +61,7 @@ public record ReglasConfig(
      * @return configuración oficial estándar
      */
     public static ReglasConfig porDefecto() {
-        return new ReglasConfig(false, null, false);
+        return new ReglasConfig(false, null, false, PUNTAJE_OBJETIVO_DEFECTO);
     }
 
     /**
@@ -56,16 +70,19 @@ public record ReglasConfig(
      * @return configuración con call shot
      */
     public static ReglasConfig conCallShot() {
-        return new ReglasConfig(true, null, false);
+        return new ReglasConfig(true, null, false, PUNTAJE_OBJETIVO_DEFECTO);
     }
 
     /**
-     * Configuración de torneo: call shot + shot clock de 45 segundos.
+     * Configuración de torneo: call shot + shot clock de 45 segundos
+     * + penalización por tres faltas.
      *
      * @return configuración de torneo
      */
     public static ReglasConfig deTorneo() {
-        return new ReglasConfig(true, Duration.ofSeconds(45), true);
+        return new ReglasConfig(
+            true, Duration.ofSeconds(45), true, PUNTAJE_OBJETIVO_DEFECTO
+        );
     }
 
     /**
