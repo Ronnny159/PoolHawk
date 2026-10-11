@@ -60,13 +60,11 @@ class ReglasFactoryTest {
         }
 
         @Test
-        @DisplayName("Por Puntos aún no está implementada")
-        void porPuntosNoImplementada() {
-            UnsupportedOperationException ex = assertThrows(
-                UnsupportedOperationException.class,
-                () -> ReglasFactory.crear(TipoModalidad.POR_PUNTOS)
-            );
-            assertTrue(ex.getMessage().contains("feature/rules-porpuntos"));
+        @DisplayName("Por Puntos se crea correctamente")
+        void porPuntosImplementada() {
+            ReglasBillar reglas = ReglasFactory.crear(TipoModalidad.POR_PUNTOS);
+            assertNotNull(reglas);
+            assertEquals("Por Puntos", reglas.getNombreModalidad());
         }
     }
 }
