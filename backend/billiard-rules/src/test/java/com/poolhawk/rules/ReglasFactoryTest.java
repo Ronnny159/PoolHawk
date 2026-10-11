@@ -48,17 +48,15 @@ class ReglasFactoryTest {
     }
 
     @Nested
-    @DisplayName("Modalidades no implementadas aún")
-    class NoImplementadas {
+    @DisplayName("Modalidades")
+    class Modalidades {
 
         @Test
-        @DisplayName("Bola 8 aún no está implementada")
-        void bola8NoImplementada() { 
-            UnsupportedOperationException ex = assertThrows(
-                UnsupportedOperationException.class,
-                () -> ReglasFactory.crear(TipoModalidad.BOLA_8)
-            );
-            assertTrue(ex.getMessage().contains("feature/rules-bola8"));
+        @DisplayName("Bola 8 se crea correctamente")
+        void bola8Implementada() {
+            ReglasBillar reglas = ReglasFactory.crear(TipoModalidad.BOLA_8);
+            assertNotNull(reglas);
+            assertEquals("Bola 8", reglas.getNombreModalidad());
         }
 
         @Test
