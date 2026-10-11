@@ -285,7 +285,7 @@ class PartidaTest {
         @DisplayName("Aplicar tiro legal sin puntos cambia turno")
         void tiroLegalSinPuntos() {
             TiroEvent evento = tiroDe(ANA);
-            ResultadoTiro resultado = ResultadoTiro.tiroLegalSinPuntos();
+            ResultadoTiro resultado = ResultadoTiro.tiroLegalSinPuntos(true);
 
             partidaIndividual.aplicarTiro(evento, resultado);
 

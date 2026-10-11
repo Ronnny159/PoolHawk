@@ -92,12 +92,12 @@ public record ResultadoTiro(
      *
      * @return resultado legal, 0 puntos, con cambio de turno
      */
-    public static ResultadoTiro tiroLegalSinPuntos() {
+    public static ResultadoTiro tiroLegalSinPuntos(boolean cambiaTurno) {
         return new ResultadoTiro(
             false,
             null,
             0,
-            true,
+            cambiaTurno,
             false,
             "Tiro legal sin embolsar bolas"
         );

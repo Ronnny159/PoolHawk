@@ -87,7 +87,7 @@ class ResultadoTiroTest {
         @Test
         @DisplayName("Crea un resultado legal sin puntos")
         void creaResultado() {
-            ResultadoTiro resultado = ResultadoTiro.tiroLegalSinPuntos();
+            ResultadoTiro resultado = ResultadoTiro.tiroLegalSinPuntos(true);
 
             assertFalse(resultado.esFalta());
             assertNull(resultado.motivo());
@@ -210,8 +210,8 @@ class ResultadoTiroTest {
         @Test
         @DisplayName("fueNeutro con tiro legal sin puntos")
         void neutro() {
-            assertTrue(ResultadoTiro.tiroLegalSinPuntos().fueNeutro());
-            assertFalse(ResultadoTiro.tiroLegalSinPuntos().fueExitoso());
+            assertTrue(ResultadoTiro.tiroLegalSinPuntos(true).fueNeutro());
+            assertFalse(ResultadoTiro.tiroLegalSinPuntos(true).fueExitoso());
         }
 
         @Test
@@ -233,7 +233,7 @@ class ResultadoTiroTest {
     @Test
     @DisplayName("Las cuatro categorías son mutuamente excluyentes")
     void categoriasExcluyentes() {
-        ResultadoTiro neutro = ResultadoTiro.tiroLegalSinPuntos();
+        ResultadoTiro neutro = ResultadoTiro.tiroLegalSinPuntos(true);
         ResultadoTiro exitoso = ResultadoTiro.tiroLegalConPuntos(3);
         ResultadoTiro falta = ResultadoTiro.falta(FaltaMotivo.NO_TOCAR_BOLA);
         ResultadoTiro victoria = ResultadoTiro.victoria(2);
