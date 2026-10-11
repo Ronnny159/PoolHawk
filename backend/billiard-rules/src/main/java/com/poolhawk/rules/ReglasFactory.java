@@ -1,6 +1,8 @@
 package com.poolhawk.rules;
 
 import com.poolhawk.domain.match.TipoModalidad;
+import com.poolhawk.rules.impl.ReglasBola8;
+import com.poolhawk.rules.impl.ReglasPorPuntos;
 
 import java.util.Objects;
 
@@ -11,10 +13,6 @@ import java.util.Objects;
  * creación de las implementaciones de reglas. El código cliente no
  * necesita saber qué clase concreta instanciar; solo indica la modalidad
  * y la configuración deseada.</p>
- *
- * <p><b>Nota:</b> las implementaciones concretas se agregarán en ramas
- * posteriores. Por ahora la fábrica lanza una excepción controlada para
- * las modalidades aún no implementadas.</p>
  *
  * @author PoolHawk Team
  * @since 0.1.0
@@ -36,16 +34,15 @@ public final class ReglasFactory {
      * @param modalidad modalidad de la partida
      * @param config    configuración de reglas opcionales
      * @return instancia de reglas para la modalidad
-     * @throws NullPointerException     si algún parámetro es nulo
-     * @throws IllegalArgumentException si la modalidad no está soportada
+     * @throws NullPointerException si algún parámetro es nulo
      */
     public static ReglasBillar crear(TipoModalidad modalidad, ReglasConfig config) {
         Objects.requireNonNull(modalidad, "La modalidad no puede ser nula");
         Objects.requireNonNull(config, "La configuración no puede ser nula");
 
         return switch (modalidad) {
-            case BOLA_8 -> crearReglasBola8(config);
-            case POR_PUNTOS -> crearReglasPorPuntos(config);
+            case BOLA_8 -> new ReglasBola8(config);
+            case POR_PUNTOS -> new ReglasPorPuntos(config);
         };
     }
 
@@ -57,33 +54,5 @@ public final class ReglasFactory {
      */
     public static ReglasBillar crear(TipoModalidad modalidad) {
         return crear(modalidad, ReglasConfig.porDefecto());
-    }
-
-    /**
-     * Crea las reglas de Bola 8.
-     *
-     * <p><b>TODO:</b> implementar en la rama {@code feature/rules-bola8}.</p>
-     *
-     * @param config configuración de reglas
-     * @return instancia de reglas de Bola 8
-     */
-    private static ReglasBillar crearReglasBola8(ReglasConfig config) {
-        throw new UnsupportedOperationException(
-            "Las reglas de Bola 8 se implementarán en la rama feature/rules-bola8"
-        );
-    }
-
-    /**
-     * Crea las reglas de Por Puntos.
-     *
-     * <p><b>TODO:</b> implementar en la rama {@code feature/rules-porpuntos}.</p>
-     *
-     * @param config configuración de reglas
-     * @return instancia de reglas de Por Puntos
-     */
-    private static ReglasBillar crearReglasPorPuntos(ReglasConfig config) {
-        throw new UnsupportedOperationException(
-            "Las reglas de Por Puntos se implementarán en la rama feature/rules-porpuntos"
-        );
     }
 }

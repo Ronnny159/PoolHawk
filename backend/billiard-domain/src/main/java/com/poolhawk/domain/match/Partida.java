@@ -169,25 +169,20 @@ public class Partida {
     // GETTERS
     // ═══════════════════════════════════════════════════════════
 
-    public String getId() {
-        return id;
-    }
+    /** @return identificador único de la partida */
+    public String getId() { return id; }
 
-    public TipoModalidad getModalidad() {
-        return modalidad;
-    }
+    /** @return modalidad de la partida */
+    public TipoModalidad getModalidad() { return modalidad; }
 
-    public Equipo getEquipoA() {
-        return equipoA;
-    }
+    /** @return primer equipo participante */
+    public Equipo getEquipoA() { return equipoA; }
 
-    public Equipo getEquipoB() {
-        return equipoB;
-    }
+    /** @return segundo equipo participante */
+    public Equipo getEquipoB() { return equipoB; }
 
-    public Instant getFechaCreacion() {
-        return fechaCreacion;
-    }
+    /** @return momento en que se creó la partida */
+    public Instant getFechaCreacion() { return fechaCreacion; }
 
     /**
      * Retorna el estado actual de la partida.

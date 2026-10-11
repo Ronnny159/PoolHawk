@@ -98,33 +98,26 @@ public class MatchState {
     // GETTERS BÁSICOS
     // ═══════════════════════════════════════════════════════════
 
-    public String getPartidaId() {
-        return partidaId;
-    }
+    /** @return identificador de la partida */
+    public String getPartidaId() { return partidaId; }
 
-    public TipoModalidad getModalidad() {
-        return modalidad;
-    }
+    /** @return modalidad de la partida */
+    public TipoModalidad getModalidad() { return modalidad; }
 
-    public Turnos getTurnos() {
-        return turnos;
-    }
+    /** @return gestor de turnos */
+    public Turnos getTurnos() { return turnos; }
 
-    public Mesa getMesa() {
-        return mesa;
-    }
+    /** @return mesa con las bolas */
+    public Mesa getMesa() { return mesa; }
 
-    public Instant getFechaInicio() {
-        return fechaInicio;
-    }
+    /** @return momento en que inició la partida */
+    public Instant getFechaInicio() { return fechaInicio; }
 
-    public FasePartida getFase() {
-        return fase;
-    }
+    /** @return fase actual de la partida */
+    public FasePartida getFase() { return fase; }
 
-    public Jugador getGanador() {
-        return ganador;
-    }
+    /** @return ganador de la partida, o {@code null} si no terminó */
+    public Jugador getGanador() { return ganador; }
 
     // ═══════════════════════════════════════════════════════════
     // CONSULTAS DE ESTADO

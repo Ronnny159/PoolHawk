@@ -88,9 +88,10 @@ public record ResultadoTiro(
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * Crea un resultado de tiro legal sin puntos (el jugador no embolsó).
+     * Crea un resultado de tiro legal sin puntos.
      *
-     * @return resultado legal, 0 puntos, con cambio de turno
+     * @param cambiaTurno {@code true} si tras este tiro pasa el turno
+     * @return resultado legal, 0 puntos
      */
     public static ResultadoTiro tiroLegalSinPuntos(boolean cambiaTurno) {
         return new ResultadoTiro(
