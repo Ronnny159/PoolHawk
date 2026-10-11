@@ -403,7 +403,7 @@ class MatchStateTest {
         @DisplayName("Aplicar tiro legal sin puntos cambia turno")
         void tiroLegalSinPuntos() {
             TiroEvent evento = tiroDe(ANA);
-            ResultadoTiro resultado = ResultadoTiro.tiroLegalSinPuntos();
+            ResultadoTiro resultado = ResultadoTiro.tiroLegalSinPuntos(true);
 
             state.aplicarTiro(evento, resultado);
 
@@ -451,7 +451,7 @@ class MatchStateTest {
         @DisplayName("Aplicar tiro nulo lanza excepción")
         void aplicarTiroNulo() {
             assertThrows(NullPointerException.class,
-                () -> state.aplicarTiro(null, ResultadoTiro.tiroLegalSinPuntos()));
+                () -> state.aplicarTiro(null, ResultadoTiro.tiroLegalSinPuntos(false)));
         }
 
         @Test
