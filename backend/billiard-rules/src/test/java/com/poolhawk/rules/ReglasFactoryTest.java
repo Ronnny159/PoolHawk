@@ -39,9 +39,11 @@ class ReglasFactoryTest {
         }
 
         @Test
-        @DisplayName("No se puede instanciar la fábrica")
-        void noInstanciable() {
-            assertThrows(Exception.class, ReglasFactory::new);
+        @DisplayName("No se puede instanciar la fábrica por reflexión")
+        void noInstanciable() throws NoSuchMethodException {
+            var constructor = ReglasFactory.class.getDeclaredConstructor();
+            assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()),
+                "El constructor de ReglasFactory debe ser privado");
         }
     }
 
