@@ -90,14 +90,14 @@ public record ResultadoTiro(
     /**
      * Crea un resultado de tiro legal sin puntos (el jugador no embolsó).
      *
-     * @return resultado legal, 0 puntos, sin cambio de turno
+     * @return resultado legal, 0 puntos, con cambio de turno
      */
     public static ResultadoTiro tiroLegalSinPuntos() {
         return new ResultadoTiro(
             false,
             null,
             0,
-            false,
+            true,
             false,
             "Tiro legal sin embolsar bolas"
         );

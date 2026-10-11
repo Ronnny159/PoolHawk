@@ -92,7 +92,7 @@ class ResultadoTiroTest {
             assertFalse(resultado.esFalta());
             assertNull(resultado.motivo());
             assertEquals(0, resultado.puntos());
-            assertFalse(resultado.cambiaTurno());
+            assertTrue(resultado.cambiaTurno());
             assertFalse(resultado.esVictoria());
             assertTrue(resultado.fueNeutro());
         }
