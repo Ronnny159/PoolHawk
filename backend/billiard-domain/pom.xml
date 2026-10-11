@@ -6,9 +6,14 @@
 
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.poolhawk</groupId>
+    <parent>
+        <groupId>com.poolhawk</groupId>
+        <artifactId>billiard-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
     <artifactId>billiard-domain</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>PoolHawk - Billiard Domain</name>
@@ -17,16 +22,7 @@
         de valor del negocio del billar, sin dependencias de frameworks.
     </description>
 
-    <properties>
-        <maven.compiler.release>21</maven.compiler.release>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-
-        <junit.version>5.10.2</junit.version>
-        <surefire.version>3.2.5</surefire.version>
-    </properties>
-
     <dependencies>
-        <!-- Única dependencia permitida en el dominio: JUnit para tests -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
