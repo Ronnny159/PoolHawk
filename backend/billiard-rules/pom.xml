@@ -13,16 +13,25 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>billiard-domain</artifactId>
+    <artifactId>billiard-rules</artifactId>
     <packaging>jar</packaging>
 
-    <name>PoolHawk - Billiard Domain</name>
+    <name>PoolHawk - Billiard Rules</name>
     <description>
-        Módulo de dominio puro de PoolHawk. Contiene las entidades y objetos
-        de valor del negocio del billar, sin dependencias de frameworks.
+        Motor de reglas de PoolHawk. Implementa las reglas de las modalidades
+        Bola 8 y Por Puntos, aplicando el patrón Strategy sobre una clase
+        base común (Template Method).
     </description>
 
     <dependencies>
+        <!-- Dependencia del módulo de dominio -->
+        <dependency>
+            <groupId>com.poolhawk</groupId>
+            <artifactId>billiard-domain</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+        </dependency>
+
+        <!-- JUnit para tests -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
