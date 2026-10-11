@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.poolhawk</groupId>
+        <artifactId>billiard-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>billiard-rules</artifactId>
+    <packaging>jar</packaging>
+
+    <name>PoolHawk - Billiard Rules</name>
+    <description>
+        Motor de reglas de PoolHawk. Implementa las reglas de las modalidades
+        Bola 8 y Por Puntos, aplicando el patrón Strategy sobre una clase
+        base común (Template Method).
+    </description>
+
+    <dependencies>
+        <!-- Dependencia del módulo de dominio -->
+        <dependency>
+            <groupId>com.poolhawk</groupId>
+            <artifactId>billiard-domain</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+        </dependency>
+
+        <!-- JUnit para tests -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${surefire.version}</version>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
