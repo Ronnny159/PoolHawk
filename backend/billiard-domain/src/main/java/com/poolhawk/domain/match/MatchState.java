@@ -416,9 +416,9 @@ public class MatchState {
         Objects.requireNonNull(evento, "El evento no puede ser nulo");
         Objects.requireNonNull(resultado, "El resultado no puede ser nulo");
 
-        if (!estaActiva()) {
+        if (fase != FasePartida.EN_CURSO) {
             throw new IllegalStateException(
-                "Solo se pueden aplicar tiros a una partida activa. " +
+                "Solo se pueden aplicar tiros a una partida EN_CURSO. " +
                 "Fase actual: " + fase
             );
         }
