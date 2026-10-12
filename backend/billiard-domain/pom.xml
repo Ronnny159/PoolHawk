@@ -18,7 +18,7 @@
 
     <name>PoolHawk - Billiard Domain</name>
     <description>
-        Módulo de dominio puro de PoolHawk. Contiene las entidades y objetos
+        Modulo de dominio puro de PoolHawk. Contiene las entidades y objetos
         de valor del negocio del billar, sin dependencias de frameworks.
     </description>
 
@@ -30,15 +30,5 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>${surefire.version}</version>
-            </plugin>
-        </plugins>
-    </build>
 
 </project>
