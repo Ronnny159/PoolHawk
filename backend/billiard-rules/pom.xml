@@ -19,19 +19,16 @@
     <name>PoolHawk - Billiard Rules</name>
     <description>
         Motor de reglas de PoolHawk. Implementa las reglas de las modalidades
-        Bola 8 y Por Puntos, aplicando el patrón Strategy sobre una clase
-        base común (Template Method).
+        Bola 8 y Por Puntos, aplicando el patron Strategy sobre una clase
+        base comun (Template Method).
     </description>
 
     <dependencies>
-        <!-- Dependencia del módulo de dominio -->
         <dependency>
             <groupId>com.poolhawk</groupId>
             <artifactId>billiard-domain</artifactId>
-            <version>0.1.0-SNAPSHOT</version>
         </dependency>
 
-        <!-- JUnit para tests -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -39,15 +36,5 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>${surefire.version}</version>
-            </plugin>
-        </plugins>
-    </build>
 
 </project>
