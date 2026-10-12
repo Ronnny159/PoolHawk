@@ -236,4 +236,57 @@ class ReglasPorPuntosTest {
             assertEquals(ANA, reglas.determinarGanador(estado));
         }
     }
+
+    @Nested
+    @DisplayName("Casos borde adicionales")
+    class CasosBorde {
+
+        @Test
+        @DisplayName("Falta por shot clock excedido")
+        void faltaPorShotClock() {
+            ReglasConfig config = new ReglasConfig(
+                false, Duration.ofSeconds(10), false, 50);
+            ReglasPorPuntos reglasConClock = new ReglasPorPuntos(config);
+
+            TiroEvent tiroLargo = new TiroEvent(
+                "evt-largo", PARTIDA_ID, ANA, bola(1),
+                List.of(), List.of(), Instant.now(), Duration.ofSeconds(20));
+
+            ResultadoTiro r = reglasConClock.evaluar(estado, tiroLargo);
+            assertTrue(r.esFalta());
+            assertEquals(FaltaMotivo.TIEMPO_EXCEDIDO, r.motivo());
+        }
+
+        @Test
+        @DisplayName("Falta si toca primero la 8 quedando otras bolas")
+        void tocaOchoConBolasEnMesa() {
+            TiroEvent t = tiro(ANA, bola(8), List.of());
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            assertTrue(r.esFalta());
+            assertEquals(FaltaMotivo.BOLA_EQUIVOCADA, r.motivo());
+        }
+
+        @Test
+        @DisplayName("Acierta al ganar con puntaje exacto")
+        void victoriaConPuntajeExacto() {
+            for (int i = 0; i < 49; i++) {
+                estado.sumarPuntos(ANA, 1);
+            }
+            // Ana tiene 49; un tiro de 1 punto la lleva a 50
+            TiroEvent t = tiro(ANA, bola(1), List.of(bola(1)));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+
+            assertTrue(r.esVictoria());
+            assertEquals(1, r.puntos());
+        }
+
+        @Test
+        @DisplayName("Partida terminada sin ganador cuando nadie llega al objetivo")
+        void sinGanador() {
+            estado.sumarPuntos(ANA, 10);
+            estado.sumarPuntos(BETO, 15);
+            assertFalse(reglas.partidaTerminada(estado));
+            assertNull(reglas.determinarGanador(estado));
+        }
+    }
 }
