@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: poolhawk-api
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.poolhawk: DEBUG
+    org.springframework.web: INFO
