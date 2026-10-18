@@ -1,6 +1,6 @@
 *(El Diagrama de Actividades - Punto 8 de Patricia. Muestra la lógica de decisión de la API).*
 
-```markdown
+
 # Diagrama de Actividades (Procesar un Tiro)
 
 ```mermaid
