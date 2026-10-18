@@ -1,6 +1,6 @@
 *(El Diagrama de Secuencia - Punto 10 de Patricia. Muestra cómo viaja un tiro desde el usuario hasta la base de datos).*
 
-```markdown
+
 # Diagrama de Secuencia (Registrar Tiro)
 
 ```mermaid
