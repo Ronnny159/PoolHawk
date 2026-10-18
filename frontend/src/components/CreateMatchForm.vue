@@ -40,324 +40,320 @@ const crear = async () => {
 </script>
 
 <template>
-  <div class="form-container">
-    <div class="header-form">
-      <h2>Nueva Partida</h2>
-      <div class="selector-modalidad">
-        <button
-          :class="{ active: modalidad === 'BOLA_8' }"
-          @click="modalidad = 'BOLA_8'">
-          Bola 8
-        </button>
-        <button
-          :class="{ active: modalidad === 'POR_PUNTOS' }"
-          @click="modalidad = 'POR_PUNTOS'">
-          Por Puntos
-        </button>
-      </div>
-    </div>
+  <div class="mesa-wrapper">
+    <div class="form-container">
 
-    <div class="equipos-container">
-      <!-- EQUIPO A (Bola 1 - Amarilla) -->
-      <div class="bola-equipo equipo-a">
-        <div class="centro-blanco">
-          <label>Equipo A</label>
-          <input v-model="jugadorA1" placeholder="Jugador 1" maxlength="12" />
-          <input v-if="modalidad === 'POR_PUNTOS'" v-model="jugadorA2" placeholder="Jugador 2" maxlength="12" />
+      <!-- CABECERA -->
+      <div class="header-form">
+        <h2>NUEVA PARTIDA</h2>
+        <p class="subtitulo-form">Configura tu mesa y prepara el taco</p>
+
+        <div class="selector-modalidad">
+          <button
+            :class="{ active: modalidad === 'BOLA_8' }"
+            @click="modalidad = 'BOLA_8'">
+            Bola 8
+          </button>
+          <button
+            :class="{ active: modalidad === 'POR_PUNTOS' }"
+            @click="modalidad = 'POR_PUNTOS'">
+            Por Puntos
+          </button>
         </div>
       </div>
 
-      <!-- EQUIPO B (Bola 2 - Azul) -->
-      <div class="bola-equipo equipo-b">
-        <div class="centro-blanco">
-          <label>Equipo B</label>
-          <input v-model="jugadorB1" placeholder="Jugador 1" maxlength="12" />
-          <input v-if="modalidad === 'POR_PUNTOS'" v-model="jugadorB2" placeholder="Jugador 2" maxlength="12" />
+      <!-- BOLAS / EQUIPOS -->
+      <div class="equipos-container">
+        <!-- EQUIPO A (Bola 1 - Amarilla) -->
+        <div class="bola-wrapper">
+          <div class="bola-equipo equipo-a">
+            <div class="brillo" aria-hidden="true"></div>
+            <div class="centro-blanco">
+              <label>Equipo A</label>
+              <input v-model="jugadorA1" placeholder="Jugador 1" maxlength="12" />
+              <input v-if="modalidad === 'POR_PUNTOS'" v-model="jugadorA2" placeholder="Jugador 2" maxlength="12" />
+            </div>
+          </div>
+        </div>
+
+        <!-- VS -->
+        <div class="vs-badge" aria-hidden="true">VS</div>
+
+        <!-- EQUIPO B (Bola 2 - Azul) -->
+        <div class="bola-wrapper">
+          <div class="bola-equipo equipo-b">
+            <div class="brillo" aria-hidden="true"></div>
+            <div class="centro-blanco">
+              <label>Equipo B</label>
+              <input v-model="jugadorB1" placeholder="Jugador 1" maxlength="12" />
+              <input v-if="modalidad === 'POR_PUNTOS'" v-model="jugadorB2" placeholder="Jugador 2" maxlength="12" />
+            </div>
+          </div>
         </div>
       </div>
+
+      <!-- ERROR (feedback con borde izquierdo rojo) -->
+      <p v-if="error" class="error" role="alert">{{ error }}</p>
+
+      <!-- CTA -->
+      <button class="btn-iniciar" @click="crear" :disabled="cargando">
+        {{ cargando ? 'CREANDO...' : 'INICIAR PARTIDA' }}
+      </button>
     </div>
-
-    <p v-if="error" class="error">{{ error }}</p>
-
-    <button class="btn-iniciar" @click="crear" :disabled="cargando">
-      {{ cargando ? 'Creando...' : 'Iniciar Partida' }}
-    </button>
   </div>
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap');
+/* ============================================================
+   MARCO EXTERIOR (madera oscura tipo borde de mesa)
+   ============================================================ */
+.mesa-wrapper {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 10px;
+  border-radius: 26px;
+  background: linear-gradient(145deg, #0a0f1a 0%, #1a2332 50%, #0a0f1a 100%);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.85),
+    0 10px 20px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
 
 /* ============================================================
-   CONTENEDOR PRINCIPAL — Mesa Premium
+   PAÑO DE LA MESA (contenedor del formulario)
    ============================================================ */
 .form-container {
   position: relative;
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 3rem 2rem 2.5rem;
-  border-radius: 22px;
-  color: #f8fafc;
-  font-family: 'Inter', 'Segoe UI', sans-serif;
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(34, 197, 94, 0.12) 0%, transparent 55%),
-    radial-gradient(ellipse at 50% 100%, rgba(15, 23, 42, 0.9) 0%, transparent 60%),
-    linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-  border: 3px solid #0f172a;
+    radial-gradient(ellipse at 50% 0%, rgba(34, 197, 94, 0.14) 0%, transparent 55%),
+    linear-gradient(160deg, #1e293b 0%, #0f172a 100%);
+  padding: 3rem 2.5rem 2.5rem;
+  border-radius: 18px;
+  color: var(--text-main);
+  border: 1px solid #334155;
   box-shadow:
-    0 25px 60px rgba(0, 0, 0, 0.65),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -40px 80px rgba(0, 0, 0, 0.35);
   overflow: hidden;
 }
 
-/* Textura sutil de paño */
+/* Textura de paño muy sutil */
 .form-container::before {
   content: '';
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgba(34, 197, 94, 0.05) 1px, transparent 1px);
-  background-size: 4px 4px;
+  background-image:
+    repeating-linear-gradient(45deg, transparent 0, transparent 2px, rgba(34, 197, 94, 0.02) 2px, rgba(34, 197, 94, 0.02) 4px);
   pointer-events: none;
-  z-index: 0;
+  border-radius: inherit;
 }
 
-.form-container > * {
+/* ============================================================
+   CABECERA
+   ============================================================ */
+.header-form {
+  text-align: center;
+  margin-bottom: 2.5rem;
   position: relative;
   z-index: 1;
 }
 
-/* ============================================================
-   HEADER
-   ============================================================ */
-.header-form {
-  text-align: center;
-  margin-bottom: 3rem;
-}
-
-h2 {
+.header-form h2 {
+  font-size: 3rem;
   margin: 0;
-  font-family: 'Bebas Neue', 'Inter', sans-serif;
-  font-size: clamp(2.2rem, 5vw, 3rem);
-  letter-spacing: 4px;
-  color: #f8fafc;
-  text-transform: uppercase;
+  color: var(--text-main);
   text-shadow:
     0 2px 0 #000,
-    0 4px 12px rgba(34, 197, 94, 0.25);
+    0 4px 12px rgba(0, 0, 0, 0.7);
+  letter-spacing: 3px;
+}
+
+.subtitulo-form {
+  margin: 0.4rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-family: 'Inter', sans-serif;
 }
 
 /* ============================================================
-   SELECTOR DE MODALIDAD — Botones físicos tipo toggle
+   SELECTOR DE MODALIDAD (slot con relieve hundido)
    ============================================================ */
 .selector-modalidad {
   display: inline-flex;
-  margin-top: 1.4rem;
-  padding: 5px;
-  gap: 4px;
-  background: #0f172a;
+  background: #0a0f1a;
+  padding: 6px;
   border-radius: 30px;
-  border: 1px solid #334155;
+  margin-top: 1.2rem;
+  border: 1px solid #1e293b;
   box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, 0.6),
-    0 2px 4px rgba(0, 0, 0, 0.3);
+    inset 0 3px 6px rgba(0, 0, 0, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .selector-modalidad button {
-  padding: 10px 26px;
   background: transparent;
-  color: #94a3b8;
+  color: var(--text-muted);
   border: none;
+  padding: 10px 28px;
   border-radius: 25px;
-  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-weight: 700;
-  font-size: 0.8rem;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
+  font-size: 0.95rem;
+  letter-spacing: 0.6px;
   cursor: pointer;
   transition: all 0.25s ease;
 }
 
 .selector-modalidad button:hover:not(.active) {
-  color: #e2e8f0;
-  background: rgba(51, 65, 85, 0.5);
+  color: var(--text-main);
 }
 
 .selector-modalidad button.active {
-  background: linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%);
+  background: linear-gradient(180deg, #22c55e 0%, #15803d 100%);
   color: #ffffff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   box-shadow:
-    0 2px 0 #14532d,
-    0 4px 12px rgba(34, 197, 94, 0.45);
+    0 3px 10px rgba(21, 128, 61, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 /* ============================================================
-   CONTENEDOR DE EQUIPOS
+   ZONA DE EQUIPOS
    ============================================================ */
 .equipos-container {
   display: flex;
+  gap: 1rem;
   justify-content: center;
   align-items: center;
-  gap: clamp(2rem, 6vw, 5rem);
-  margin-bottom: 3rem;
+  margin-bottom: 2.5rem;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
+}
+
+.vs-badge {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2rem;
+  color: #475569;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+  user-select: none;
 }
 
 /* ============================================================
-   BOLAS DE BILLAR 3D
+   LA BOLA DE BILLAR GIGANTE 3D
    ============================================================ */
-.bola-equipo {
-  --ball-size: clamp(240px, 44vw, 320px);
+.bola-wrapper {
   position: relative;
-  width: var(--ball-size);
-  height: var(--ball-size);
+}
+
+.bola-equipo {
+  width: 280px;
+  height: 280px;
   border-radius: 50%;
   display: flex;
   justify-content: center;
   align-items: center;
-  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  will-change: transform;
+  position: relative;
+  transition:
+    transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.45s ease;
+  box-shadow:
+    inset -22px -22px 55px rgba(0, 0, 0, 0.7),
+    inset 18px 18px 35px rgba(255, 255, 255, 0.35),
+    0 22px 40px rgba(0, 0, 0, 0.7),
+    0 8px 15px rgba(0, 0, 0, 0.5);
 }
 
 .bola-equipo:hover {
-  transform: translateY(-8px) scale(1.02);
+  transform: translateY(-10px) scale(1.02);
+  box-shadow:
+    inset -22px -22px 55px rgba(0, 0, 0, 0.7),
+    inset 18px 18px 35px rgba(255, 255, 255, 0.35),
+    0 35px 55px rgba(0, 0, 0, 0.8),
+    0 14px 22px rgba(0, 0, 0, 0.6);
 }
 
-/* Destello especular (reflejo de luz superior-izquierda) */
-.bola-equipo::before {
-  content: '';
+/* Brillo especular (reflejo de luz cenital) */
+.brillo {
   position: absolute;
-  top: 10%;
-  left: 16%;
-  width: 24%;
-  height: 15%;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(255, 255, 255, 0.95) 0%,
-    rgba(255, 255, 255, 0.45) 35%,
-    transparent 75%
-  );
-  border-radius: 50%;
-  filter: blur(2px);
-  transform: rotate(-30deg);
-  z-index: 2;
-  pointer-events: none;
-}
-
-/* Luz de rebote inferior (reflejo del paño verde) */
-.bola-equipo::after {
-  content: '';
-  position: absolute;
-  bottom: 7%;
-  right: 20%;
-  width: 22%;
-  height: 9%;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(255, 255, 255, 0.35) 0%,
-    transparent 70%
-  );
+  top: 12%;
+  left: 18%;
+  width: 92px;
+  height: 68px;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 70%);
   border-radius: 50%;
   filter: blur(5px);
-  z-index: 2;
   pointer-events: none;
+  z-index: 6;
 }
 
-/* Bola 1 — Amarilla (Equipo A) */
+/* Gradiente esférico Equipo A (Bola 1 - Amarilla) */
 .equipo-a {
   background: radial-gradient(
-    circle at 32% 28%,
-    #fefce8 0%,
-    #fde047 10%,
-    #facc15 35%,
-    #eab308 55%,
-    #a16207 82%,
+    circle at 30% 25%,
+    #fef9c3 0%,
+    var(--ball-yellow) 42%,
+    #ca8a04 78%,
     #713f12 100%
   );
-  box-shadow:
-    inset -25px -30px 60px rgba(0, 0, 0, 0.55),
-    inset 12px 14px 35px rgba(255, 255, 255, 0.18),
-    0 25px 50px rgba(0, 0, 0, 0.65),
-    0 10px 20px rgba(0, 0, 0, 0.45),
-    0 0 70px rgba(250, 204, 21, 0.18);
 }
 
-/* Bola 2 — Azul (Equipo B) */
+/* Gradiente esférico Equipo B (Bola 2 - Azul) */
 .equipo-b {
   background: radial-gradient(
-    circle at 32% 28%,
-    #f0f9ff 0%,
-    #93c5fd 10%,
-    #3b82f6 35%,
-    #2563eb 55%,
-    #1d4ed8 82%,
+    circle at 30% 25%,
+    #dbeafe 0%,
+    var(--ball-blue) 42%,
+    #1d4ed8 78%,
     #1e3a8a 100%
   );
-  box-shadow:
-    inset -25px -30px 60px rgba(0, 0, 0, 0.55),
-    inset 12px 14px 35px rgba(255, 255, 255, 0.18),
-    0 25px 50px rgba(0, 0, 0, 0.65),
-    0 10px 20px rgba(0, 0, 0, 0.45),
-    0 0 70px rgba(59, 130, 246, 0.18);
 }
 
 /* ============================================================
-   CÍRCULO BLANCO CENTRAL — Como el número de la bola
+   CÍRCULO BLANCO CENTRAL (parche numerado)
    ============================================================ */
 .centro-blanco {
-  position: relative;
-  width: 62%;
-  height: 62%;
+  width: 168px;
+  height: 168px;
+  background: radial-gradient(circle at 38% 30%, #ffffff 0%, #f1f5f9 65%, #dbe3ec 100%);
   border-radius: 50%;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 8%;
-  box-sizing: border-box;
-  background: radial-gradient(
-    circle at 45% 38%,
-    #ffffff 0%,
-    #f8fafc 45%,
-    #e2e8f0 80%,
-    #cbd5e1 100%
-  );
-  box-shadow:
-    inset 0 3px 8px rgba(0, 0, 0, 0.15),
-    inset 0 -2px 4px rgba(255, 255, 255, 0.7),
-    0 3px 10px rgba(0, 0, 0, 0.3),
-    0 0 0 2px rgba(255, 255, 255, 0.35);
+  padding: 0.75rem;
+  position: relative;
   z-index: 10;
+  box-shadow:
+    inset 3px 3px 10px rgba(0, 0, 0, 0.18),
+    inset -2px -2px 6px rgba(255, 255, 255, 0.9),
+    0 3px 8px rgba(0, 0, 0, 0.35);
 }
 
 .centro-blanco label {
-  margin-bottom: 0.4rem;
   color: #0f172a;
-  font-weight: 800;
-  font-size: 0.72rem;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+  font-family: 'Bebas Neue', sans-serif;
+  font-weight: 400;
+  font-size: 1.05rem;
+  letter-spacing: 1.5px;
+  margin-bottom: 0.45rem;
 }
 
 .centro-blanco input {
-  width: 100%;
-  max-width: 130px;
-  margin-bottom: 0.4rem;
+  width: 128px;
   padding: 0.42rem 0.5rem;
+  margin-bottom: 0.35rem;
   border: 2px solid #cbd5e1;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
-  color: #0f172a;
-  font-family: 'Inter', 'Segoe UI', sans-serif;
-  font-weight: 700;
-  font-size: 0.85rem;
+  border-radius: 7px;
   text-align: center;
-  box-sizing: border-box;
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.08),
-    0 1px 2px rgba(0, 0, 0, 0.06);
-  transition: all 0.2s ease;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #0f172a;
+  background: #ffffff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .centro-blanco input:last-child {
@@ -371,108 +367,127 @@ h2 {
 
 .centro-blanco input:focus {
   outline: none;
-  border-color: #22c55e;
+  border-color: var(--felt-light);
   box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.05),
-    0 0 0 3px rgba(34, 197, 94, 0.25);
+    0 0 0 3px rgba(34, 197, 94, 0.22),
+    inset 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 /* ============================================================
-   MENSAJE DE ERROR — Borde izquierdo rojo (Design System)
-   ============================================================ */
-.error {
-  max-width: 520px;
-  margin: 0 auto 1.5rem;
-  padding: 0.85rem 1.2rem;
-  background: rgba(239, 68, 68, 0.1);
-  border-left: 4px solid #ef4444;
-  border-radius: 8px;
-  color: #fca5a5;
-  font-weight: 600;
-  font-size: 0.92rem;
-  text-align: left;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
-}
-
-/* ============================================================
-   BOTÓN PRINCIPAL — Efecto físico 3D
+   BOTÓN INICIAR (efecto físico 3D)
    ============================================================ */
 .btn-iniciar {
   display: block;
   width: 100%;
   max-width: 420px;
   margin: 0 auto;
-  padding: 1.1rem 2rem;
-  border: none;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%);
+  padding: 1.15rem 1rem 1.05rem;
+  background: linear-gradient(180deg, #22c55e 0%, #15803d 100%);
   color: #ffffff;
-  font-family: 'Bebas Neue', 'Inter', sans-serif;
-  font-size: 1.7rem;
-  letter-spacing: 4px;
-  text-transform: uppercase;
-  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.35);
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.55rem;
+  letter-spacing: 3px;
+  border: none;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
   box-shadow:
-    0 6px 0 #14532d,
-    0 10px 22px rgba(0, 0, 0, 0.45),
-    0 0 35px rgba(34, 197, 94, 0.3);
+    0 6px 0 #0f5132,
+    0 10px 22px rgba(0, 0, 0, 0.55),
+    0 4px 8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.25s ease;
 }
 
 .btn-iniciar:hover:not(:disabled) {
-  background: linear-gradient(180deg, #4ade80 0%, #22c55e 50%, #16a34a 100%);
-  transform: translateY(-2px);
+  background: linear-gradient(180deg, #4ade80 0%, #22c55e 100%);
+  transform: translateY(-1px);
   box-shadow:
-    0 8px 0 #14532d,
-    0 14px 28px rgba(0, 0, 0, 0.5),
-    0 0 45px rgba(34, 197, 94, 0.55);
+    0 7px 0 #0f5132,
+    0 14px 26px rgba(0, 0, 0, 0.55),
+    0 5px 10px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
 .btn-iniciar:active:not(:disabled) {
   transform: translateY(4px);
   box-shadow:
-    0 2px 0 #14532d,
-    0 4px 10px rgba(0, 0, 0, 0.45),
-    0 0 20px rgba(34, 197, 94, 0.3);
+    0 2px 0 #0f5132,
+    0 4px 10px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .btn-iniciar:disabled {
   opacity: 0.55;
   cursor: not-allowed;
-  filter: grayscale(0.3);
+  filter: grayscale(0.25);
+}
+
+/* ============================================================
+   FEEDBACK DE ERROR (borde izquierdo rojo)
+   ============================================================ */
+.error {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.12);
+  border-left: 4px solid var(--ball-red);
+  padding: 0.85rem 1rem;
+  border-radius: 6px;
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 0.92rem;
+  margin: 0 auto 1.5rem;
+  max-width: 420px;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
 }
 
 /* ============================================================
    RESPONSIVE
    ============================================================ */
-@media (max-width: 560px) {
+@media (max-width: 720px) {
   .form-container {
-    padding: 2rem 1rem 1.5rem;
+    padding: 2rem 1.25rem 2rem;
+  }
+
+  .header-form h2 {
+    font-size: 2.4rem;
   }
 
   .bola-equipo {
-    --ball-size: 220px;
+    width: 230px;
+    height: 230px;
   }
 
+  .centro-blanco {
+    width: 138px;
+    height: 138px;
+  }
+
+  .centro-blanco input {
+    width: 108px;
+    font-size: 0.85rem;
+  }
+
+  .vs-badge {
+    font-size: 1.4rem;
+  }
+}
+
+@media (max-width: 520px) {
   .equipos-container {
     gap: 1.5rem;
   }
 
-  .selector-modalidad button {
-    padding: 9px 18px;
-    font-size: 0.72rem;
+  .bola-equipo {
+    width: 210px;
+    height: 210px;
   }
 
-  .centro-blanco label {
-    font-size: 0.65rem;
-    margin-bottom: 0.3rem;
-  }
-
-  .centro-blanco input {
-    font-size: 0.78rem;
-    padding: 0.35rem 0.4rem;
-    margin-bottom: 0.3rem;
+  .brillo {
+    width: 70px;
+    height: 50px;
   }
 }
 </style>
