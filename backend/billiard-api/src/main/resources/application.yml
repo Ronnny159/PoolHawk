@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: poolhawk-api
+
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+logging:
+  level:
+    com.poolhawk: DEBUG
+    org.springframework.web: INFO

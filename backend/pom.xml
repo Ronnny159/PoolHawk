@@ -14,13 +14,14 @@
     <name>PoolHawk - Backend</name>
     <description>
         Proyecto padre multi-modulo de PoolHawk. Agrupa los modulos
-        billiard-domain y billiard-rules bajo una misma configuracion
-        de build, versiones y plugins.
+        billiard-domain, billiard-rules y billiard-api bajo una misma
+        configuracion de build, versiones y plugins.
     </description>
 
     <modules>
         <module>billiard-domain</module>
         <module>billiard-rules</module>
+        <module>billiard-api</module>
     </modules>
 
     <properties>
@@ -30,6 +31,7 @@
         <junit.version>5.10.2</junit.version>
         <surefire.version>3.2.5</surefire.version>
         <jacoco.version>0.8.12</jacoco.version>
+        <spring-boot.version>3.3.5</spring-boot.version>
     </properties>
 
     <dependencyManagement>
@@ -39,11 +41,26 @@
                 <artifactId>billiard-domain</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.poolhawk</groupId>
+                <artifactId>billiard-rules</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <parameters>true</parameters>
+                    <encoding>UTF-8</encoding>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
