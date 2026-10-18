@@ -1,5 +1,5 @@
 
-```markdown
+
 # Modelo Entidad-Relación (MER)
 
 ```mermaid
