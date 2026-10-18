@@ -1,5 +1,4 @@
 
-```markdown
 # Aplicación de Patrones GRASP y Principios SOLID
 
 ## 1. Patrones GRASP
