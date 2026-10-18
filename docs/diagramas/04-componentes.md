@@ -1,6 +1,5 @@
 *(El Diagrama de Componentes - Punto 11 de Patricia).*
 
-```markdown
 # Diagrama de Componentes
 
 ```mermaid
