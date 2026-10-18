@@ -29,7 +29,8 @@ com.poolhawk
     ├── config: Configuración (CORS).
     └── exception: Manejo global de errores.
 ```
-2. Justificación de la Arquitectura
+## 2. Justificación de la Arquitectura
+
 billiard-domain no tiene dependencias externas (cero Spring, cero JPA). Esto permite que las reglas del billar se prueben de forma aislada y rápida con JUnit.
 
 billiard-rules depende únicamente del dominio. Aplica el principio de Inversión de Dependencias (SOLID).
