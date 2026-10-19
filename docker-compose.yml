@@ -9,10 +9,9 @@ services:
       POSTGRES_PASSWORD: poolhawk_password
       POSTGRES_DB: poolhawk_db
     ports:
-      - "5432:5432"
+      - "5433:5432"  # <-- Cambiamos el puerto externo al 5433
     volumes:
       - poolhawk_data:/var/lib/postgresql/data
-
   # 2. Interfaz visual para ver la base de datos (Opcional pero recomendado)
   adminer:
     image: adminer:latest
