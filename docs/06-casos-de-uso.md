@@ -28,7 +28,7 @@ A continuación, se detallan los actores principales y los casos de uso crítico
 
 ## 3. Diagrama de Casos de Uso (Mermaid)
 
-```mermaid
+
 usecaseDiagram
     actor Árbitro
     actor Jugador
