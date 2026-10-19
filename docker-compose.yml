@@ -1,0 +1,27 @@
+services:
+  # 1. El motor de la Base de Datos
+  postgres:
+    image: postgres:16-alpine
+    container_name: poolhawk-db
+    restart: always
+    environment:
+      POSTGRES_USER: poolhawk_user
+      POSTGRES_PASSWORD: poolhawk_password
+      POSTGRES_DB: poolhawk_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - poolhawk_data:/var/lib/postgresql/data
+
+  # 2. Interfaz visual para ver la base de datos (Opcional pero recomendado)
+  adminer:
+    image: adminer:latest
+    container_name: poolhawk-adminer
+    restart: always
+    ports:
+      - "8081:8080" # Usamos el 8081 porque el 8080 lo tiene tu Spring Boot
+    depends_on:
+      - postgres
+
+volumes:
+  poolhawk_data:

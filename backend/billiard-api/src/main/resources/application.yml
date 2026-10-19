@@ -1,6 +1,21 @@
 spring:
   application:
     name: poolhawk-api
+  
+  # Conexión a la Base de Datos PostgreSQL (la que acabas de levantar)
+  datasource:
+    url: jdbc:postgresql://localhost:5432/poolhawk_db
+    username: poolhawk_user
+    password: poolhawk_password
+    driver-class-name: org.postgresql.Driver
+
+  # Configuración de JPA / Hibernate
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update # Crea/Actualiza las tablas automáticamente
+    show-sql: true     # Muestra las consultas SQL en la consola (para debug)
+    open-in-view: false # <-- Agregado para quitar el warning
 
 server:
   port: 8080
