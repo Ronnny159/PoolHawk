@@ -2,6 +2,8 @@ package com.poolhawk.api.service;
 
 import com.poolhawk.api.dto.CrearPartidaRequest;
 import com.poolhawk.api.dto.TiroEventRequest;
+import com.poolhawk.api.entity.JugadorEntity;
+import com.poolhawk.api.entity.PartidaEntity;
 import com.poolhawk.api.exception.PartidaNoEncontradaException;
 import com.poolhawk.domain.event.ResultadoTiro;
 import com.poolhawk.domain.event.TiroEvent;
@@ -9,20 +11,14 @@ import com.poolhawk.domain.match.Partida;
 import com.poolhawk.domain.match.TipoModalidad;
 import com.poolhawk.domain.player.Equipo;
 import com.poolhawk.domain.player.Jugador;
-import com.poolhawk.domain.table.Bola;
-import com.poolhawk.domain.table.Coordenada;
-import com.poolhawk.domain.table.Mesa;
-import com.poolhawk.domain.table.TroneraNombre;
-import com.poolhawk.rules.ReglasBillar;
-import com.poolhawk.rules.ReglasConfig;
-import com.poolhawk.rules.ReglasFactory;
+import com.poolhawk.domain.table.*;
+import com.poolhawk.rules.*;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Servicio que orquesta la logica de partidas.
@@ -36,8 +32,8 @@ import java.util.UUID;
  */
 @Service
 public class MatchService {
-
     private final MatchStorage storage;
+    private final Map<String, Partida> partidasEnMemoria = new HashMap<>(); // puente temporal
 
     public MatchService(MatchStorage storage) {
         this.storage = storage;
@@ -51,17 +47,17 @@ public class MatchService {
      */
     public Partida crear(CrearPartidaRequest request) {
         String id = UUID.randomUUID().toString();
-
         Equipo equipoA = construirEquipo("eA-" + id, request.equipoA());
         Equipo equipoB = construirEquipo("eB-" + id, request.equipoB());
-
         Mesa mesa = construirMesaInicial();
 
-        Partida partida = new Partida(
-            id, request.modalidad(), equipoA, equipoB, mesa, Instant.now());
-
+        Partida partida = new Partida(id, request.modalidad(), equipoA, equipoB, mesa, Instant.now());
         partida.iniciar();
-        storage.guardar(partida);
+        partidasEnMemoria.put(id, partida);
+
+        // Guardar en BD
+        PartidaEntity entity = toEntity(partida);
+        storage.guardar(entity);
         return partida;
     }
 
@@ -73,8 +69,8 @@ public class MatchService {
      * @throws PartidaNoEncontradaException si no existe
      */
     public Partida buscar(String id) {
-        return storage.buscar(id)
-            .orElseThrow(() -> new PartidaNoEncontradaException(id));
+        return Optional.ofNullable(partidasEnMemoria.get(id))
+                .orElseThrow(() -> new RuntimeException("Partida no encontrada"));
     }
 
     /**
@@ -83,7 +79,7 @@ public class MatchService {
      * @return lista de partidas
      */
     public List<Partida> listarTodas() {
-        return new ArrayList<>(storage.listarTodas());
+        return new ArrayList<>(partidasEnMemoria.values());
     }
 
     /**
@@ -93,24 +89,20 @@ public class MatchService {
      * @param request   datos del tiro
      * @return el resultado del tiro segun las reglas
      */
-    public ResultadoTiro registrarTiro(String partidaId, TiroEventRequest request) {
+   public ResultadoTiro registrarTiro(String partidaId, TiroEventRequest request) {
         Partida partida = buscar(partidaId);
-
         TiroEvent evento = construirEvento(partida, request);
-
-        ReglasConfig config = ReglasConfig.porDefecto();
-        ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), config);
-
+        ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
         ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
-
         partida.aplicarTiro(evento, resultado);
-
         if (resultado.esVictoria()) {
             partida.finalizar(evento.jugador());
         }
-
+        // Actualizar en BD
+        storage.guardar(toEntity(partida));
         return resultado;
     }
+
 
     // ───────────────────────────────────────────────────────────
     // Helpers privados
@@ -196,5 +188,33 @@ public class MatchService {
             troneras,
             Instant.now(),
             duracion);
+    }
+
+    private JugadorEntity toJugadorEntity(Jugador j, String equipo, PartidaEntity partida) {
+        JugadorEntity je = new JugadorEntity();
+        je.setId(j.id());
+        je.setNombre(j.nombre());
+        je.setEquipo(equipo);
+        je.setPartida(partida);
+        return je;
+    }
+
+    private PartidaEntity toEntity(Partida partida) {
+        PartidaEntity entity = new PartidaEntity();
+        entity.setId(partida.getId());
+        entity.setModalidad(partida.getModalidad().name());
+        entity.setFase(partida.getFase().name());
+        entity.setFechaCreacion(partida.getFechaCreacion());
+        entity.setGanadorId(partida.getGanador() != null ? partida.getGanador().id() : null);
+
+        List<JugadorEntity> jugadores = new ArrayList<>();
+        for (Jugador j : partida.getEquipoA().getJugadores()) {
+            jugadores.add(toJugadorEntity(j, "A", entity));
+        }
+        for (Jugador j : partida.getEquipoB().getJugadores()) {
+            jugadores.add(toJugadorEntity(j, "B", entity));
+        }
+        entity.setJugadores(jugadores);
+        return entity;
     }
 }

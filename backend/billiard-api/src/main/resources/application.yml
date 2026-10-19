@@ -1,6 +1,8 @@
 spring:
+  application:
+    name: poolhawk-api
   datasource:
-    url: jdbc:postgresql://localhost:5432/poolhawk_db
+    url: jdbc:postgresql://localhost:5433/poolhawk_db
     username: poolhawk_user
     password: poolhawk_password
     driver-class-name: org.postgresql.Driver

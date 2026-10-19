@@ -1,10 +1,12 @@
 package com.poolhawk.api.service;
 
+import com.poolhawk.api.entity.PartidaEntity;
+import com.poolhawk.api.repository.PartidaRepository;
 import com.poolhawk.domain.match.Partida;
+
 import org.springframework.stereotype.Component;
 
-import java.util.Collection;
-import java.util.Map;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -22,15 +24,19 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class MatchStorage {
 
-    private final Map<String, Partida> partidas = new ConcurrentHashMap<>();
+    private final PartidaRepository partidaRepository;
+
+    public MatchStorage(PartidaRepository partidaRepository) {
+        this.partidaRepository = partidaRepository;
+    }
 
     /**
      * Guarda una partida. Si ya existe una con el mismo id, la reemplaza.
      *
      * @param partida partida a guardar
      */
-    public void guardar(Partida partida) {
-        partidas.put(partida.getId(), partida);
+    public void guardar(PartidaEntity partida) {
+        partidaRepository.save(partida);
     }
 
     /**
@@ -39,8 +45,8 @@ public class MatchStorage {
      * @param id identificador de la partida
      * @return la partida si existe
      */
-    public Optional<Partida> buscar(String id) {
-        return Optional.ofNullable(partidas.get(id));
+    public Optional<PartidaEntity> buscar(String id) {
+        return partidaRepository.findById(id);
     }
 
     /**
@@ -48,18 +54,8 @@ public class MatchStorage {
      *
      * @return coleccion de partidas
      */
-    public Collection<Partida> listarTodas() {
-        return partidas.values();
-    }
-
-    /**
-     * Elimina una partida por su id.
-     *
-     * @param id identificador de la partida
-     * @return {@code true} si existia y fue eliminada
-     */
-    public boolean eliminar(String id) {
-        return partidas.remove(id) != null;
+    public List<PartidaEntity> listarTodas() {
+        return partidaRepository.findAll();
     }
 
     /**
@@ -68,6 +64,6 @@ public class MatchStorage {
      * @return cantidad de partidas
      */
     public int cantidad() {
-        return partidas.size();
+        return (int) partidaRepository.count();
     }
 }
