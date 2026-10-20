@@ -87,27 +87,25 @@ class DtoSanityTest {
         @DisplayName("Se construye y expone sus valores")
         void construccion() {
             Instant ahora = Instant.now();
-            // Cómo debería quedar tu test:
-            PartidaResponse response = new PartidaResponse(
-                "1", "BOLA_8", "EN_JUEGO",
-                List.of(new JugadorResponse("1", "Ana")),
-                List.of(new JugadorResponse("2", "Beto")),
+            PartidaResponse dto = new PartidaResponse(
+                "p1",
+                "BOLA_8",
+                "EN_CURSO",
+                List.of(new JugadorResponse("j1", "Ana")),
+                List.of(new JugadorResponse("j2", "Beto")),
                 Map.of("Ana", 0, "Beto", 0),
-                Map.of("Ana", "LISAS", "Beto", "RAYADAS"),
-                Map.of("A", 0, "B", 0), // <--- AGREGAR ESTO (El total por equipo)
-                "Ana",
+                null, "Ana",
                 null,
                 0,
-                Instant.now()
-            );
+                ahora);
 
-            assertEquals("1", response.id());
-            assertEquals("BOLA_8", response.modalidad());
-            assertEquals("EN_JUEGO", response.fase());
-            assertEquals("Ana", response.jugadorActual());
-            assertNull(response.ganador());
-            assertEquals(0, response.cantidadTiros());
-            assertEquals(ahora, response.fechaCreacion());
+            assertEquals("p1", dto.id());
+            assertEquals("BOLA_8", dto.modalidad());
+            assertEquals("EN_CURSO", dto.fase());
+            assertEquals("Ana", dto.jugadorActual());
+            assertNull(dto.ganador());
+            assertEquals(0, dto.cantidadTiros());
+            assertEquals(ahora, dto.fechaCreacion());
         }
     }
 

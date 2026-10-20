@@ -13,6 +13,9 @@ import java.util.Map;
 /**
  * Mapper entre el dominio {@link Partida} y los DTOs de la API.
  *
+ * <p>Su responsabilidad es traducir el modelo de dominio a la vista
+ * publica que expone la API, sin filtrar detalles internos.</p>
+ *
  * @author PoolHawk Team
  * @since 0.1.0
  */
@@ -35,11 +38,6 @@ public class PartidaMapper {
         partida.getEstado().getPuntajes().forEach(
             (j, p) -> puntajes.put(j.nombre(), p));
 
-        // Exponer el grupo asignado por jugador (LISAS / RAYADAS / SIN_ASIGNAR)
-        Map<String, String> grupos = new LinkedHashMap<>();
-        partida.getEstado().getGruposAsignados().forEach(
-            (j, g) -> grupos.put(j.nombre(), g.name()));
-
         return new PartidaResponse(
             partida.getId(),
             partida.getModalidad().name(),
@@ -47,19 +45,13 @@ public class PartidaMapper {
             equipoA,
             equipoB,
             puntajes,
-            grupos,
-            puntajes, 
-            // FIX 1: Usar jugadorActual() en vez de getTurnoActual()
-            partida.jugadorActual().nombre(),
+            null, partida.jugadorActual().nombre(),
             partida.getGanador() != null ? partida.getGanador().nombre() : null,
-            // FIX 2: Usar cantidadTiros() que sí existe en MatchState
-            partida.getEstado().cantidadTiros(), 
-            // Si el error era por la cantidad de jugadores, en Turnos se usa cantidadJugadores()
+            partida.getEstado().cantidadTiros(),
             partida.getFechaCreacion());
     }
 
     private JugadorResponse toJugadorResponse(Jugador j) {
         return new JugadorResponse(j.id(), j.nombre());
     }
-    
 }

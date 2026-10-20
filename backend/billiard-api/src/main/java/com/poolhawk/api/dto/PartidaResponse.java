@@ -33,7 +33,6 @@ public record PartidaResponse(
         List<JugadorResponse> equipoB,
         Map<String, Integer> puntajes,
         Map<String, String> grupos,
-        Map<String, Integer> puntajesPorEquipo,   // ← NUEVO: totales ya calculados
         String jugadorActual,
         String ganador,
         int cantidadTiros,
