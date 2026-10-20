@@ -11,39 +11,42 @@ const emit = defineEmits(['tiroRegistrado'])
 const cargando = ref(false)
 
 const simularTiro = async (tipo) => {
+  if (partidaTerminada.value) return
+  
   try {
     cargando.value = true
-
-    // Buscar el ID del jugador actual
+    
     const todosLosJugadores = [...props.partida.equipoA, ...props.partida.equipoB]
     const jugadorActual = todosLosJugadores.find(j => j.nombre === props.partida.jugadorActual)
-    if (!jugadorActual) {
-      throw new Error('Jugador actual no encontrado en la partida')
-    }
-
-    // Convención del simulador:
-    //   Equipo A → bola 1 (lisas)
-    //   Equipo B → bola 9 (rayadas)
-    const esEquipoA = props.partida.equipoA.some(j => j.id === jugadorActual.id)
-    const bolaObjetivo = esEquipoA ? 1 : 9
 
     let payload = { jugadorId: jugadorActual.id, duracionSegundos: 5 }
 
     if (tipo === 'FALLO') {
       payload.primeraBolaTocada = null
       payload.bolasEmbolsadas = []
-    } else if (tipo === 'LEGAL') {
-      payload.primeraBolaTocada = bolaObjetivo
-      payload.bolasEmbolsadas = []
-    } else if (tipo === 'EMBOLSÓ') {
-      payload.primeraBolaTocada = bolaObjetivo
-      payload.bolasEmbolsadas = [bolaObjetivo]
-      payload.troneras = ['TOP_LEFT']
+    } else {
+      // Lógica inteligente de grupos
+      const grupoActual = props.partida.grupos[jugadorActual.nombre] // "LISAS", "RAYADAS" o "SIN_ASIGNAR"
+      
+      let bolaASimular = 1 // Por defecto Lisa
+      if (grupoActual === 'RAYADAS') {
+        bolaASimular = 9 // Bola Rayada
+      }
+
+      payload.primeraBolaTocada = bolaASimular
+      
+      if (tipo === 'EMBOLSÓ') {
+        payload.bolasEmbolsadas = [bolaASimular]
+        payload.troneras = ['TOP_LEFT']
+      } else {
+        payload.bolasEmbolsadas = []
+      }
     }
 
-    await registrarTiro(props.partida.id, payload)
+    const resultado = await registrarTiro(props.partida.id, payload)
+    ultimoResultado.value = resultado
     emit('tiroRegistrado')
-
+    
   } catch (error) {
     console.error('Error al registrar tiro:', error)
     alert('Error al registrar el tiro')

@@ -1,5 +1,6 @@
 package com.poolhawk.api.service;
 
+import com.poolhawk.api.config.MatchWebSocketHandler;
 import com.poolhawk.api.dto.CrearPartidaRequest;
 import com.poolhawk.api.dto.TiroEventRequest;
 import com.poolhawk.api.entity.JugadorEntity;
@@ -34,9 +35,11 @@ import java.util.stream.Collectors;
 public class MatchService {
     private final MatchStorage storage;
     private final Map<String, Partida> partidasEnMemoria = new HashMap<>(); // puente temporal
+    private final MatchWebSocketHandler wsHandler;
 
-    public MatchService(MatchStorage storage) {
+    public MatchService(MatchStorage storage, MatchWebSocketHandler wsHandler) {
         this.storage = storage;
+        this.wsHandler = wsHandler;
     }
 
     /**
@@ -100,6 +103,8 @@ public class MatchService {
         }
         // Actualizar en BD
         storage.guardar(toEntity(partida));
+        // Notificar actualización a través de WebSocket
+        wsHandler.notificarActualizacion("{\"matchId\": \"" + partidaId + "\"}");
         return resultado;
     }
 

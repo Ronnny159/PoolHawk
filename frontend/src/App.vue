@@ -1,9 +1,29 @@
 <script setup>
+import { ref, onMounted, onUnmounted } from 'vue'
 import { ref, onMounted } from 'vue'
 import { obtenerPartida } from './api/matches'
 import CreateMatchForm from './components/CreateMatchForm.vue'
 import ScoreBoard from './components/ScoreBoard.vue'
 import ShotSimulator from './components/ShotSimulator.vue'
+
+let socket = null
+
+onMounted(() => {
+  // Conectar al WebSocket del backend
+  socket = new WebSocket('ws://localhost:8080/ws/matches')
+  
+  socket.onmessage = (event) => {
+    const data = JSON.parse(event.data)
+    if (partidaActual.value && partidaActual.value.id === data.matchId) {
+      console.log('¡WebSocket recibió un tiro!')
+      recargarPartida() // Vue se actualiza en tiempo real
+    }
+  }
+})
+
+onUnmounted(() => {
+  if (socket) socket.close()
+})
 
 const partidaActual = ref(null)
 
