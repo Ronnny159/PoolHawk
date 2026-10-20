@@ -5,20 +5,39 @@ const props = defineProps({
   partida: { type: Object, required: true }
 })
 
-// --- LÓGICA DE NOMBRES ---
-// Une los nombres si es modo parejas (ej. "Juan / Pedro")
-const nombreEquipoA = computed(() => props.partida.equipoA.map(j => j.nombre).join(' / '))
-const nombreEquipoB = computed(() => props.partida.equipoB.map(j => j.nombre).join(' / '))
+// 1. Nombres de los equipos (unidos por si es pareja)
+const nombreEquipoA = computed(() => props.partida.equipoA.map(j => j.nombre.trim()).join(' / '))
+const nombreEquipoB = computed(() => props.partida.equipoB.map(j => j.nombre.trim()).join(' / '))
 
-// --- LÓGICA DE PUNTOS ---
-// NOTA: Asumo que el backend envía 'puntosEquipoA' y 'puntosEquipoB' directo en la partida.
-// Si el backend los envía diferente (ej. dentro de cada jugador), tendrás que ajustar esta línea.
-const puntosEquipoA = computed(() => props.partida.puntosEquipoA ?? 0)
-const puntosEquipoB = computed(() => props.partida.puntosEquipoB ?? 0)
+// 2. Función de suma total (Blindada contra espacios y nulos)
+const calcularPuntosEquipo = (equipo) => {
+  if (!props.partida.puntajes) return 0;
+  
+  return equipo.reduce((total, jugador) => {
+    // Limpiamos el nombre para asegurar que haga match exacto con la llave del JSON
+    const nombreLimpio = jugador.nombre.trim();
+    // Buscamos en el mapa de puntajes. Si no existe, sumamos 0.
+    const puntosJugador = props.partida.puntajes[nombreLimpio] || 0;
+    return total + puntosJugador;
+  }, 0);
+}
 
-// --- LÓGICA DE TURNOS ---
-const turnoEsDeA = computed(() => props.partida.equipoA.some(j => j.nombre === props.partida.jugadorActual))
-const turnoEsDeB = computed(() => props.partida.equipoB.some(j => j.nombre === props.partida.jugadorActual))
+// 3. Puntos computados para el template
+const puntosEquipoA = computed(() => calcularPuntosEquipo(props.partida.equipoA))
+const puntosEquipoB = computed(() => calcularPuntosEquipo(props.partida.equipoB))
+
+// 4. Resaltado de turno (Blindado contra espacios)
+const turnoEsDeA = computed(() => {
+  if (!props.partida.jugadorActual) return false;
+  const actualLimpio = props.partida.jugadorActual.trim();
+  return props.partida.equipoA.some(j => j.nombre.trim() === actualLimpio);
+})
+
+const turnoEsDeB = computed(() => {
+  if (!props.partida.jugadorActual) return false;
+  const actualLimpio = props.partida.jugadorActual.trim();
+  return props.partida.equipoB.some(j => j.nombre.trim() === actualLimpio);
+})
 </script>
 
 <template>
