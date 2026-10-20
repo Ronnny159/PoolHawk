@@ -1,7 +1,24 @@
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   partida: { type: Object, required: true }
 })
+
+// --- LÓGICA DE NOMBRES ---
+// Une los nombres si es modo parejas (ej. "Juan / Pedro")
+const nombreEquipoA = computed(() => props.partida.equipoA.map(j => j.nombre).join(' / '))
+const nombreEquipoB = computed(() => props.partida.equipoB.map(j => j.nombre).join(' / '))
+
+// --- LÓGICA DE PUNTOS ---
+// NOTA: Asumo que el backend envía 'puntosEquipoA' y 'puntosEquipoB' directo en la partida.
+// Si el backend los envía diferente (ej. dentro de cada jugador), tendrás que ajustar esta línea.
+const puntosEquipoA = computed(() => props.partida.puntosEquipoA ?? 0)
+const puntosEquipoB = computed(() => props.partida.puntosEquipoB ?? 0)
+
+// --- LÓGICA DE TURNOS ---
+const turnoEsDeA = computed(() => props.partida.equipoA.some(j => j.nombre === props.partida.jugadorActual))
+const turnoEsDeB = computed(() => props.partida.equipoB.some(j => j.nombre === props.partida.jugadorActual))
 </script>
 
 <template>
@@ -32,7 +49,7 @@ defineProps({
         
         <!-- EQUIPO A (Izquierda) -->
         <div class="team-side">
-          <div class="ball-container" :class="{ 'glow-active': turnoEsDeA }">
+          <div class="ball-container" :class="{ 'glow-active': turnoEsDeA && partida.fase === 'EN_CURSO' }">
             <div class="ball ball-yellow">
               <div class="ball-inner">
                 <span class="score">{{ puntosEquipoA }}</span>
@@ -85,7 +102,7 @@ defineProps({
             </div>
           </div>
 
-          <!-- INDICADOR DE TURNO -->
+          <!-- INDICADOR DE TURNO / GANADOR -->
           <div class="turn-indicator">
             <div class="mini-cue-ball"></div>
             <span v-if="partida.fase === 'EN_CURSO'">Turn: <strong>{{ partida.jugadorActual }}</strong></span>
@@ -95,7 +112,7 @@ defineProps({
 
         <!-- EQUIPO B (Derecha) -->
         <div class="team-side">
-          <div class="ball-container" :class="{ 'glow-active': turnoEsDeB }">
+          <div class="ball-container" :class="{ 'glow-active': turnoEsDeB && partida.fase === 'EN_CURSO' }">
             <div class="ball ball-blue">
               <div class="ball-inner">
                 <span class="score">{{ puntosEquipoB }}</span>
