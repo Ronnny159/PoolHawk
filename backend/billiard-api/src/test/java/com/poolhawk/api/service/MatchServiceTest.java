@@ -34,7 +34,7 @@ class MatchServiceTest {
 
     @BeforeEach
     void setUp() {
-        storage = new MatchStorage();
+        storage = new MatchStorage(null);
         service = new MatchService(storage);
     }
 
