@@ -17,6 +17,7 @@ import java.util.Map;
  * @param equipoA       jugadores del equipo A
  * @param equipoB       jugadores del equipo B
  * @param puntajes      puntaje actual por nombre de jugador
+ * @param grupos        grupo asignado por nombre de jugador (LISAS, RAYADAS o SIN_ASIGNAR)
  * @param jugadorActual nombre del jugador con el turno
  * @param ganador       nombre del ganador, o {@code null} si no ha terminado
  * @param cantidadTiros cantidad de tiros registrados
@@ -31,6 +32,7 @@ public record PartidaResponse(
         List<JugadorResponse> equipoA,
         List<JugadorResponse> equipoB,
         Map<String, Integer> puntajes,
+        Map<String, String> grupos,
         String jugadorActual,
         String ganador,
         int cantidadTiros,

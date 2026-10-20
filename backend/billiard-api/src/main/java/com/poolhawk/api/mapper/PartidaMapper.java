@@ -38,6 +38,11 @@ public class PartidaMapper {
         partida.getEstado().getPuntajes().forEach(
             (j, p) -> puntajes.put(j.nombre(), p));
 
+        // NUEVO: exponer el grupo asignado por jugador (LISAS / RAYADAS / SIN_ASIGNAR)
+        Map<String, String> grupos = new LinkedHashMap<>();
+        partida.getEstado().getGruposAsignados().forEach(
+            (j, g) -> grupos.put(j.nombre(), g.name()));
+
         return new PartidaResponse(
             partida.getId(),
             partida.getModalidad().name(),
@@ -45,6 +50,7 @@ public class PartidaMapper {
             equipoA,
             equipoB,
             puntajes,
+            grupos,                                    // ← insertado en la posición correcta
             partida.jugadorActual().nombre(),
             partida.getGanador() != null ? partida.getGanador().nombre() : null,
             partida.getEstado().cantidadTiros(),

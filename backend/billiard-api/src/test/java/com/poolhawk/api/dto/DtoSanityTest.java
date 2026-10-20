@@ -94,7 +94,7 @@ class DtoSanityTest {
                 List.of(new JugadorResponse("j1", "Ana")),
                 List.of(new JugadorResponse("j2", "Beto")),
                 Map.of("Ana", 0, "Beto", 0),
-                "Ana",
+                null, "Ana",
                 null,
                 0,
                 ahora);

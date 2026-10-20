@@ -12,33 +12,37 @@ const cargando = ref(false)
 const simularTiro = async (tipo) => {
   try {
     cargando.value = true
-    
+
     // Buscar el ID del jugador actual
     const todosLosJugadores = [...props.partida.equipoA, ...props.partida.equipoB]
     const jugadorActual = todosLosJugadores.find(j => j.nombre === props.partida.jugadorActual)
+    if (!jugadorActual) {
+      throw new Error('Jugador actual no encontrado en la partida')
+    }
+
+    // Convención del simulador:
+    //   Equipo A → bola 1 (lisas)
+    //   Equipo B → bola 9 (rayadas)
+    const esEquipoA = props.partida.equipoA.some(j => j.id === jugadorActual.id)
+    const bolaObjetivo = esEquipoA ? 1 : 9
 
     let payload = { jugadorId: jugadorActual.id, duracionSegundos: 5 }
 
     if (tipo === 'FALLO') {
-      // No toca ninguna bola -> generará falta NO_TOCAR_BOLA
       payload.primeraBolaTocada = null
       payload.bolasEmbolsadas = []
     } else if (tipo === 'LEGAL') {
-      // Toca la bola 1 (lisa) pero no embolsa
-      payload.primeraBolaTocada = 1
+      payload.primeraBolaTocada = bolaObjetivo
       payload.bolasEmbolsadas = []
     } else if (tipo === 'EMBOLSÓ') {
-      // Toca la bola 1 y la embolsa
-      payload.primeraBolaTocada = 1
-      payload.bolasEmbolsadas = [1]
+      payload.primeraBolaTocada = bolaObjetivo
+      payload.bolasEmbolsadas = [bolaObjetivo]
       payload.troneras = ['TOP_LEFT']
     }
 
     await registrarTiro(props.partida.id, payload)
-    
-    // Recargar estado de la partida después del tiro
     emit('tiroRegistrado')
-    
+
   } catch (error) {
     console.error('Error al registrar tiro:', error)
     alert('Error al registrar el tiro')
