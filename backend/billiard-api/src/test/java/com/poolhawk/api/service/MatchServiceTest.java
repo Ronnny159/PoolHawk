@@ -17,6 +17,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.poolhawk.api.websocket.MatchLiveHandler;
+import com.poolhawk.api.mapper.PartidaMapper;
+
 
 import java.util.List;
 import java.util.Optional;
@@ -38,7 +41,11 @@ class MatchServiceTest {
     @BeforeEach
     void setUp() {
         storage = new MatchStorage(partidaRepository);
-        service = new MatchService(storage);
+
+        MatchLiveHandler liveHandler = new MatchLiveHandler();
+        PartidaMapper mapper = new PartidaMapper();
+
+        service = new MatchService(storage, liveHandler, mapper);
     }
 
     private Partida crearPartidaBola8() {

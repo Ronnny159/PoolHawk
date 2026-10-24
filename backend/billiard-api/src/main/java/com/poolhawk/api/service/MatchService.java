@@ -14,6 +14,10 @@ import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.*;
 import com.poolhawk.rules.*;
 import org.springframework.stereotype.Service;
+import com.poolhawk.api.mapper.PartidaMapper;
+import com.poolhawk.api.websocket.MatchLiveHandler;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -33,10 +37,15 @@ import java.util.stream.Collectors;
 @Service
 public class MatchService {
     private final MatchStorage storage;
-    private final Map<String, Partida> partidasEnMemoria = new HashMap<>(); // puente temporal
+    private final MatchLiveHandler liveHandler;
+    private final PartidaMapper mapper;
+    private final ObjectMapper jsonMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    private final Map<String, Partida> partidasEnMemoria = new HashMap<>();
 
-    public MatchService(MatchStorage storage) {
+    public MatchService(MatchStorage storage, MatchLiveHandler liveHandler, PartidaMapper mapper) {
         this.storage = storage;
+        this.liveHandler = liveHandler;
+        this.mapper = mapper;
     }
 
     /**
@@ -112,17 +121,29 @@ public class MatchService {
      * @param request   datos del tiro
      * @return el resultado del tiro segun las reglas
      */
-   public ResultadoTiro registrarTiro(String partidaId, TiroEventRequest request) {
+    public ResultadoTiro registrarTiro(String partidaId, TiroEventRequest request) {
         Partida partida = buscar(partidaId);
         TiroEvent evento = construirEvento(partida, request);
         ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
         ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
+        
         partida.aplicarTiro(evento, resultado);
+        
         if (resultado.esVictoria()) {
             partida.finalizar(evento.jugador());
         }
+        
         // Actualizar en BD
         storage.guardar(toEntity(partida));
+
+        // ✨ NUEVO: Emitir el estado actualizado por WebSocket
+        try {
+            String json = jsonMapper.writeValueAsString(mapper.toResponse(partida));
+            liveHandler.broadcast(json);
+        } catch (Exception e) {
+            System.err.println("Error serializando partida para WebSocket: " + e.getMessage());
+        }
+
         return resultado;
     }
 
