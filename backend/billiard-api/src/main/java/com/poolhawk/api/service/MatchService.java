@@ -68,9 +68,32 @@ public class MatchService {
      * @return la partida encontrada
      * @throws PartidaNoEncontradaException si no existe
      */
+       /**
+     * Busca una partida por su id.
+     *
+     * @param id identificador de la partida
+     * @return la partida encontrada
+     * @throws PartidaNoEncontradaException si no existe
+     */
     public Partida buscar(String id) {
-        return Optional.ofNullable(partidasEnMemoria.get(id))
-                .orElseThrow(() -> new RuntimeException("Partida no encontrada"));
+        // 1. Primero buscamos en la memoria (que es donde está el objeto completo)
+        Partida partida = partidasEnMemoria.get(id);
+        
+        if (partida != null) {
+            return partida;
+        }
+
+        // 2. Si no está en memoria, verificamos si existe en la base de datos
+        boolean existeEnBd = storage.buscar(id).isPresent();
+        
+        if (!existeEnBd) {
+            throw new PartidaNoEncontradaException(id);
+        }
+
+        // 3. Si existe en la base de datos pero no en memoria (ej. el servidor se reinició),
+        // necesitaríamos un mapper inverso (Entity -> Domain) para reconstruirla.
+        // Para este MVP, si se reinicia el servidor, las partidas en curso se pierden.
+        throw new PartidaNoEncontradaException(id + " (requiere reinicio de partida)");
     }
 
     /**
