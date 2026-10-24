@@ -46,6 +46,14 @@
                 <artifactId>billiard-rules</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
+                <!-- WebSocket -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-websocket</artifactId>
+                <version>${spring-boot.version}</version>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 
