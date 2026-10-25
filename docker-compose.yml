@@ -5,15 +5,15 @@ services:
     container_name: poolhawk-db
     restart: always
     environment:
-      POSTGRES_USER: poolhawk_user
-      POSTGRES_PASSWORD: poolhawk_password
-      POSTGRES_DB: poolhawk_db
+      POSTGRES_USER: ${POSTGRES_USER:?Define POSTGRES_USER en el archivo .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en el archivo .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Define POSTGRES_DB en el archivo .env}
     ports:
       - "5433:5432"
     volumes:
       - poolhawk_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U poolhawk_user -d poolhawk_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -37,9 +37,9 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/poolhawk_db
-      SPRING_DATASOURCE_USERNAME: poolhawk_user
-      SPRING_DATASOURCE_PASSWORD: poolhawk_password
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "8080:8080"
 
