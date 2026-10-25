@@ -8,6 +8,7 @@ Uso:
     pip install -r requirements.txt
     python simulador.py
     python simulador.py --base-url http://localhost:8080
+    python simulador.py --match-id <id de una partida existente>
 """
 import argparse
 import random
@@ -76,14 +77,22 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Simulador de camara PoolHawk")
     parser.add_argument("--base-url", default="http://localhost:8080")
     parser.add_argument("--pausa", type=float, default=PAUSA_SEGUNDOS)
+    parser.add_argument(
+        "--match-id",
+        help="Usar una partida existente en lugar de crear una nueva",
+    )
     args = parser.parse_args()
     base_url = args.base_url.rstrip("/")
 
     try:
-        partida = crear_partida(base_url)
+        if args.match_id:
+            partida = consultar_partida(base_url, args.match_id)
+            print(f"Usando partida existente: {args.match_id}")
+        else:
+            partida = crear_partida(base_url)
+            print(f"Partida creada: {partida['id']}")
         match_id = partida["id"]
         ids = ids_por_nombre(partida)
-        print(f"Partida creada: {match_id}")
         print(f"Jugadores: {', '.join(ids)}")
 
         # Bolas 1-15 sin la 8
