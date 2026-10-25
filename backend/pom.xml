@@ -46,6 +46,14 @@
                 <artifactId>billiard-rules</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
+            <!-- WebSocket -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-websocket</artifactId>
+                <version>${spring-boot.version}</version>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 
@@ -61,10 +69,14 @@
                 </configuration>
             </plugin>
 
+            <!-- Surefire unificado con la configuración de Byte Buddy -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${surefire.version}</version>
+                <configuration>
+                    <argLine>-Dnet.bytebuddy.experimental=true</argLine>
+                </configuration>
             </plugin>
 
             <plugin>
@@ -87,6 +99,7 @@
                     </execution>
                 </executions>
             </plugin>
+            
         </plugins>
     </build>
 
