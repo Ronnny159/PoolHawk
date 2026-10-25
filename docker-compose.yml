@@ -9,18 +9,49 @@ services:
       POSTGRES_PASSWORD: poolhawk_password
       POSTGRES_DB: poolhawk_db
     ports:
-      - "5433:5432"  # <-- Cambiamos el puerto externo al 5433
+      - "5433:5432"
     volumes:
       - poolhawk_data:/var/lib/postgresql/data
-  # 2. Interfaz visual para ver la base de datos (Opcional pero recomendado)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poolhawk_user -d poolhawk_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # 2. Interfaz visual para ver la base de datos
   adminer:
     image: adminer:latest
     container_name: poolhawk-adminer
     restart: always
     ports:
-      - "8081:8080" # Usamos el 8081 porque el 8080 lo tiene tu Spring Boot
+      - "8081:8080"
     depends_on:
       - postgres
+
+  # 3. Backend (Spring Boot)
+  backend:
+    build: ./backend
+    container_name: poolhawk-backend
+    restart: on-failure
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/poolhawk_db
+      SPRING_DATASOURCE_USERNAME: poolhawk_user
+      SPRING_DATASOURCE_PASSWORD: poolhawk_password
+    ports:
+      - "8080:8080"
+
+  # 4. Frontend (Vue + Nginx)
+  frontend:
+    build: ./frontend
+    container_name: poolhawk-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
 
 volumes:
   poolhawk_data:
