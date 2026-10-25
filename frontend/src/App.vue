@@ -4,6 +4,7 @@ import { obtenerPartida } from './api/matches'
 import CreateMatchForm from './components/CreateMatchForm.vue'
 import ScoreBoard from './components/ScoreBoard.vue'
 import ShotSimulator from './components/ShotSimulator.vue'
+import MatchHistory from './components/MatchHistory.vue'
 
 const partidaActual = ref(null)
 let socket = null
@@ -60,6 +61,10 @@ onMounted(() => {
 onUnmounted(() => {
   if (socket) socket.close()
 })
+
+const cargarPartidaDelHistorial = (partida) => {
+  partidaActual.value = partida
+}
 </script>
 
 <template>
@@ -72,7 +77,9 @@ onUnmounted(() => {
     <main>
       <!-- Si no hay partida, mostrar formulario -->
       <div v-if="!partidaActual">
-        <CreateMatchForm @partidaIniciada="iniciarPartida" />
+        <!-- En <template>, dentro del div v-if="!partidaActual" -->
+<CreateMatchForm @partidaIniciada="iniciarPartida" />
+<MatchHistory @partidaSeleccionada="cargarPartidaDelHistorial" />
       </div>
 
       <!-- Si hay partida, mostrar marcador y simulador -->
