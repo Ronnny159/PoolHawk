@@ -1,21 +1,65 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { obtenerPartida } from './api/matches'
 import CreateMatchForm from './components/CreateMatchForm.vue'
 import ScoreBoard from './components/ScoreBoard.vue'
 import ShotSimulator from './components/ShotSimulator.vue'
 
 const partidaActual = ref(null)
+let socket = null
 
 const iniciarPartida = (nuevaPartida) => {
   partidaActual.value = nuevaPartida
 }
 
+// Mantenemos esta función por si acaso el simulador la usa
 const recargarPartida = async () => {
   if (!partidaActual.value) return
   const datos = await obtenerPartida(partidaActual.value.id)
   partidaActual.value = datos
 }
+
+// ───────────────────────────────────────────────────────────
+// Lógica del WebSocket
+// ───────────────────────────────────────────────────────────
+const conectarWebSocket = () => {
+  // Nos conectamos al endpoint que creaste en Spring Boot
+  socket = new WebSocket('ws://localhost:8080/ws/matches')
+
+  socket.onopen = () => {
+    console.log('🟢 Conectado al WebSocket de PoolHawk')
+  }
+
+  socket.onmessage = (event) => {
+    // El backend envía la partida completa en formato JSON
+    const partidaActualizada = JSON.parse(event.data)
+    
+    // Solo actualizamos la pantalla si es la partida que estamos viendo
+    if (partidaActual.value && partidaActual.value.id === partidaActualizada.id) {
+      console.log('⚡ Marcador actualizado en vivo')
+      partidaActual.value = partidaActualizada
+    }
+  }
+
+  socket.onclose = () => {
+    console.log('🔴 WebSocket desconectado. Reconectando en 3 segundos...')
+    setTimeout(conectarWebSocket, 3000) // Reconexión automática si se cae el server
+  }
+
+  socket.onerror = (error) => {
+    console.error('Error en WebSocket:', error)
+  }
+}
+
+// Conectamos el WebSocket cuando la app arranca
+onMounted(() => {
+  conectarWebSocket()
+})
+
+// Cerramos el WebSocket cuando se cierra la pestaña
+onUnmounted(() => {
+  if (socket) socket.close()
+})
 </script>
 
 <template>

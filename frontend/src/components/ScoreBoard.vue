@@ -1,6 +1,18 @@
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   partida: { type: Object, required: true }
+})
+
+// Calculamos dinámicamente si es el turno del Equipo A
+const turnoEsDeA = computed(() => {
+  return props.partida.equipoA.some(j => j.nombre === props.partida.jugadorActual)
+})
+
+// Calculamos dinámicamente si es el turno del Equipo B
+const turnoEsDeB = computed(() => {
+  return props.partida.equipoB.some(j => j.nombre === props.partida.jugadorActual)
 })
 </script>
 
