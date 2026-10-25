@@ -111,7 +111,39 @@ public class MatchService {
      * @return lista de partidas
      */
     public List<Partida> listarTodas() {
-        return new ArrayList<>(partidasEnMemoria.values());
+        List<PartidaEntity> entities = storage.listarTodas();
+        
+        return entities.stream().map(entity -> {
+            // 1. Extraemos los jugadores de la entidad
+            List<Jugador> jugadoresA = entity.getJugadores().stream()
+                .filter(j -> "A".equals(j.getEquipo()))
+                .map(j -> new Jugador(j.getId(), j.getNombre()))
+                .toList();
+                
+            List<Jugador> jugadoresB = entity.getJugadores().stream()
+                .filter(j -> "B".equals(j.getEquipo()))
+                .map(j -> new Jugador(j.getId(), j.getNombre()))
+                .toList();
+
+            // 2. Creamos los equipos con el constructor de 2 argumentos
+            String nombreA = jugadoresA.isEmpty() ? "Equipo A" : jugadoresA.get(0).nombre();
+            Equipo equipoA = new Equipo("eA-" + entity.getId(), nombreA);
+            jugadoresA.forEach(equipoA::agregarJugador); // Agregamos los jugadores uno por uno
+
+            String nombreB = jugadoresB.isEmpty() ? "Equipo B" : jugadoresB.get(0).nombre();
+            Equipo equipoB = new Equipo("eB-" + entity.getId(), nombreB);
+            jugadoresB.forEach(equipoB::agregarJugador);
+
+            // 3. Retornamos la partida
+            return new Partida(
+                entity.getId(),
+                TipoModalidad.valueOf(entity.getModalidad()),
+                equipoA,
+                equipoB,
+                new Mesa(), // Mesa vacía para el historial
+                entity.getFechaCreacion()
+            );
+        }).collect(Collectors.toList());
     }
 
     /**
