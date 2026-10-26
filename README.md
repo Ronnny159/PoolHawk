@@ -74,6 +74,13 @@ PoolHawk/
 
 Desde la raíz del repositorio:
 
+Antes de la primera ejecución, crea tu archivo de variables de entorno a partir de la plantilla:
+
+```bash
+cp .env.example .env
+```
+
+En Windows (PowerShell): `Copy-Item .env.example .env`. Luego edita `.env` y cambia las contraseñas si lo deseas.
 
 
 ```bash
@@ -236,5 +243,32 @@ cd backend
 
 ```
 
+## Seguridad básica
+
+Se aplicaron tres medidas de seguridad en la infraestructura.
+
+### 1. Credenciales en variables de entorno
+
+Las credenciales de PostgreSQL ya no están escritas en `docker-compose.yml`: se leen del archivo `.env` en la raíz del proyecto.
+
+- `.env` contiene las contraseñas reales y **está ignorado por Git**, por lo que no se sube al repositorio.
+- `.env.example` es la plantilla que sí se versiona. Cópiala a `.env` y ajusta los valores.
+- Si falta alguna variable, `docker compose` se detiene con un mensaje claro en lugar de usar valores en blanco.
+- Si cambias la contraseña después de haber creado la base, borra el volumen (`docker compose down -v`), porque PostgreSQL solo lee sus credenciales al inicializarse.
+
+### 2. CORS restringido en el WebSocket
+
+El endpoint `/ws/matches` solo acepta conexiones cuyo origen sea `http://localhost:5173` (el frontend). Una página alojada en otro origen no puede conectarse al marcador en vivo. Si el frontend se publica en otra dirección, hay que actualizar `setAllowedOrigins(...)` en `WebSocketConfig.java`.
+
+Nota: abrir el frontend como `http://127.0.0.1:5173` cuenta como otro origen y será rechazado.
+
+### 3. Stacktrace oculto en errores
+
+En `application.yml` se configuró `server.error.include-stacktrace: never`, para que las respuestas de error de la API no incluyan trazas internas de Java. Spring Boot ya oculta el stacktrace por defecto; la línea hace explícita esa decisión y evita que se active por accidente.
+
+### Limitaciones conocidas
+
+- Para el desarrollo local, `application.yml` conserva las credenciales de la base de datos de desarrollo. En Docker, esos valores se sobrescriben con las variables del `.env`.
+- Los valores de ejemplo (`poolhawk_password`) son solo para desarrollo y deben cambiarse en cualquier entorno real.
 
 
