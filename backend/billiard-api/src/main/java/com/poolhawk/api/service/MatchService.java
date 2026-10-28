@@ -321,6 +321,67 @@ public class MatchService {
             jugadores.add(toJugadorEntity(j, "B", entity));
         }
         entity.setJugadores(jugadores);
+
+        try {
+            entity.setEstadoMesaJson(jsonMapper.writeValueAsString(partida.getMesa().getBolas()));
+        } catch (Exception e) {
+            System.err.println("Error guardando mesa en JSON: " + e.getMessage());
+        }
+
         return entity;
+    }
+
+    /**
+     * Reconstruye una entidad JPA a un objeto de dominio Partida,
+     * recuperando la lista de jugadores y el estado de la mesa desde el JSON.
+     *
+     * @param entity entidad de la base de datos
+     * @return objeto de dominio Partida
+     */
+    private Partida reconstruirPartida(PartidaEntity entity) {
+        // 1. Extraemos los jugadores
+        List<Jugador> jugadoresA = entity.getJugadores().stream()
+            .filter(j -> "A".equals(j.getEquipo()))
+            .map(j -> new Jugador(j.getId(), j.getNombre()))
+            .toList();
+            
+        List<Jugador> jugadoresB = entity.getJugadores().stream()
+            .filter(j -> "B".equals(j.getEquipo()))
+            .map(j -> new Jugador(j.getId(), j.getNombre()))
+            .toList();
+
+        String nombreA = jugadoresA.isEmpty() ? "Equipo A" : jugadoresA.get(0).nombre();
+        Equipo equipoA = new Equipo("eA-" + entity.getId(), nombreA);
+        jugadoresA.forEach(equipoA::agregarJugador);
+
+        String nombreB = jugadoresB.isEmpty() ? "Equipo B" : jugadoresB.get(0).nombre();
+        Equipo equipoB = new Equipo("eB-" + entity.getId(), nombreB);
+        jugadoresB.forEach(equipoB::agregarJugador);
+
+        // 2. Reconstruimos la mesa
+        Mesa mesaReconstruida = new Mesa();
+        if (entity.getEstadoMesaJson() != null && !entity.getEstadoMesaJson().isEmpty()) {
+            try {
+                List<Bola> bolasGuardadas = jsonMapper.readValue(
+                    entity.getEstadoMesaJson(), 
+                    jsonMapper.getTypeFactory().constructCollectionType(List.class, Bola.class)
+                );
+                for (Bola b : bolasGuardadas) {
+                    mesaReconstruida.agregarBola(b);
+                }
+            } catch (Exception e) {
+                System.err.println("Error leyendo mesa desde JSON: " + e.getMessage());
+            }
+        }
+
+        // 3. Creamos la partida
+        return new Partida(
+            entity.getId(),
+            TipoModalidad.valueOf(entity.getModalidad()),
+            equipoA,
+            equipoB,
+            mesaReconstruida,
+            entity.getFechaCreacion()
+        );
     }
 }
