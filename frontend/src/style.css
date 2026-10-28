@@ -1,0 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;800&display=swap');
+
+:root {
+  --bg-main: #0f172a;       /* Fondo más oscuro */
+  --felt-green: #15803d;    /* Verde mesa oscuro */
+  --felt-light: #22c55e;    /* Verde mesa iluminado */
+  
+  --ball-yellow: #facc15;   /* Bola 1 */
+  --ball-red: #ef4444;      /* Bola 3 */
+  --ball-blue: #3b82f6;     /* Bola 2 */
+  --ball-purple: #a855f7;   /* Bola 4 */
+  --ball-orange: #f97316;   /* Bola 5 */
+  --ball-black: #000000;    /* Bola 8 */
+  
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  
+  font-family: 'Inter', sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  /* Efecto de luz cenital sobre paño verde */
+  background: radial-gradient(circle at 50% 0%, #1e3a29 0%, var(--bg-main) 60%, #000000 100%);
+  background-attachment: fixed;
+  color: var(--text-main);
+  min-height: 100vh;
+}
+
+h1, h2, h3 {
+  font-family: 'Bebas Neue', sans-serif;
+  letter-spacing: 1px;
+}
+
+#app { width: 100%; min-height: 100vh; display: flex; flex-direction: column; }

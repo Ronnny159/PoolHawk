@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: poolhawk-api
+  datasource:
+    url: jdbc:postgresql://localhost:5433/poolhawk_db
+    username: poolhawk_user
+    password: poolhawk_password
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    open-in-view: false
+
+server:
+  port: 8080
+  error:
+    include-stacktrace: never
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+logging:
+  level:
+    com.poolhawk: DEBUG
+    org.springframework.web: INFO
