@@ -15,6 +15,10 @@ public class PartidaEntity {
     private Instant fechaCreacion;
     private String ganadorId;
 
+    @Lob // Para que la base de datos acepte textos muy largos
+    @Column(columnDefinition = "TEXT")
+    private String estadoMesaJson;
+
     @OneToMany(mappedBy = "partida", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private List<JugadorEntity> jugadores;
 
@@ -31,4 +35,6 @@ public class PartidaEntity {
     public void setGanadorId(String ganadorId) { this.ganadorId = ganadorId; }
     public List<JugadorEntity> getJugadores() { return jugadores; }
     public void setJugadores(List<JugadorEntity> jugadores) { this.jugadores = jugadores; }
+    public String getEstadoMesaJson() { return estadoMesaJson; }
+    public void setEstadoMesaJson(String estadoMesaJson) { this.estadoMesaJson = estadoMesaJson; }
 }
