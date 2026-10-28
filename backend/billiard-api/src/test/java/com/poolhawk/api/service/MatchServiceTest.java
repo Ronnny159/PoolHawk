@@ -48,8 +48,8 @@ class MatchServiceTest {
         service = new MatchService(storage, liveHandler, mapper);
     }
 
+    @SuppressWarnings("null")
     private Partida crearPartidaBola8() {
-        // AHORA: Simulamos el guardado de PartidaEntity, no de Partida
         when(partidaRepository.save(any(PartidaEntity.class))).thenAnswer(i -> i.getArguments()[0]);
         return service.crear(new CrearPartidaRequest(
             TipoModalidad.BOLA_8,
@@ -57,6 +57,7 @@ class MatchServiceTest {
             List.of("Beto")));
     }
 
+    @SuppressWarnings("null")
     private Partida crearPartidaPorPuntos() {
         when(partidaRepository.save(any(PartidaEntity.class))).thenAnswer(i -> i.getArguments()[0]);
         return service.crear(new CrearPartidaRequest(
