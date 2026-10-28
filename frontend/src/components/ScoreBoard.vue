@@ -5,14 +5,39 @@ const props = defineProps({
   partida: { type: Object, required: true }
 })
 
-// Calculamos dinámicamente si es el turno del Equipo A
+// 1. Calculamos de quién es el turno
 const turnoEsDeA = computed(() => {
   return props.partida.equipoA.some(j => j.nombre === props.partida.jugadorActual)
 })
 
-// Calculamos dinámicamente si es el turno del Equipo B
 const turnoEsDeB = computed(() => {
   return props.partida.equipoB.some(j => j.nombre === props.partida.jugadorActual)
+})
+
+// 2. Calculamos los puntos (sumando los puntos de los jugadores de cada equipo)
+const puntosEquipoA = computed(() => {
+  let total = 0
+  for (const jugador of props.partida.equipoA) {
+    total += props.partida.puntajes[jugador.nombre] || 0
+  }
+  return total
+})
+
+const puntosEquipoB = computed(() => {
+  let total = 0
+  for (const jugador of props.partida.equipoB) {
+    total += props.partida.puntajes[jugador.nombre] || 0
+  }
+  return total
+})
+
+// 3. Calculamos el nombre del equipo para mostrarlo en el marcador
+const nombreEquipoA = computed(() => {
+  return props.partida.equipoA.map(j => j.nombre).join(' & ')
+})
+
+const nombreEquipoB = computed(() => {
+  return props.partida.equipoB.map(j => j.nombre).join(' & ')
 })
 </script>
 

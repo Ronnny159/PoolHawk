@@ -7,6 +7,7 @@ import com.poolhawk.api.entity.PartidaEntity;
 import com.poolhawk.api.exception.PartidaNoEncontradaException;
 import com.poolhawk.domain.event.ResultadoTiro;
 import com.poolhawk.domain.event.TiroEvent;
+import com.poolhawk.domain.match.FasePartida;
 import com.poolhawk.domain.match.Partida;
 import com.poolhawk.domain.match.TipoModalidad;
 import com.poolhawk.domain.player.Equipo;
@@ -86,26 +87,53 @@ public class MatchService {
      * @throws PartidaNoEncontradaException si no existe
      */
     public Partida buscar(String id) {
-        // 1. Primero buscamos en la memoria (que es donde está el objeto completo)
-        Partida partida = partidasEnMemoria.get(id);
-        
-        if (partida != null) {
-            return partida;
+        // 1. Si está en memoria, la devolvemos rápido (es la que está en juego ahora mismo)
+        if (partidasEnMemoria.containsKey(id)) {
+            return partidasEnMemoria.get(id);
         }
 
-        // 2. Si no está en memoria, verificamos si existe en la base de datos
-        boolean existeEnBd = storage.buscar(id).isPresent();
-        
-        if (!existeEnBd) {
-            throw new PartidaNoEncontradaException(id);
+        // 2. Si no está (porque reiniciaste el server), la buscamos en PostgreSQL
+        PartidaEntity entity = storage.buscar(id)
+            .orElseThrow(() -> new PartidaNoEncontradaException(id));
+
+        // 3. Reconstruimos la partida desde la BD
+        List<Jugador> jugadoresA = entity.getJugadores().stream()
+            .filter(j -> "A".equals(j.getEquipo()))
+            .map(j -> new Jugador(j.getId(), j.getNombre()))
+            .toList();
+            
+        List<Jugador> jugadoresB = entity.getJugadores().stream()
+            .filter(j -> "B".equals(j.getEquipo()))
+            .map(j -> new Jugador(j.getId(), j.getNombre()))
+            .toList();
+
+        Equipo equipoA = new Equipo("eA-" + entity.getId(), jugadoresA.isEmpty() ? "Equipo A" : jugadoresA.get(0).nombre());
+        jugadoresA.forEach(equipoA::agregarJugador);
+
+        Equipo equipoB = new Equipo("eB-" + entity.getId(), jugadoresB.isEmpty() ? "Equipo B" : jugadoresB.get(0).nombre());
+        jugadoresB.forEach(equipoB::agregarJugador);
+
+        // Creamos la mesa y la partida
+        Mesa mesa = construirMesaInicial(); // Volvemos a armar la mesa
+        Partida partida = new Partida(
+            entity.getId(),
+            TipoModalidad.valueOf(entity.getModalidad()),
+            equipoA,
+            equipoB,
+            mesa,
+            entity.getFechaCreacion()
+        );
+
+        // (Opcional) Si la partida en la BD estaba EN_CURSO, la iniciamos
+        if (FasePartida.valueOf(entity.getFase()) == FasePartida.EN_CURSO) {
+            partida.iniciar();
         }
 
-        // 3. Si existe en la base de datos pero no en memoria (ej. el servidor se reinició),
-        // necesitaríamos un mapper inverso (Entity -> Domain) para reconstruirla.
-        // Para este MVP, si se reinicia el servidor, las partidas en curso se pierden.
-        throw new PartidaNoEncontradaException(id + " (requiere reinicio de partida)");
+        // La guardamos en memoria para que el siguiente tiro sea rápido
+        partidasEnMemoria.put(id, partida);
+        
+        return partida;
     }
-
     /**
      * Lista todas las partidas almacenadas.
      *
