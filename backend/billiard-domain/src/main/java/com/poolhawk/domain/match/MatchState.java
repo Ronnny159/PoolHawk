@@ -38,7 +38,7 @@ public class MatchState {
 
     private final String partidaId;
     private final TipoModalidad modalidad;
-    private final Turnos turnos;
+    private final Turnos<Jugador> turnos; 
     private final Mesa mesa;
     private final Instant fechaInicio;
 
@@ -61,7 +61,7 @@ public class MatchState {
      */
     public MatchState(String partidaId,
                       TipoModalidad modalidad,
-                      Turnos turnos,
+                      Turnos<Jugador> turnos,
                       Mesa mesa,
                       Instant fechaInicio) {
         Objects.requireNonNull(partidaId, "El id de la partida no puede ser nulo");
@@ -105,7 +105,7 @@ public class MatchState {
     public TipoModalidad getModalidad() { return modalidad; }
 
     /** @return gestor de turnos */
-    public Turnos getTurnos() { return turnos; }
+    public Turnos<Jugador> getTurnos() { return turnos; }
 
     /** @return mesa con las bolas */
     public Mesa getMesa() { return mesa; }

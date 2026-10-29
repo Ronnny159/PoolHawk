@@ -7,6 +7,7 @@ import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.Mesa;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -82,7 +83,12 @@ public class Partida {
         this.equipoB = equipoB;
         this.fechaCreacion = fechaCreacion;
 
-        Turnos turnos = Turnos.desdeEquipos(equipoA, equipoB);
+        // Armar la lista de jugadores de ambos equipos
+        List<Jugador> jugadores = new ArrayList<>(equipoA.getJugadores());
+        jugadores.addAll(equipoB.getJugadores());
+
+        // Crear turnos genéricos con los jugadores
+        Turnos<Jugador> turnos = new Turnos<>(jugadores);
         this.estado = new MatchState(id, modalidad, turnos, mesa, fechaCreacion);
     }
 
@@ -220,6 +226,15 @@ public class Partida {
         return List.of(equipoA, equipoB);
     }
 
+    /**
+     * Retorna la mesa de la partida.
+     *
+     * @return mesa con las bolas
+     */
+    public Mesa getMesa() {
+        return estado.getMesa();
+    }
+
     // ═══════════════════════════════════════════════════════════
     // OPERACIONES DELEGADAS AL ESTADO
     // ═══════════════════════════════════════════════════════════
@@ -329,10 +344,5 @@ public class Partida {
             ", equipoA='" + equipoA.getNombre() + '\'' +
             ", equipoB='" + equipoB.getNombre() + '\'' +
             '}';
-    }
-
-    public Mesa getMesa() {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'getMesa'");
     }
 }

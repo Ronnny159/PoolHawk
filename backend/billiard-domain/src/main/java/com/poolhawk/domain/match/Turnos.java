@@ -9,40 +9,32 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Gestiona el orden de turnos entre los jugadores de una partida.
+ * Gestiona el orden de turnos de forma circular.
  *
- * <p>Los turnos funcionan como una lista circular: después del último
- * jugador, se vuelve al primero. El orden se define al crear el objeto
- * y se mantiene constante durante la partida, salvo reinicio explícito.</p>
- *
- * <p>El orden de juego según modalidad es:</p>
- * <ul>
- *   <li><b>Bola 8 (individual):</b> {@code [J1, J2]} — alternan uno a uno.</li>
- *   <li><b>Por Puntos (parejas):</b> {@code [A1, B1, A2, B2]} — rotación
- *       estricta intercalando equipos.</li>
- * </ul>
+ * <p>Utiliza genéricos para poder rotar indistintamente entre {@link Jugador}
+ * (en modalidades individuales) o {@link Equipo} (en modalidades de parejas).</p>
  *
  * <p>Esta clase es mutable: {@link #avanzar()} modifica el índice interno
- * del jugador actual.</p>
+ * del jugador/equipo actual.</p>
  *
+ * @param <T> El tipo de participante (Jugador o Equipo).
  * @author PoolHawk Team
- * @since 0.1.0
+ * @since 0.2.0
  */
-public class Turnos {
+public class Turnos<T> {
 
-    private final List<Jugador> orden;
+    private final List<T> orden;
     private int indiceActual;
 
     /**
      * Crea un gestor de turnos con el orden indicado, comenzando por el
-     * primer jugador de la lista.
+     * primer participante de la lista.
      *
-     * @param orden lista de jugadores en el orden de juego
+     * @param orden lista de participantes en el orden de juego
      * @throws NullPointerException     si la lista es nula
-     * @throws IllegalArgumentException si la lista está vacía o contiene
-     *                                  menos de 2 jugadores
+     * @throws IllegalArgumentException si la lista tiene menos de 2 participantes
      */
-    public Turnos(List<Jugador> orden) {
+    public Turnos(List<T> orden) {
         this(orden, 0);
     }
 
@@ -50,18 +42,18 @@ public class Turnos {
      * Crea un gestor de turnos con el orden indicado, comenzando en la
      * posición especificada.
      *
-     * @param orden         lista de jugadores en el orden de juego
-     * @param indiceInicial índice del jugador que comienza (0-based)
+     * @param orden         lista de participantes en el orden de juego
+     * @param indiceInicial índice del participante que comienza (0-based)
      * @throws NullPointerException     si la lista es nula
-     * @throws IllegalArgumentException si la lista tiene menos de 2 jugadores
+     * @throws IllegalArgumentException si la lista tiene menos de 2 participantes
      *                                  o el índice inicial está fuera de rango
      */
-    public Turnos(List<Jugador> orden, int indiceInicial) {
-        Objects.requireNonNull(orden, "La lista de jugadores no puede ser nula");
+    public Turnos(List<T> orden, int indiceInicial) {
+        Objects.requireNonNull(orden, "La lista de participantes no puede ser nula");
 
         if (orden.size() < 2) {
             throw new IllegalArgumentException(
-                "Se requieren al menos 2 jugadores para gestionar turnos. " +
+                "Se requieren al menos 2 participantes para gestionar turnos. " +
                 "Cantidad recibida: " + orden.size()
             );
         }
@@ -73,11 +65,11 @@ public class Turnos {
             );
         }
 
-        // Verificar que no haya jugadores duplicados
+        // Verificar que no haya participantes duplicados
         long distintos = orden.stream().distinct().count();
         if (distintos != orden.size()) {
             throw new IllegalArgumentException(
-                "La lista de jugadores contiene duplicados"
+                "La lista de participantes contiene duplicados"
             );
         }
 
@@ -86,65 +78,38 @@ public class Turnos {
     }
 
     /**
-     * Crea un gestor de turnos a partir de dos equipos, intercalando
-     * sus jugadores en el orden correcto.
+     * Fábrica para crear los turnos a partir de una lista de Equipos.
+     * (Útil para 2 vs 2).
      *
-     * <p>Para equipos con 2 jugadores cada uno, el orden resultante es:
-     * {@code [A[0], B[0], A[1], B[1]]}. Para equipos con 1 jugador,
-     * el orden es {@code [A[0], B[0]]}.</p>
-     *
-     * <p>Útil para construir el orden estándar de Por Puntos y Bola 8.</p>
-     *
-     * @param equipoA primer equipo
-     * @param equipoB segundo equipo
-     * @return gestor de turnos con el orden intercalado
-     * @throws NullPointerException     si algún equipo es nulo
-     * @throws IllegalArgumentException si ambos equipos tienen distinto
-     *                                  número de jugadores
+     * @param equipos Lista de equipos.
+     * @return Gestor de turnos de tipo Equipo.
      */
-    public static Turnos desdeEquipos(Equipo equipoA, Equipo equipoB) {
-        Objects.requireNonNull(equipoA, "El equipo A no puede ser nulo");
-        Objects.requireNonNull(equipoB, "El equipo B no puede ser nulo");
-
-        int cantidadA = equipoA.cantidadJugadores();
-        int cantidadB = equipoB.cantidadJugadores();
-
-        if (cantidadA != cantidadB) {
-            throw new IllegalArgumentException(
-                "Los equipos deben tener la misma cantidad de jugadores. " +
-                "Equipo A: " + cantidadA + ", Equipo B: " + cantidadB
-            );
-        }
-
-        if (cantidadA == 0) {
-            throw new IllegalArgumentException(
-                "Los equipos deben tener al menos un jugador"
-            );
-        }
-
-        List<Jugador> intercalados = new ArrayList<>(cantidadA * 2);
-        List<Jugador> jugadoresA = equipoA.getJugadores();
-        List<Jugador> jugadoresB = equipoB.getJugadores();
-
-        for (int i = 0; i < cantidadA; i++) {
-            intercalados.add(jugadoresA.get(i));
-            intercalados.add(jugadoresB.get(i));
-        }
-
-        return new Turnos(intercalados);
+    public static Turnos<Equipo> desdeEquipos(List<Equipo> equipos) {
+        return new Turnos<>(equipos);
     }
 
     /**
-     * Retorna el jugador que tiene el turno actual.
+     * Fábrica para crear los turnos a partir de una lista de Jugadores.
+     * (Útil para 1 vs 1, 1 vs 1 vs 1, etc.).
      *
-     * @return jugador actual
+     * @param jugadores Lista de jugadores.
+     * @return Gestor de turnos de tipo Jugador.
      */
-    public Jugador jugadorActual() {
+    public static Turnos<Jugador> desdeJugadores(List<Jugador> jugadores) {
+        return new Turnos<>(jugadores);
+    }
+
+    /**
+     * Retorna el participante que tiene el turno actual.
+     *
+     * @return jugador o equipo actual
+     */
+    public T jugadorActual() {
         return orden.get(indiceActual);
     }
 
     /**
-     * Retorna el índice actual del jugador en el orden de turnos.
+     * Retorna el índice actual en el orden de turnos.
      *
      * @return índice 0-based
      */
@@ -153,10 +118,7 @@ public class Turnos {
     }
 
     /**
-     * Avanza al siguiente jugador en la rotación circular.
-     *
-     * <p>Si el jugador actual es el último de la lista, el siguiente es
-     * el primero.</p>
+     * Avanza al siguiente participante en la rotación circular.
      */
     public void avanzar() {
         indiceActual = (indiceActual + 1) % orden.size();
@@ -165,8 +127,7 @@ public class Turnos {
     /**
      * Avanza {@code n} posiciones en la rotación circular.
      *
-     * @param n número de posiciones a avanzar (puede ser negativo para
-     *          retroceder)
+     * @param n número de posiciones a avanzar (puede ser negativo para retroceder)
      */
     public void avanzar(int n) {
         int tamaño = orden.size();
@@ -174,85 +135,83 @@ public class Turnos {
     }
 
     /**
-     * Reinicia la rotación al primer jugador de la lista.
+     * Reinicia la rotación al primer participante de la lista.
      */
     public void reiniciar() {
         indiceActual = 0;
     }
 
     /**
-     * Reinicia la rotación de manera que comience el jugador indicado.
+     * Reinicia la rotación de manera que comience el participante indicado.
      *
-     * <p>Útil para establecer el ganador del lag como primer tirador.</p>
-     *
-     * @param jugador jugador que debe comenzar
-     * @throws IllegalArgumentException si el jugador no está en el orden
+     * @param participante jugador o equipo que debe comenzar
+     * @throws IllegalArgumentException si el participante no está en el orden
      */
-    public void reiniciarDesde(Jugador jugador) {
-        Objects.requireNonNull(jugador, "El jugador no puede ser nulo");
-        int posicion = posicionDe(jugador);
+    public void reiniciarDesde(T participante) {
+        Objects.requireNonNull(participante, "El participante no puede ser nulo");
+        int posicion = posicionDe(participante);
         if (posicion < 0) {
             throw new IllegalArgumentException(
-                "El jugador " + jugador.nombre() + " no está en el orden de turnos"
+                "El participante no está en el orden de turnos"
             );
         }
         indiceActual = posicion;
     }
 
     /**
-     * Retorna una lista inmutable con el orden completo de jugadores.
+     * Retorna una lista inmutable con el orden completo.
      *
      * @return orden de turnos
      */
-    public List<Jugador> jugadores() {
+    public List<T> jugadores() {
         return orden;
     }
 
     /**
-     * Retorna la cantidad total de jugadores en la rotación.
+     * Retorna la cantidad total de participantes en la rotación.
      *
-     * @return cantidad de jugadores
+     * @return cantidad
      */
     public int cantidadJugadores() {
         return orden.size();
     }
 
     /**
-     * Verifica si es el turno del jugador indicado.
+     * Verifica si es el turno del participante indicado.
      *
-     * @param jugador jugador a verificar
+     * @param participante jugador o equipo a verificar
      * @return {@code true} si es su turno
      */
-    public boolean esTurnoDe(Jugador jugador) {
-        return jugadorActual().equals(jugador);
+    public boolean esTurnoDe(T participante) {
+        return jugadorActual().equals(participante);
     }
 
     /**
-     * Retorna la posición de un jugador en el orden.
+     * Retorna la posición de un participante en el orden.
      *
-     * @param jugador jugador a buscar
+     * @param participante jugador o equipo a buscar
      * @return índice 0-based, o -1 si no está en el orden
      */
-    public int posicionDe(Jugador jugador) {
-        return orden.indexOf(jugador);
+    public int posicionDe(T participante) {
+        return orden.indexOf(participante);
     }
 
     /**
-     * Retorna el siguiente jugador en la rotación sin modificar el estado.
+     * Retorna el siguiente participante en la rotación sin modificar el estado.
      *
-     * @return siguiente jugador
+     * @return siguiente participante
      */
-    public Jugador turnoSiguiente() {
+    public T turnoSiguiente() {
         int siguiente = (indiceActual + 1) % orden.size();
         return orden.get(siguiente);
     }
 
     /**
-     * Retorna el jugador anterior en la rotación sin modificar el estado.
+     * Retorna el participante anterior en la rotación sin modificar el estado.
      *
-     * @return jugador anterior
+     * @return participante anterior
      */
-    public Jugador turnoAnterior() {
+    public T turnoAnterior() {
         int anterior = (indiceActual - 1 + orden.size()) % orden.size();
         return orden.get(anterior);
     }

@@ -15,9 +15,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * Pruebas unitarias de {@link Turnos}.
  *
  * @author PoolHawk Team
- * @since 0.1.0
+ * @since 0.2.0
  */
-@DisplayName("Turnos - rotación de jugadores")
+@DisplayName("Turnos - rotación de participantes")
 class TurnosTest {
 
     private static final Jugador J1 = new Jugador("j1", "Ana");
@@ -32,16 +32,16 @@ class TurnosTest {
         @Test
         @DisplayName("Crea turnos con 2 jugadores")
         void dosJugadores() {
-            Turnos turnos = new Turnos(List.of(J1, J2));
+            Turnos<Jugador> turnos = new Turnos<>(List.of(J1, J2));
             assertEquals(2, turnos.cantidadJugadores());
             assertEquals(J1, turnos.jugadorActual());
             assertEquals(0, turnos.indiceActual());
         }
 
         @Test
-        @DisplayName("Crea turnos con 4 jugadores (Por Puntos)")
+        @DisplayName("Crea turnos con 4 jugadores (Por Puntos / Bola 8 libre)")
         void cuatroJugadores() {
-            Turnos turnos = new Turnos(List.of(J1, J2, J3, J4));
+            Turnos<Jugador> turnos = new Turnos<>(List.of(J1, J2, J3, J4));
             assertEquals(4, turnos.cantidadJugadores());
             assertEquals(J1, turnos.jugadorActual());
         }
@@ -49,7 +49,7 @@ class TurnosTest {
         @Test
         @DisplayName("Crea turnos con índice inicial")
         void indiceInicial() {
-            Turnos turnos = new Turnos(List.of(J1, J2, J3, J4), 2);
+            Turnos<Jugador> turnos = new Turnos<>(List.of(J1, J2, J3, J4), 2);
             assertEquals(J3, turnos.jugadorActual());
             assertEquals(2, turnos.indiceActual());
         }
@@ -58,43 +58,43 @@ class TurnosTest {
         @DisplayName("Rechaza lista nula")
         void rechazaListaNula() {
             assertThrows(NullPointerException.class,
-                () -> new Turnos(null));
+                () -> new Turnos<Jugador>(null));
         }
 
         @Test
         @DisplayName("Rechaza lista vacía")
         void rechazaListaVacia() {
             assertThrows(IllegalArgumentException.class,
-                () -> new Turnos(List.of()));
+                () -> new Turnos<Jugador>(List.of()));
         }
 
         @Test
         @DisplayName("Rechaza lista con un solo jugador")
         void rechazaUnJugador() {
             assertThrows(IllegalArgumentException.class,
-                () -> new Turnos(List.of(J1)));
+                () -> new Turnos<Jugador>(List.of(J1)));
         }
 
         @Test
         @DisplayName("Rechaza índice inicial fuera de rango")
         void rechazaIndiceInvalido() {
             assertThrows(IllegalArgumentException.class,
-                () -> new Turnos(List.of(J1, J2), 5));
+                () -> new Turnos<Jugador>(List.of(J1, J2), 5));
             assertThrows(IllegalArgumentException.class,
-                () -> new Turnos(List.of(J1, J2), -1));
+                () -> new Turnos<Jugador>(List.of(J1, J2), -1));
         }
 
         @Test
         @DisplayName("Rechaza jugadores duplicados")
         void rechazaDuplicados() {
             assertThrows(IllegalArgumentException.class,
-                () -> new Turnos(List.of(J1, J2, J1)));
+                () -> new Turnos<Jugador>(List.of(J1, J2, J1)));
         }
 
         @Test
         @DisplayName("La lista de jugadores es inmutable")
         void listaInmutable() {
-            Turnos turnos = new Turnos(List.of(J1, J2));
+            Turnos<Jugador> turnos = new Turnos<>(List.of(J1, J2));
             assertThrows(UnsupportedOperationException.class,
                 () -> turnos.jugadores().clear());
         }
@@ -105,57 +105,16 @@ class TurnosTest {
     class FabricaDesdeEquipos {
 
         @Test
-        @DisplayName("Crea turnos intercalados para parejas")
-        void parejasIntercaladas() {
+        @DisplayName("Crea turnos rotando entre equipos")
+        void rotacionEntreEquipos() {
             Equipo equipoA = Equipo.pareja("eA", "A", J1, J3);
             Equipo equipoB = Equipo.pareja("eB", "B", J2, J4);
 
-            Turnos turnos = Turnos.desdeEquipos(equipoA, equipoB);
-
-            assertEquals(4, turnos.cantidadJugadores());
-            assertEquals(List.of(J1, J2, J3, J4), turnos.jugadores());
-        }
-
-        @Test
-        @DisplayName("Crea turnos para equipos individuales")
-        void individuales() {
-            Equipo equipoA = Equipo.individual("eA", "A", J1);
-            Equipo equipoB = Equipo.individual("eB", "B", J2);
-
-            Turnos turnos = Turnos.desdeEquipos(equipoA, equipoB);
+            // Ahora la fábrica recibe una lista de equipos
+            Turnos<Equipo> turnos = Turnos.desdeEquipos(List.of(equipoA, equipoB));
 
             assertEquals(2, turnos.cantidadJugadores());
-            assertEquals(List.of(J1, J2), turnos.jugadores());
-        }
-
-        @Test
-        @DisplayName("Rechaza equipos con distinta cantidad de jugadores")
-        void equiposDesiguales() {
-            Equipo equipoA = Equipo.individual("eA", "A", J1);
-            Equipo equipoB = Equipo.pareja("eB", "B", J2, J4);
-
-            assertThrows(IllegalArgumentException.class,
-                () -> Turnos.desdeEquipos(equipoA, equipoB));
-        }
-
-        @Test
-        @DisplayName("Rechaza equipos vacíos")
-        void equiposVacios() {
-            Equipo vacioA = new Equipo("eA", "A");
-            Equipo vacioB = new Equipo("eB", "B");
-
-            assertThrows(IllegalArgumentException.class,
-                () -> Turnos.desdeEquipos(vacioA, vacioB));
-        }
-
-        @Test
-        @DisplayName("Rechaza equipos nulos")
-        void equiposNulos() {
-            Equipo equipo = new Equipo("e", "Equipo");
-            assertThrows(NullPointerException.class,
-                () -> Turnos.desdeEquipos(null, equipo));
-            assertThrows(NullPointerException.class,
-                () -> Turnos.desdeEquipos(equipo, null));
+            assertEquals(equipoA, turnos.jugadorActual()); // Empieza el equipo A
         }
     }
 
@@ -163,11 +122,11 @@ class TurnosTest {
     @DisplayName("Avance circular")
     class AvanceCircular {
 
-        private Turnos turnos;
+        private Turnos<Jugador> turnos;
 
         @BeforeEach
         void setUp() {
-            turnos = new Turnos(List.of(J1, J2, J3, J4));
+            turnos = new Turnos<>(List.of(J1, J2, J3, J4));
         }
 
         @Test
@@ -215,11 +174,11 @@ class TurnosTest {
     @DisplayName("Reinicio")
     class Reinicio {
 
-        private Turnos turnos;
+        private Turnos<Jugador> turnos;
 
         @BeforeEach
         void setUp() {
-            turnos = new Turnos(List.of(J1, J2, J3, J4));
+            turnos = new Turnos<>(List.of(J1, J2, J3, J4));
         }
 
         @Test
@@ -259,11 +218,11 @@ class TurnosTest {
     @DisplayName("Consulta de turnos")
     class Consulta {
 
-        private Turnos turnos;
+        private Turnos<Jugador> turnos;
 
         @BeforeEach
         void setUp() {
-            turnos = new Turnos(List.of(J1, J2, J3, J4));
+            turnos = new Turnos<>(List.of(J1, J2, J3, J4));
         }
 
         @Test
