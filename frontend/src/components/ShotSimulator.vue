@@ -1,6 +1,7 @@
 <script setup>
 import { registrarTiro } from '../api/matches'
 import { ref } from 'vue'
+import { toast } from '../utils/toast'
 
 const props = defineProps({
   partida: { type: Object, required: true }
@@ -8,6 +9,16 @@ const props = defineProps({
 
 const emit = defineEmits(['tiroRegistrado'])
 const cargando = ref(false)
+
+// Muestra el veredicto del motor de reglas como notificacion
+const avisarResultado = (resultado) => {
+  const mensaje = resultado?.descripcion ?? 'Tiro registrado'
+  if (mensaje.startsWith('Falta')) {
+    toast.warning(mensaje)
+  } else {
+    toast.success(mensaje)
+  }
+}
 
 const simularTiro = async (tipo) => {
   try {
@@ -39,12 +50,13 @@ const simularTiro = async (tipo) => {
       payload.troneras = ['TOP_LEFT']
     }
 
-    await registrarTiro(props.partida.id, payload)
+    const resultado = await registrarTiro(props.partida.id, payload)
     emit('tiroRegistrado')
+    avisarResultado(resultado)
 
   } catch (error) {
     console.error('Error al registrar tiro:', error)
-    alert('Error al registrar el tiro')
+    toast.error('Error al registrar el tiro')
   } finally {
     cargando.value = false
   }
