@@ -1,5 +1,7 @@
 # PoolHawk
 
+[![Maven CI](https://github.com/Ronnny159/PoolHawk/actions/workflows/maven.yml/badge.svg?branch=develop)](https://github.com/Ronnny159/PoolHawk/actions/workflows/maven.yml)
+
 PoolHawk es un marcador automático de partidas de billar mediante visión por computadora. Elimina el conteo manual y garantiza la aplicación objetiva de las reglas (Bola 8 y Por Puntos). Los tiros se registran por una API REST, pasan por el motor de reglas y el marcador se actualiza en vivo en el navegador mediante WebSockets.
 
 **Stack:** Java 21 + Spring Boot (Maven multi-módulo), Vue 3 (Vite), PostgreSQL y Docker.
