@@ -25,6 +25,12 @@ const cargarPartidaDelHistorial = (partida) => {
   partidaActual.value = partida
 }
 
+// Función para cerrar sesión
+const cerrarSesion = () => {
+  localStorage.removeItem('token')
+  window.location.reload() // Recarga para volver al login
+}
+
 // ───────────────────────────────────────────────────────────
 // Lógica del WebSocket
 // ───────────────────────────────────────────────────────────
@@ -73,6 +79,7 @@ onUnmounted(() => {
     <header>
       <h1> PoolHawk</h1>
       <p class="subtitle">Sistema de Rastreo y Marcado Automático</p>
+      <button @click="cerrarSesion">Salir</button>
     </header>
 
     <main>

@@ -1,5 +1,8 @@
 package com.poolhawk.domain.table;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.Objects;
 
 /**
@@ -32,6 +35,7 @@ public record Bola(int numero, TipoBola tipo, Coordenada posicion, boolean enMes
      *                                  o si el tipo no corresponde
      * @throws NullPointerException     si la posición o el tipo son nulos
      */
+    @JsonCreator
     public Bola {
         Objects.requireNonNull(tipo, "El tipo de bola no puede ser nulo");
         Objects.requireNonNull(posicion, "La posición de la bola no puede ser nula");

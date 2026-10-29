@@ -330,4 +330,9 @@ public class Partida {
             ", equipoB='" + equipoB.getNombre() + '\'' +
             '}';
     }
+
+    public Mesa getMesa() {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'getMesa'");
+    }
 }
