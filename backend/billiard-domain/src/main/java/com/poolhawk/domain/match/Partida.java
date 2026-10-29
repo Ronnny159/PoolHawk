@@ -40,21 +40,6 @@ public class Partida {
 
     /**
      * Crea una nueva partida en fase CREADA.
-     *
-     * <p>Construye internamente el {@link MatchState} a partir de los
-     * equipos, intercalando sus jugadores según la modalidad.</p>
-     *
-     * @param id            identificador único de la partida
-     * @param modalidad     modalidad de la partida
-     * @param equipoA       primer equipo
-     * @param equipoB       segundo equipo
-     * @param mesa          mesa con las bolas en su posición inicial
-     * @param fechaCreacion momento en que se creó la partida
-     * @throws NullPointerException     si algún parámetro es nulo
-     * @throws IllegalArgumentException si el id está en blanco, si los
-     *                                  equipos tienen distinta cantidad de
-     *                                  jugadores, o si la cantidad no
-     *                                  corresponde a la modalidad
      */
     public Partida(String id,
                    TipoModalidad modalidad,
@@ -83,22 +68,36 @@ public class Partida {
         this.equipoB = equipoB;
         this.fechaCreacion = fechaCreacion;
 
-        // Armar la lista de jugadores de ambos equipos
         List<Jugador> jugadores = new ArrayList<>(equipoA.getJugadores());
         jugadores.addAll(equipoB.getJugadores());
 
-        // Crear turnos genéricos con los jugadores
         Turnos<Jugador> turnos = new Turnos<>(jugadores);
         this.estado = new MatchState(id, modalidad, turnos, mesa, fechaCreacion);
     }
 
     /**
+     * NUEVO CONSTRUCTOR: Crea una partida con una lista dinámica de 2 a 4 jugadores.
+     * (Necesario para el modo 1v1v1v1 o 2v2).
+     */
+    public Partida(String id,
+                   TipoModalidad modalidad,
+                   List<Jugador> jugadores,
+                   MatchState estado,
+                   Instant fechaCreacion) {
+        this.id = id;
+        this.modalidad = modalidad;
+        this.estado = estado;
+        this.fechaCreacion = fechaCreacion;
+        
+        // Asignamos los 2 primeros jugadores como Equipo A y B solo para mantener 
+        // compatibilidad con el mapper actual y la base de datos.
+        // (El estado interno ya tiene a los 4 jugadores en el Turnos).
+        this.equipoA = Equipo.individual("eA-" + id, jugadores.get(0).nombre(), jugadores.get(0));
+        this.equipoB = Equipo.individual("eB-" + id, jugadores.get(1).nombre(), jugadores.get(1));
+    }
+
+    /**
      * Valida que los equipos sean coherentes con la modalidad.
-     *
-     * @param modalidad modalidad de la partida
-     * @param equipoA   primer equipo
-     * @param equipoB   segundo equipo
-     * @throws IllegalArgumentException si la validación falla
      */
     private static void validarEquipos(TipoModalidad modalidad,
                                        Equipo equipoA,
@@ -128,18 +127,8 @@ public class Partida {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // FÁBRICAS ESTÁTICAS
-    // ═══════════════════════════════════════════════════════════
-
     /**
      * Crea una partida de Bola 8 individual con dos jugadores.
-     *
-     * @param id     identificador de la partida
-     * @param j1     primer jugador
-     * @param j2     segundo jugador
-     * @param mesa   mesa con las bolas en posición inicial
-     * @return partida de Bola 8 individual
      */
     public static Partida individual(String id, Jugador j1, Jugador j2, Mesa mesa) {
         Objects.requireNonNull(j1, "El jugador 1 no puede ser nulo");
@@ -159,21 +148,11 @@ public class Partida {
 
     /**
      * Crea una partida de Por Puntos en parejas con dos equipos.
-     *
-     * @param id    identificador de la partida
-     * @param eqA   primer equipo (debe tener 2 jugadores)
-     * @param eqB   segundo equipo (debe tener 2 jugadores)
-     * @param mesa  mesa con las bolas en posición inicial
-     * @return partida de Por Puntos en parejas
      */
     public static Partida parejas(String id, Equipo eqA, Equipo eqB, Mesa mesa) {
         return new Partida(id, TipoModalidad.POR_PUNTOS, eqA, eqB,
             mesa, Instant.now());
     }
-
-    // ═══════════════════════════════════════════════════════════
-    // GETTERS
-    // ═══════════════════════════════════════════════════════════
 
     /** @return identificador único de la partida */
     public String getId() { return id; }
@@ -190,138 +169,40 @@ public class Partida {
     /** @return momento en que se creó la partida */
     public Instant getFechaCreacion() { return fechaCreacion; }
 
-    /**
-     * Retorna el estado actual de la partida.
-     *
-     * @return estado de la partida
-     */
-    public MatchState getEstado() {
-        return estado;
-    }
+    /** @return estado de la partida */
+    public MatchState getEstado() { return estado; }
 
-    /**
-     * Retorna la fase actual de la partida.
-     *
-     * @return fase actual
-     */
-    public FasePartida getFase() {
-        return estado.getFase();
-    }
+    /** @return fase actual */
+    public FasePartida getFase() { return estado.getFase(); }
 
-    /**
-     * Retorna el ganador de la partida, si ya terminó.
-     *
-     * @return ganador, o {@code null} si aún no hay
-     */
-    public Jugador getGanador() {
-        return estado.getGanador();
-    }
+    /** @return ganador, o {@code null} */
+    public Jugador getGanador() { return estado.getGanador(); }
 
-    /**
-     * Retorna los dos equipos participantes.
-     *
-     * @return lista inmutable con los dos equipos
-     */
-    public List<Equipo> getEquipos() {
-        return List.of(equipoA, equipoB);
-    }
+    /** @return lista con los dos equipos */
+    public List<Equipo> getEquipos() { return List.of(equipoA, equipoB); }
 
-    /**
-     * Retorna la mesa de la partida.
-     *
-     * @return mesa con las bolas
-     */
-    public Mesa getMesa() {
-        return estado.getMesa();
-    }
+    /** @return mesa de la partida */
+    public Mesa getMesa() { return estado.getMesa(); }
 
-    // ═══════════════════════════════════════════════════════════
-    // OPERACIONES DELEGADAS AL ESTADO
-    // ═══════════════════════════════════════════════════════════
+    public void iniciar() { estado.iniciar(); }
 
-    /**
-     * Inicia la partida.
-     *
-     * @throws IllegalStateException si no está en fase CREADA
-     */
-    public void iniciar() {
-        estado.iniciar();
-    }
+    public void pausar() { estado.pausar(); }
 
-    /**
-     * Pausa la partida.
-     *
-     * @throws IllegalStateException si no está en curso
-     */
-    public void pausar() {
-        estado.pausar();
-    }
+    public void reanudar() { estado.reanudar(); }
 
-    /**
-     * Reanuda la partida pausada.
-     *
-     * @throws IllegalStateException si no está pausada
-     */
-    public void reanudar() {
-        estado.reanudar();
-    }
+    public void finalizar(Jugador ganador) { estado.finalizar(ganador); }
 
-    /**
-     * Finaliza la partida declarando un ganador.
-     *
-     * @param ganador jugador ganador
-     */
-    public void finalizar(Jugador ganador) {
-        estado.finalizar(ganador);
-    }
+    public void abandonar() { estado.abandonar(); }
 
-    /**
-     * Abandona la partida sin ganador.
-     */
-    public void abandonar() {
-        estado.abandonar();
-    }
-
-    /**
-     * Aplica un tiro a la partida.
-     *
-     * @param evento    evento registrado
-     * @param resultado veredicto del motor de reglas
-     */
     public void aplicarTiro(TiroEvent evento, ResultadoTiro resultado) {
         estado.aplicarTiro(evento, resultado);
     }
 
-    /**
-     * Verifica si la partida está terminada.
-     *
-     * @return {@code true} si finalizó o fue abandonada
-     */
-    public boolean estaTerminada() {
-        return estado.estaTerminada();
-    }
+    public boolean estaTerminada() { return estado.estaTerminada(); }
 
-    /**
-     * Verifica si la partida está activa (en curso o pausada).
-     *
-     * @return {@code true} si está activa
-     */
-    public boolean estaActiva() {
-        return estado.estaActiva();
-    }
+    public boolean estaActiva() { return estado.estaActiva(); }
 
-    /**
-     * Retorna el jugador que tiene el turno actual.
-     *
-     * @return jugador actual
-     */
-    public Jugador jugadorActual() {
-        return estado.jugadorActual();
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // IGUALDAD Y TOSTRING
-    // ═══════════════════════════════════════════════════════════
+    public Jugador jugadorActual() { return estado.jugadorActual(); }
 
     @Override
     public boolean equals(Object o) {
@@ -331,9 +212,7 @@ public class Partida {
     }
 
     @Override
-    public int hashCode() {
-        return Objects.hash(id);
-    }
+    public int hashCode() { return Objects.hash(id); }
 
     @Override
     public String toString() {

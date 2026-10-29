@@ -8,8 +8,11 @@ import com.poolhawk.api.exception.PartidaNoEncontradaException;
 import com.poolhawk.domain.event.ResultadoTiro;
 import com.poolhawk.domain.event.TiroEvent;
 import com.poolhawk.domain.match.FasePartida;
+import com.poolhawk.domain.match.FormatoJuego;
+import com.poolhawk.domain.match.MatchState;
 import com.poolhawk.domain.match.Partida;
 import com.poolhawk.domain.match.TipoModalidad;
+import com.poolhawk.domain.match.Turnos;
 import com.poolhawk.domain.player.Equipo;
 import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.*;
@@ -58,17 +61,51 @@ public class MatchService {
      */
     public Partida crear(CrearPartidaRequest request) {
         String id = UUID.randomUUID().toString();
-        Equipo equipoA = construirEquipo("eA-" + id, request.equipoA());
-        Equipo equipoB = construirEquipo("eB-" + id, request.equipoB());
         Mesa mesa = construirMesaInicial();
+        
+        // 1. Validar que la cantidad de nombres coincida con la configuración
+        if (request.jugadores() == null || request.jugadores().size() < 2 || request.jugadores().size() > 4) {
+            throw new IllegalArgumentException("Debe haber entre 2 y 4 jugadores.");
+        }
+        if (request.formato() == FormatoJuego.PAREJAS && request.jugadores().size() % 2 != 0) {
+            throw new IllegalArgumentException("Las parejas requieren un número par de jugadores.");
+        }
 
-        Partida partida = new Partida(id, request.modalidad(), equipoA, equipoB, mesa, Instant.now());
-        partida.iniciar();
+        // 2. Crear los objetos Jugador
+        List<Jugador> listaJugadores = request.jugadores().stream()
+            .map(nombre -> new Jugador(UUID.randomUUID().toString(), nombre))
+            .toList();
+
+        // 3. Armar los Turnos (Usando genéricos)
+        Turnos<Jugador> turnos;
+
+        if (request.formato() == FormatoJuego.INDIVIDUAL) {
+            // Todos contra todos (1v1, 1v1v1, 1v1v1v1)
+            turnos = new Turnos<>(listaJugadores);
+        } else {
+            // Parejas (2v2). Intercalamos A1, B1, A2, B2
+            List<Jugador> intercalados = new ArrayList<>();
+            int mitad = listaJugadores.size() / 2;
+            for (int i = 0; i < mitad; i++) {
+                intercalados.add(listaJugadores.get(i));           // Equipo A
+                intercalados.add(listaJugadores.get(i + mitad));   // Equipo B
+            }
+            turnos = new Turnos<>(intercalados);
+        }
+
+        // 4. Crear el MatchState y la Partida
+        MatchState estado = new MatchState(id, request.modalidad(), turnos, mesa, Instant.now());
+        estado.iniciar();
+
+        // 5. Construimos la Partida (Ajustamos el constructor de Partida para que reciba el estado ya armado)
+        Partida partida = new Partida(id, request.modalidad(), listaJugadores, estado, Instant.now());
+        
         partidasEnMemoria.put(id, partida);
-
-        // Guardar en BD
+        
+        // 6. Guardar en BD (Usando tu método toEntity)
         PartidaEntity entity = toEntity(partida);
         storage.guardar(entity);
+        
         return partida;
     }
 

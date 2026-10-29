@@ -189,11 +189,11 @@ public class Turnos<T> {
     /**
      * Retorna la posición de un participante en el orden.
      *
-     * @param participante jugador o equipo a buscar
+     * @param ganador jugador o equipo a buscar
      * @return índice 0-based, o -1 si no está en el orden
      */
-    public int posicionDe(T participante) {
-        return orden.indexOf(participante);
+    public int posicionDe(Object ganador) {
+        return orden.indexOf(ganador);
     }
 
     /**

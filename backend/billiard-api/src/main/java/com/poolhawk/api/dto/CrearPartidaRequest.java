@@ -1,8 +1,7 @@
 package com.poolhawk.api.dto;
 
+import com.poolhawk.domain.match.FormatoJuego;
 import com.poolhawk.domain.match.TipoModalidad;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 
 import java.util.List;
 
@@ -20,12 +19,8 @@ import java.util.List;
  * @since 0.1.0
  */
 public record CrearPartidaRequest(
-        @NotNull(message = "La modalidad es obligatoria")
-        TipoModalidad modalidad,
-
-        @NotEmpty(message = "El equipo A debe tener al menos un jugador")
-        List<String> equipoA,
-
-        @NotEmpty(message = "El equipo B debe tener al menos un jugador")
-        List<String> equipoB) {
+        TipoModalidad modalidad,      // BOLA_8 o POR_PUNTOS
+        FormatoJuego formato,         // INDIVIDUAL o PAREJAS
+        List<String> jugadores        // Lista con los nombres (de 2 a 4)
+) {
 }
