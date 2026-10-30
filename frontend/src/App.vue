@@ -7,10 +7,12 @@ import ShotSimulator from './components/ShotSimulator.vue'
 import MatchHistory from './components/MatchHistory.vue'
 import ToastContainer from './components/ToastContainer.vue'
 import LoginView from './components/LoginView.vue'
+import CorrectionModal from './components/CorrectionModal.vue'
 import { AUTH_REQUERIDA } from './api/endpoints'
 
 const partidaActual = ref(null)
 const token = ref(localStorage.getItem('token'))
+const mostrarCorreccion = ref(false)
 
 // Guarda el token que entrega LoginView (el propio LoginView ya lo puso en localStorage)
 const iniciarSesion = (nuevoToken) => {
@@ -36,6 +38,7 @@ const cerrarSesion = () => {
   localStorage.removeItem('token')
   token.value = null
   partidaActual.value = null
+  mostrarCorreccion.value = false
 }
 
 // ───────────────────────────────────────────────────────────
@@ -103,7 +106,7 @@ onUnmounted(() => {
 
       <!-- Si hay partida, mostrar marcador y simulador -->
       <div v-else>
-        <button @click="partidaActual = null" class="btn-salir">← Nueva Partida</button>
+        <button @click="partidaActual = null; mostrarCorreccion = false" class="btn-salir">← Nueva Partida</button>
         
         <!-- EL TRUCO: El :key obliga a ScoreBoard a redibujarse si los puntajes o el turno cambian -->
         <ScoreBoard 
@@ -112,6 +115,13 @@ onUnmounted(() => {
         />
         
         <ShotSimulator :partida="partidaActual" @tiroRegistrado="recargarPartida" />
+        <button @click="mostrarCorreccion = true" class="btn-corregir">Corregir &uacute;ltimo tiro</button>
+        <CorrectionModal
+          v-if="mostrarCorreccion"
+          :partida="partidaActual"
+          @cerrar="mostrarCorreccion = false"
+          @corregido="recargarPartida"
+        />
       </div>
     </template>
       <!-- fin del contenido protegido por login -->
@@ -160,5 +170,22 @@ header h1 {
 
 .btn-salir:hover {
   color: white;
+}
+.btn-corregir {
+  display: block;
+  width: 100%;
+  max-width: 800px;
+  margin: 1rem auto 0;
+  padding: 0.8rem;
+  background: transparent;
+  color: #f59e0b;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.btn-corregir:hover {
+  background: rgba(245, 158, 11, 0.12);
 }
 </style>
