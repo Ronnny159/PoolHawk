@@ -2,12 +2,13 @@ package com.poolhawk.api.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Entity
 @Table(name = "partidas")
 public class PartidaEntity {
+
     @Id
     private String id;
     private String modalidad;
@@ -15,14 +16,14 @@ public class PartidaEntity {
     private Instant fechaCreacion;
     private String ganadorId;
 
-    @Lob // Para que la base de datos acepte textos muy largos
+    // NUEVO: Campo para guardar el JSON de la mesa
     @Column(columnDefinition = "TEXT")
     private String estadoMesaJson;
 
-    @OneToMany(mappedBy = "partida", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
-    private List<JugadorEntity> jugadores;
+    @OneToMany(mappedBy = "partida", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<JugadorEntity> jugadores = new ArrayList<>();
 
-    // Getters y Setters
+    // Getters y Setters (si usas Lombok, omite esto y usa @Getter @Setter)
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getModalidad() { return modalidad; }
@@ -33,8 +34,11 @@ public class PartidaEntity {
     public void setFechaCreacion(Instant fechaCreacion) { this.fechaCreacion = fechaCreacion; }
     public String getGanadorId() { return ganadorId; }
     public void setGanadorId(String ganadorId) { this.ganadorId = ganadorId; }
-    public List<JugadorEntity> getJugadores() { return jugadores; }
-    public void setJugadores(List<JugadorEntity> jugadores) { this.jugadores = jugadores; }
+    
+    // Getters y Setters del nuevo campo
     public String getEstadoMesaJson() { return estadoMesaJson; }
     public void setEstadoMesaJson(String estadoMesaJson) { this.estadoMesaJson = estadoMesaJson; }
+
+    public List<JugadorEntity> getJugadores() { return jugadores; }
+    public void setJugadores(List<JugadorEntity> jugadores) { this.jugadores = jugadores; }
 }

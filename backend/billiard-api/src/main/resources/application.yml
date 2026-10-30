@@ -16,6 +16,11 @@ spring:
       hibernate:
         format_sql: true
 
+  # NUEVO: Evita que Jackson explote (Error 500) si el JSON trae campos extra
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: false
+
 server:
   port: 8080
   servlet:

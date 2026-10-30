@@ -36,7 +36,10 @@ const cerrarSesion = () => {
 // ───────────────────────────────────────────────────────────
 const conectarWebSocket = () => {
   // Nos conectamos al endpoint que creaste en Spring Boot
-  socket = new WebSocket('ws://localhost:8080/ws/matches')
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+  const wsHost = window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host;
+  socket = new WebSocket(`${wsProtocol}//${wsHost}/ws/matches`)
 
   socket.onopen = () => {
     console.log('🟢 Conectado al WebSocket de PoolHawk')
