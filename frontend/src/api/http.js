@@ -9,30 +9,24 @@ import axios from 'axios'
 const http = axios.create({
   baseURL: 'http://localhost:8080/api/v1',
   timeout: 5000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  headers: { 'Content-Type': 'application/json' }
 })
 
-// Interceptor para inyectar el Token JWT en cada petición
+// Interceptor para imprimir errores en consola (útil en desarrollo)
 http.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    let token = localStorage.getItem('token')
+    
+    // TRUCO TEMPORAL PARA DESARROLLO:
+    // Si no hay token (porque no hay Login aún), usamos uno de prueba
+    if (!token) {
+      token = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhcmJpdHJvIiwiaWF0IjoxNzkzMzIwOTg3LCJleHAiOjE3OTM0MDczODd9.xG7MAlz5IScZRuKKzMowTZysKHsXOCpR9fNN5Mgnse4'
     }
+    
+    config.headers.Authorization = `Bearer ${token}`
     return config
   },
   (error) => Promise.reject(error)
-)
-
-// Interceptor para imprimir errores en consola (útil en desarrollo)
-http.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    console.error('Error en la petición HTTP:', error.response?.data || error.message)
-    return Promise.reject(error)
-  }
 )
 
 export default http

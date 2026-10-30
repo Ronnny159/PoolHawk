@@ -1,28 +1,35 @@
 spring:
   application:
     name: poolhawk-api
+  
   datasource:
     url: jdbc:postgresql://localhost:5433/poolhawk_db
-    username: poolhawk_user
-    password: poolhawk_password
+    username: ${DB_USER:poolhawk_user}
+    password: ${DB_PASSWORD:poolhawk_password} # Ahora usa variable de entorno
     driver-class-name: org.postgresql.Driver
+
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
-    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  # NUEVO: Evita que Jackson explote (Error 500) si el JSON trae campos extra
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: false
 
 server:
   port: 8080
-  error:
-    include-stacktrace: never
   servlet:
     encoding:
       charset: UTF-8
       enabled: true
       force: true
 
-logging:
-  level:
-    com.poolhawk: DEBUG
-    org.springframework.web: INFO
+# NUEVO: Configuración JWT (mínimo 32 caracteres para HS256)
+jwt:
+  secret: ${JWT_SECRET:SuperSecretoPoolHawk2026_cambialo_por_algo_de_32_o_mas_caracteres}
+  expiration: 86400000 # 24 horas en milisegundos

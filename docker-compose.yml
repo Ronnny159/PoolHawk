@@ -29,6 +29,7 @@ services:
       - postgres
 
   # 3. Backend (Spring Boot)
+      # 3. Backend (Spring Boot)
   backend:
     build: ./backend
     container_name: poolhawk-backend
@@ -37,9 +38,10 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/poolhawk_db
+      SPRING_DATASOURCE_USERNAME: poolhawk_user
+      SPRING_DATASOURCE_PASSWORD: poolhawk_password
+      JWT_SECRET: "SuperSecretoPoolHawk2026_cambialo_por_algo_de_32_o_mas_caracteres"
     ports:
       - "8080:8080"
 

@@ -1,22 +1,23 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, onUnmounted } from 'vue'
 import { listarPartidas, obtenerPartida } from '../api/matches'
-import { toast } from '../utils/toast'
+import { toast } from '../utils/toast' 
 
 const emit = defineEmits(['partidaSeleccionada'])
 const partidas = ref([])
 const cargando = ref(false)
-const busqueda = ref('') // Variable para el buscador
+const busqueda = ref('')
+let intervalo = null
 
-const cargarHistorial = async () => {
+const cargarHistorial = async (silencioso = false) => {
   try {
-    cargando.value = true
+    if (!silencioso) cargando.value = true
     partidas.value = await listarPartidas()
   } catch (error) {
     console.error('Error al cargar historial', error)
-    toast.error('No se pudo cargar el historial de partidas')
+    if (!silencioso) toast.error('No se pudo cargar el historial de partidas')
   } finally {
-    cargando.value = false
+    if (!silencioso) cargando.value = false
   }
 }
 
@@ -25,27 +26,32 @@ const seleccionar = async (id) => {
     const partida = await obtenerPartida(id)
     emit('partidaSeleccionada', partida)
   } catch (error) {
-    toast.error('No se pudo cargar la partida')
+    console.error('Error al cargar la partida', error)
+    toast.error('No se pudo cargar la partida seleccionada')
   }
 }
 
-// 🪄 LA MAGIA: Filtramos las partidas en tiempo real según lo que escriba el usuario
 const partidasFiltradas = computed(() => {
   if (!busqueda.value) return partidas.value
-  
   const termino = busqueda.value.toLowerCase()
   return partidas.value.filter(p => {
-    // Buscamos si el término está en el nombre de algún jugador del Equipo A o B
     const nombresA = p.equipoA.map(j => j.nombre.toLowerCase()).join(' ')
     const nombresB = p.equipoB.map(j => j.nombre.toLowerCase()).join(' ')
     return nombresA.includes(termino) || nombresB.includes(termino)
   })
 })
 
-// Genera un código corto y bonito para mostrar en lugar del UUID feo
 const codigoCorto = (id) => id.substring(0, 6).toUpperCase()
 
-onMounted(cargarHistorial)
+onMounted(() => {
+  cargarHistorial()
+  // Recarga en silencio cada 3 segundos para ver las partidas nuevas
+  intervalo = setInterval(() => cargarHistorial(true), 3000)
+})
+
+onUnmounted(() => {
+  if (intervalo) clearInterval(intervalo)
+})
 </script>
 
 <template>
@@ -59,7 +65,7 @@ onMounted(cargarHistorial)
         placeholder="🔍 Buscar por nombre de jugador..." 
         class="buscador"
       />
-      <button @click="cargarHistorial" :disabled="cargando">
+      <button @click="cargarHistorial()" :disabled="cargando">
         {{ cargando ? '...' : '🔄' }}
       </button>
     </div>
@@ -70,7 +76,6 @@ onMounted(cargarHistorial)
           <strong>{{ p.modalidad }}</strong> - {{ p.equipoA[0]?.nombre || 'Equipo A' }} vs {{ p.equipoB[0]?.nombre || 'Equipo B' }}
           <br>
           <small>
-            <!-- Mostramos un código amigable en vez del UUID completo -->
             Código: <strong>#{{ codigoCorto(p.id) }}</strong> | 
             {{ p.fase }} | {{ new Date(p.fechaCreacion).toLocaleString() }}
           </small>

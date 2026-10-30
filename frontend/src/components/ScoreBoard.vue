@@ -5,6 +5,9 @@ const props = defineProps({
   partida: { type: Object, required: true }
 })
 
+// LOG DE DIAGNÓSTICO
+console.log('📊 ScoreBoard se está redibujando. Puntajes actuales:', props.partida.puntajes)
+
 // 1. Calculamos de quién es el turno
 const turnoEsDeA = computed(() => {
   return props.partida.equipoA.some(j => j.nombre === props.partida.jugadorActual)
@@ -14,24 +17,26 @@ const turnoEsDeB = computed(() => {
   return props.partida.equipoB.some(j => j.nombre === props.partida.jugadorActual)
 })
 
-// 2. Calculamos los puntos (sumando los puntos de los jugadores de cada equipo)
+// 2. Calculamos los puntos
 const puntosEquipoA = computed(() => {
   let total = 0
+  const puntajes = props.partida.puntajes || {}
   for (const jugador of props.partida.equipoA) {
-    total += props.partida.puntajes[jugador.nombre] || 0
+    total += puntajes[jugador.nombre] || 0
   }
   return total
 })
 
 const puntosEquipoB = computed(() => {
   let total = 0
+  const puntajes = props.partida.puntajes || {}
   for (const jugador of props.partida.equipoB) {
-    total += props.partida.puntajes[jugador.nombre] || 0
+    total += puntajes[jugador.nombre] || 0
   }
   return total
 })
 
-// 3. Calculamos el nombre del equipo para mostrarlo en el marcador
+// 3. Calculamos el nombre del equipo
 const nombreEquipoA = computed(() => {
   return props.partida.equipoA.map(j => j.nombre).join(' & ')
 })
@@ -51,7 +56,7 @@ const nombreEquipoB = computed(() => {
     </div>
 
     <div class="jugadores">
-      <!-- EQUIPO A (Estilo Bola 1 - Amarilla) -->
+      <!-- EQUIPO A -->
       <div class="equipo equipo-a" :class="{ activo: turnoEsDeA }">
         <span class="nombre">{{ nombreEquipoA }}</span>
         <div class="bola-marcador">
@@ -61,7 +66,7 @@ const nombreEquipoB = computed(() => {
       
       <div class="vs">VS</div>
       
-      <!-- EQUIPO B (Estilo Bola 2 - Azul) -->
+      <!-- EQUIPO B -->
       <div class="equipo equipo-b" :class="{ activo: turnoEsDeB }">
         <span class="nombre">{{ nombreEquipoB }}</span>
         <div class="bola-marcador">
@@ -80,9 +85,10 @@ const nombreEquipoB = computed(() => {
 </template>
 
 <style scoped>
+/* Tus estilos del marcador (los de las bolas de billar y el paño) se mantienen igual */
 .scoreboard { 
-  background: #1e293b; /* Madera oscura */
-  border: 4px solid #0f172a; /* Borde de la mesa */
+  background: #1e293b;
+  border: 4px solid #0f172a;
   border-radius: 12px; 
   padding: 2rem; 
   color: white; 
@@ -95,11 +101,10 @@ const nombreEquipoB = computed(() => {
 h2 { margin: 0; font-size: 2.5rem; color: #e2e8f0; text-shadow: 2px 2px 0 #000; }
 
 .fase { background: #334155; color: #94a3b8; padding: 0.4rem 1rem; border-radius: 4px; font-family: monospace; font-weight: bold; }
-.fase.finalizada { background: var(--ball-red); color: white; }
+.fase.finalizada { background: #ef4444; color: white; }
 
 .jugadores { display: flex; align-items: center; justify-content: space-around; gap: 1rem; }
 
-/* Contenedor de cada equipo */
 .equipo { 
   flex: 1; 
   display: flex; 
@@ -111,18 +116,16 @@ h2 { margin: 0; font-size: 2.5rem; color: #e2e8f0; text-shadow: 2px 2px 0 #000; 
   transition: all 0.3s ease;
 }
 
-/* Cuando es su turno, se ilumina el paño detrás de ellos */
 .equipo.activo { 
   background: rgba(21, 128, 61, 0.2);
-  border-color: var(--felt-light);
+  border-color: #22c55e;
   box-shadow: 0 0 25px rgba(34, 197, 94, 0.4);
   transform: scale(1.02);
 }
 
 .nombre { font-size: 1.4rem; font-weight: 800; color: #cbd5e1; margin-bottom: 1rem; text-transform: uppercase;}
-.equipo.activo .nombre { color: var(--felt-light); }
+.equipo.activo .nombre { color: #4ade80; }
 
-/* EL DISEÑO DE LA BOLA DE BILLAR */
 .bola-marcador {
   width: 120px;
   height: 120px;
@@ -132,12 +135,11 @@ h2 { margin: 0; font-size: 2.5rem; color: #e2e8f0; text-shadow: 2px 2px 0 #000; 
   align-items: center;
   position: relative;
   box-shadow: 
-    inset -15px -15px 25px rgba(0,0,0,0.5), /* Sombra inferior */
-    inset 10px 10px 15px rgba(255,255,255,0.6), /* Brillo superior */
-    5px 5px 15px rgba(0,0,0,0.5); /* Sombra proyectada */
+    inset -15px -15px 25px rgba(0,0,0,0.5),
+    inset 10px 10px 15px rgba(255,255,255,0.6),
+    5px 5px 15px rgba(0,0,0,0.5);
 }
 
-/* Círculo blanco interior (como el número de la bola) */
 .bola-marcador::before {
   content: '';
   position: absolute;
@@ -148,7 +150,6 @@ h2 { margin: 0; font-size: 2.5rem; color: #e2e8f0; text-shadow: 2px 2px 0 #000; 
   box-shadow: inset 2px 2px 5px rgba(0,0,0,0.3);
 }
 
-/* El número de la bola */
 .puntos {
   position: relative;
   z-index: 10;
@@ -158,11 +159,8 @@ h2 { margin: 0; font-size: 2.5rem; color: #e2e8f0; text-shadow: 2px 2px 0 #000; 
   font-weight: bold;
 }
 
-/* Color de la bola del Equipo A (Amarilla) */
-.equipo-a .bola-marcador { background: radial-gradient(circle at 30% 30%, #fef08a, var(--ball-yellow) 60%, #a16207 100%); }
-
-/* Color de la bola del Equipo B (Azul) */
-.equipo-b .bola-marcador { background: radial-gradient(circle at 30% 30%, #bfdbfe, var(--ball-blue) 60%, #1e3a8a 100%); }
+.equipo-a .bola-marcador { background: radial-gradient(circle at 30% 30%, #fef08a, #eab308 60%, #a16207 100%); }
+.equipo-b .bola-marcador { background: radial-gradient(circle at 30% 30%, #bfdbfe, #3b82f6 60%, #1e3a8a 100%); }
 
 .vs { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; color: #475569; }
 
@@ -177,6 +175,6 @@ h2 { margin: 0; font-size: 2.5rem; color: #e2e8f0; text-shadow: 2px 2px 0 #000; 
   border: 1px solid #334155;
 }
 
-.turno strong { color: var(--ball-yellow); font-size: 1.4rem; }
-.turno.ganador { color: var(--ball-yellow); }
+.turno strong { color: #eab308; font-size: 1.4rem; }
+.turno.ganador { color: #eab308; }
 </style>
