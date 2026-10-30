@@ -36,7 +36,8 @@ class MatchControllerIT {
         CrearPartidaRequest request = new CrearPartidaRequest(
             TipoModalidad.BOLA_8,
             FormatoJuego.INDIVIDUAL,
-            List.of("Ana", "Luis", "Pedro")
+            List.of("Ana", "Luis", "Pedro"), 
+            null, null
         );
 
         mockMvc.perform(post("/api/v1/matches")

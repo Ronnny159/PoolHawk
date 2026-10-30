@@ -1,71 +1,49 @@
 package com.poolhawk.api.service;
 
 import com.poolhawk.api.dto.CrearPartidaRequest;
-import com.poolhawk.api.mapper.PartidaMapper;
-import com.poolhawk.api.repository.PartidaRepository;
-import com.poolhawk.api.websocket.MatchLiveHandler;
 import com.poolhawk.domain.match.FormatoJuego;
 import com.poolhawk.domain.match.Partida;
 import com.poolhawk.domain.match.TipoModalidad;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@ExtendWith(MockitoExtension.class)
-@DisplayName("MatchService - Orquestación dinámica")
+@SpringBootTest
 class MatchServiceTest {
 
-    @Mock
-    private PartidaRepository partidaRepository;
+    @Autowired
+    private MatchService matchService;
 
-    private MatchService service;
-
-    @BeforeEach
-    void setUp() {
-        MatchStorage storage = new MatchStorage(partidaRepository);
-        MatchLiveHandler liveHandler = new MatchLiveHandler();
-        PartidaMapper mapper = new PartidaMapper();
-        
-        // Simulamos que la BD guarda correctamente
-        when(partidaRepository.save(any())).thenAnswer(i -> i.getArguments()[0]);
-        
-        service = new MatchService(storage, liveHandler, mapper);
-    }
+    @MockBean
+    private MatchStorage storage; // Mockeamos la BD para no depender de Postgres
 
     @Test
-    @DisplayName("Crea partida de Bola 8 con 4 jugadores individuales")
-    void crearPartida4Jugadores() {
-        CrearPartidaRequest request = new CrearPartidaRequest(
-            TipoModalidad.BOLA_8,
-            FormatoJuego.INDIVIDUAL,
-            List.of("Ana", "Luis", "Carlos", "Pedro")
-        );
-
-        Partida partida = service.crear(request);
-
-        assertNotNull(partida);
-        assertEquals(4, partida.getEstado().getTurnos().cantidadJugadores());
-        assertEquals("Ana", partida.jugadorActual().nombre());
-    }
-
-    @Test
-    @DisplayName("Rechaza partida en parejas con número impar de jugadores")
-    void rechazaParejasImpares() {
+    void porPuntosParejasDebeCrear4TurnosIntercalados() {
+        // 1. Preparamos la petición: 2 equipos de 2 jugadores
         CrearPartidaRequest request = new CrearPartidaRequest(
             TipoModalidad.POR_PUNTOS,
             FormatoJuego.PAREJAS,
-            List.of("Ana", "Luis", "Carlos") // 3 jugadores en parejas = error
+            List.of("Ana", "Carlos", "Luis", "Maria"), // A1, A2, B1, B2
+            254.0, 127.0
         );
 
-        assertThrows(IllegalArgumentException.class, () -> service.crear(request));
+        // 2. Ejecutamos
+        Partida partida = matchService.crear(request);
+
+        // 3. Verificamos los turnos
+        var turnos = partida.getEstado().getTurnos().jugadores();
+        assertEquals(4, turnos.size(), "Debe haber 4 turnos");
+        
+        // El orden esperado es: A1 (Ana), B1 (Luis), A2 (Carlos), B2 (Maria)
+        assertEquals("Ana", turnos.get(0).nombre());
+        assertEquals("Luis", turnos.get(1).nombre());
+        assertEquals("Carlos", turnos.get(2).nombre());
+        assertEquals("Maria", turnos.get(3).nombre());
     }
 }

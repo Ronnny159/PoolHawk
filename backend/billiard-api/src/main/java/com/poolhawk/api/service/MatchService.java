@@ -7,12 +7,7 @@ import com.poolhawk.api.entity.PartidaEntity;
 import com.poolhawk.api.exception.PartidaNoEncontradaException;
 import com.poolhawk.domain.event.ResultadoTiro;
 import com.poolhawk.domain.event.TiroEvent;
-import com.poolhawk.domain.match.FasePartida;
-import com.poolhawk.domain.match.FormatoJuego;
-import com.poolhawk.domain.match.MatchState;
-import com.poolhawk.domain.match.Partida;
-import com.poolhawk.domain.match.TipoModalidad;
-import com.poolhawk.domain.match.Turnos;
+import com.poolhawk.domain.match.*;
 import com.poolhawk.domain.player.Equipo;
 import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.*;
@@ -21,6 +16,7 @@ import org.springframework.stereotype.Service;
 import com.poolhawk.api.mapper.PartidaMapper;
 import com.poolhawk.api.websocket.MatchLiveHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,22 +25,17 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Servicio que orquesta la logica de partidas.
- *
- * <p>Es el punto donde convergen el dominio, las reglas y la API.
- * Recibe las peticiones REST, construye los objetos de dominio,
- * consulta las reglas y aplica los resultados al estado.</p>
- *
- * @author PoolHawk Team
- * @since 0.1.0
- */
 @Service
 public class MatchService {
     private final MatchStorage storage;
     private final MatchLiveHandler liveHandler;
     private final PartidaMapper mapper;
-    private final ObjectMapper jsonMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    
+    // Se agregó tolerancia a campos desconocidos
+    private final ObjectMapper jsonMapper = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+            
     private final Map<String, Partida> partidasEnMemoria = new HashMap<>();
 
     public MatchService(MatchStorage storage, MatchLiveHandler liveHandler, PartidaMapper mapper) {
@@ -53,17 +44,16 @@ public class MatchService {
         this.mapper = mapper;
     }
 
-    /**
-     * Crea una nueva partida con sus jugadores y equipos.
-     *
-     * @param request datos de creacion
-     * @return la partida creada
-     */
     public Partida crear(CrearPartidaRequest request) {
         String id = UUID.randomUUID().toString();
-        Mesa mesa = construirMesaInicial();
         
-        // 1. Validar que la cantidad de nombres coincida con la configuración
+        // TAREA 1.2: Dimensiones dinámicas con fallback
+        double ancho = request.anchoMesa() != null ? request.anchoMesa() : Mesa.ANCHO_DEFECTO;
+        double alto = request.altoMesa() != null ? request.altoMesa() : Mesa.ALTO_DEFECTO;
+        
+        Mesa mesa = construirMesaInicial(ancho, alto); 
+        
+        // 1. Validaciones
         if (request.jugadores() == null || request.jugadores().size() < 2 || request.jugadores().size() > 4) {
             throw new IllegalArgumentException("Debe haber entre 2 y 4 jugadores.");
         }
@@ -71,155 +61,53 @@ public class MatchService {
             throw new IllegalArgumentException("Las parejas requieren un número par de jugadores.");
         }
 
-        // 2. Crear los objetos Jugador
+        // 2. Jugadores
         List<Jugador> listaJugadores = request.jugadores().stream()
             .map(nombre -> new Jugador(UUID.randomUUID().toString(), nombre))
             .toList();
 
-        // 3. Armar los Turnos (Usando genéricos)
+        // 3. Turnos
         Turnos<Jugador> turnos;
-
         if (request.formato() == FormatoJuego.INDIVIDUAL) {
-            // Todos contra todos (1v1, 1v1v1, 1v1v1v1)
             turnos = new Turnos<>(listaJugadores);
         } else {
-            // Parejas (2v2). Intercalamos A1, B1, A2, B2
             List<Jugador> intercalados = new ArrayList<>();
             int mitad = listaJugadores.size() / 2;
             for (int i = 0; i < mitad; i++) {
-                intercalados.add(listaJugadores.get(i));           // Equipo A
-                intercalados.add(listaJugadores.get(i + mitad));   // Equipo B
+                intercalados.add(listaJugadores.get(i));
+                intercalados.add(listaJugadores.get(i + mitad));
             }
             turnos = new Turnos<>(intercalados);
         }
 
-        // 4. Crear el MatchState y la Partida
+        // 4. Crear MatchState y Partida
         MatchState estado = new MatchState(id, request.modalidad(), turnos, mesa, Instant.now());
         estado.iniciar();
 
-        // 5. Construimos la Partida (Ajustamos el constructor de Partida para que reciba el estado ya armado)
         Partida partida = new Partida(id, request.modalidad(), listaJugadores, estado, Instant.now());
-        
         partidasEnMemoria.put(id, partida);
         
-        // 6. Guardar en BD (Usando tu método toEntity)
-        PartidaEntity entity = toEntity(partida);
-        storage.guardar(entity);
-        
+        // 5. Guardar en BD
+        storage.guardar(toEntity(partida));
         return partida;
     }
 
-    /**
-     * Busca una partida por su id.
-     *
-     * @param id identificador de la partida
-     * @return la partida encontrada
-     * @throws PartidaNoEncontradaException si no existe
-     */
-       /**
-     * Busca una partida por su id.
-     *
-     * @param id identificador de la partida
-     * @return la partida encontrada
-     * @throws PartidaNoEncontradaException si no existe
-     */
     public Partida buscar(String id) {
-        // 1. Si está en memoria, la devolvemos rápido (es la que está en juego ahora mismo)
-        if (partidasEnMemoria.containsKey(id)) {
-            return partidasEnMemoria.get(id);
-        }
+        if (partidasEnMemoria.containsKey(id)) return partidasEnMemoria.get(id);
 
-        // 2. Si no está (porque reiniciaste el server), la buscamos en PostgreSQL
         PartidaEntity entity = storage.buscar(id)
             .orElseThrow(() -> new PartidaNoEncontradaException(id));
 
-        // 3. Reconstruimos la partida desde la BD
-        List<Jugador> jugadoresA = entity.getJugadores().stream()
-            .filter(j -> "A".equals(j.getEquipo()))
-            .map(j -> new Jugador(j.getId(), j.getNombre()))
-            .toList();
-            
-        List<Jugador> jugadoresB = entity.getJugadores().stream()
-            .filter(j -> "B".equals(j.getEquipo()))
-            .map(j -> new Jugador(j.getId(), j.getNombre()))
-            .toList();
-
-        Equipo equipoA = new Equipo("eA-" + entity.getId(), jugadoresA.isEmpty() ? "Equipo A" : jugadoresA.get(0).nombre());
-        jugadoresA.forEach(equipoA::agregarJugador);
-
-        Equipo equipoB = new Equipo("eB-" + entity.getId(), jugadoresB.isEmpty() ? "Equipo B" : jugadoresB.get(0).nombre());
-        jugadoresB.forEach(equipoB::agregarJugador);
-
-        // Creamos la mesa y la partida
-        Mesa mesa = construirMesaInicial(); // Volvemos a armar la mesa
-        Partida partida = new Partida(
-            entity.getId(),
-            TipoModalidad.valueOf(entity.getModalidad()),
-            equipoA,
-            equipoB,
-            mesa,
-            entity.getFechaCreacion()
-        );
-
-        // (Opcional) Si la partida en la BD estaba EN_CURSO, la iniciamos
-        if (FasePartida.valueOf(entity.getFase()) == FasePartida.EN_CURSO) {
-            partida.iniciar();
-        }
-
-        // La guardamos en memoria para que el siguiente tiro sea rápido
-        partidasEnMemoria.put(id, partida);
-        
-        return partida;
+        return reconstruirPartida(entity);
     }
-    /**
-     * Lista todas las partidas almacenadas.
-     *
-     * @return lista de partidas
-     */
+
     @Transactional(readOnly = true)
     public List<Partida> listarTodas() {
-        List<PartidaEntity> entities = storage.listarTodas();
-        
-        return entities.stream().map(entity -> {
-            // 1. Extraemos los jugadores de la entidad
-            List<Jugador> jugadoresA = entity.getJugadores().stream()
-                .filter(j -> "A".equals(j.getEquipo()))
-                .map(j -> new Jugador(j.getId(), j.getNombre()))
-                .toList();
-                
-            List<Jugador> jugadoresB = entity.getJugadores().stream()
-                .filter(j -> "B".equals(j.getEquipo()))
-                .map(j -> new Jugador(j.getId(), j.getNombre()))
-                .toList();
-
-            // 2. Creamos los equipos con el constructor de 2 argumentos
-            String nombreA = jugadoresA.isEmpty() ? "Equipo A" : jugadoresA.get(0).nombre();
-            Equipo equipoA = new Equipo("eA-" + entity.getId(), nombreA);
-            jugadoresA.forEach(equipoA::agregarJugador); // Agregamos los jugadores uno por uno
-
-            String nombreB = jugadoresB.isEmpty() ? "Equipo B" : jugadoresB.get(0).nombre();
-            Equipo equipoB = new Equipo("eB-" + entity.getId(), nombreB);
-            jugadoresB.forEach(equipoB::agregarJugador);
-
-            // 3. Retornamos la partida
-            return new Partida(
-                entity.getId(),
-                TipoModalidad.valueOf(entity.getModalidad()),
-                equipoA,
-                equipoB,
-                new Mesa(), // Mesa vacía para el historial
-                entity.getFechaCreacion()
-            );
-        }).collect(Collectors.toList());
+        return storage.listarTodas().stream()
+            .map(this::reconstruirPartida)
+            .collect(Collectors.toList());
     }
 
-    /**
-     * Registra un tiro y devuelve el resultado de su evaluacion.
-     *
-     * @param partidaId id de la partida
-     * @param request   datos del tiro
-     * @return el resultado del tiro segun las reglas
-     */
     public ResultadoTiro registrarTiro(String partidaId, TiroEventRequest request) {
         Partida partida = buscar(partidaId);
         TiroEvent evento = construirEvento(partida, request);
@@ -232,50 +120,27 @@ public class MatchService {
             partida.finalizar(evento.jugador());
         }
         
-        // Actualizar en BD
         storage.guardar(toEntity(partida));
 
-        // ✨ NUEVO: Emitir el estado actualizado por WebSocket
         try {
             String json = jsonMapper.writeValueAsString(mapper.toResponse(partida));
             liveHandler.broadcast(json);
         } catch (Exception e) {
-            System.err.println("Error serializando partida para WebSocket: " + e.getMessage());
+            System.err.println("Error serializando partida: " + e.getMessage());
         }
 
         return resultado;
     }
 
+    // ─── Helpers ──────────────────────────────────────────────
 
-    // ───────────────────────────────────────────────────────────
-    // Helpers privados
-    // ───────────────────────────────────────────────────────────
-
-    private Equipo construirEquipo(String id, List<String> nombres) {
-        if (nombres.size() == 1) {
-            Jugador j = new Jugador(id + "-j1", nombres.get(0));
-            return Equipo.individual(id, nombres.get(0), j);
-        }
-        if (nombres.size() == 2) {
-            Jugador j1 = new Jugador(id + "-j1", nombres.get(0));
-            Jugador j2 = new Jugador(id + "-j2", nombres.get(1));
-            return Equipo.pareja(id, nombres.get(0) + " & " + nombres.get(1), j1, j2);
-        }
-        throw new IllegalArgumentException(
-            "Un equipo debe tener 1 o 2 jugadores. Recibidos: " + nombres.size());
-    }
-
-    /**
-     * Construye una mesa con las 16 bolas en su posicion inicial estandar.
-     *
-     * <p>La blanca se coloca en el lado izquierdo. El triangulo de bolas
-     * se arma en el lado derecho con la bola 8 en el centro.</p>
-     */
-    private Mesa construirMesaInicial() {
-        Mesa mesa = new Mesa();
-        mesa.agregarBola(Bola.crear(0, new Coordenada(63, 63)));
-
-        double cx = 190, cy = 63;
+    // TAREA 1.1: Construcción dinámica con ancho y alto
+    private Mesa construirMesaInicial(double ancho, double alto) {
+        Mesa mesa = new Mesa(ancho, alto);
+        mesa.agregarBola(Bola.crear(0, new Coordenada(ancho * 0.25, alto * 0.5)));
+        
+        double cx = ancho * 0.75;
+        double cy = alto * 0.5;
         double dx = 6;
         int[] numeros = {1, 9, 2, 10, 8, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15};
         int idx = 0;
@@ -289,25 +154,95 @@ public class MatchService {
         return mesa;
     }
 
+    private Partida reconstruirPartida(PartidaEntity entity) {
+        List<Jugador> jugadoresA = entity.getJugadores().stream()
+            .filter(j -> "A".equals(j.getEquipo()))
+            .map(j -> new Jugador(j.getId(), j.getNombre()))
+            .toList();
+        List<Jugador> jugadoresB = entity.getJugadores().stream()
+            .filter(j -> "B".equals(j.getEquipo()))
+            .map(j -> new Jugador(j.getId(), j.getNombre()))
+            .toList();
+
+        Equipo equipoA = new Equipo("eA-" + entity.getId(), jugadoresA.isEmpty() ? "Equipo A" : jugadoresA.get(0).nombre());
+        jugadoresA.forEach(equipoA::agregarJugador);
+        Equipo equipoB = new Equipo("eB-" + entity.getId(), jugadoresB.isEmpty() ? "Equipo B" : jugadoresB.get(0).nombre());
+        jugadoresB.forEach(equipoB::agregarJugador);
+
+        Mesa mesa = new Mesa();
+        if (entity.getEstadoMesaJson() != null && !entity.getEstadoMesaJson().isEmpty()) {
+            try {
+                List<Bola> bolasGuardadas = jsonMapper.readValue(
+                    entity.getEstadoMesaJson(),
+                    jsonMapper.getTypeFactory().constructCollectionType(List.class, Bola.class)
+                );
+                bolasGuardadas.forEach(mesa::agregarBola);
+            } catch (Exception e) {
+                System.err.println("Error leyendo mesa desde JSON: " + e.getMessage());
+            }
+        }
+
+        Partida partida = new Partida(
+            entity.getId(),
+            TipoModalidad.valueOf(entity.getModalidad()),
+            equipoA, equipoB, mesa, entity.getFechaCreacion()
+        );
+        
+        if (FasePartida.valueOf(entity.getFase()) == FasePartida.EN_CURSO) {
+            partida.iniciar();
+        }
+        return partida;
+    }
+
+    private PartidaEntity toEntity(Partida partida) {
+        PartidaEntity entity = new PartidaEntity();
+        entity.setId(partida.getId());
+        entity.setModalidad(partida.getModalidad().name());
+        entity.setFase(partida.getFase().name());
+        entity.setFechaCreacion(partida.getFechaCreacion());
+        entity.setGanadorId(partida.getGanador() != null ? partida.getGanador().id() : null);
+
+        try {
+            entity.setEstadoMesaJson(jsonMapper.writeValueAsString(partida.getMesa().getBolas()));
+        } catch (Exception e) {
+            System.err.println("Error guardando mesa en JSON: " + e.getMessage());
+        }
+
+        List<JugadorEntity> jugadores = new ArrayList<>();
+        for (Jugador j : partida.getEquipoA().getJugadores()) {
+            jugadores.add(toJugadorEntity(j, "A", entity));
+        }
+        for (Jugador j : partida.getEquipoB().getJugadores()) {
+            jugadores.add(toJugadorEntity(j, "B", entity));
+        }
+        entity.setJugadores(jugadores);
+        return entity;
+    }
+
+    private JugadorEntity toJugadorEntity(Jugador j, String equipo, PartidaEntity partida) {
+        JugadorEntity je = new JugadorEntity();
+        je.setId(j.id());
+        je.setNombre(j.nombre());
+        je.setEquipo(equipo);
+        je.setPartida(partida);
+        return je;
+    }
+
     private TiroEvent construirEvento(Partida partida, TiroEventRequest request) {
         Jugador jugador = partida.getEstado().getTurnos().jugadores().stream()
             .filter(j -> j.id().equals(request.jugadorId()))
             .findFirst()
-            .orElseThrow(() -> new IllegalArgumentException(
-                "Jugador no encontrado en la partida: " + request.jugadorId()));
+            .orElseThrow(() -> new IllegalArgumentException("Jugador no encontrado"));
 
         Bola primeraTocada = null;
         if (request.primeraBolaTocada() != null) {
-            primeraTocada = partida.getEstado().getMesa()
-                .buscarBola(request.primeraBolaTocada())
-                .orElse(null);
+            primeraTocada = partida.getMesa().buscarBola(request.primeraBolaTocada()).orElse(null);
         }
 
         List<Bola> embolsadas = new ArrayList<>();
         if (request.bolasEmbolsadas() != null) {
             for (Integer numero : request.bolasEmbolsadas()) {
-                partida.getEstado().getMesa().buscarBola(numero)
-                    .ifPresent(embolsadas::add);
+                partida.getMesa().buscarBola(numero).ifPresent(embolsadas::add);
             }
         }
 
@@ -322,103 +257,7 @@ public class MatchService {
             ? Duration.ofSeconds(request.duracionSegundos())
             : Duration.ofSeconds(5);
 
-        return new TiroEvent(
-            UUID.randomUUID().toString(),
-            partida.getId(),
-            jugador,
-            primeraTocada,
-            embolsadas,
-            troneras,
-            Instant.now(),
-            duracion);
-    }
-
-    private JugadorEntity toJugadorEntity(Jugador j, String equipo, PartidaEntity partida) {
-        JugadorEntity je = new JugadorEntity();
-        je.setId(j.id());
-        je.setNombre(j.nombre());
-        je.setEquipo(equipo);
-        je.setPartida(partida);
-        return je;
-    }
-
-    private PartidaEntity toEntity(Partida partida) {
-        PartidaEntity entity = new PartidaEntity();
-        entity.setId(partida.getId());
-        entity.setModalidad(partida.getModalidad().name());
-        entity.setFase(partida.getFase().name());
-        entity.setFechaCreacion(partida.getFechaCreacion());
-        entity.setGanadorId(partida.getGanador() != null ? partida.getGanador().id() : null);
-
-        List<JugadorEntity> jugadores = new ArrayList<>();
-        for (Jugador j : partida.getEquipoA().getJugadores()) {
-            jugadores.add(toJugadorEntity(j, "A", entity));
-        }
-        for (Jugador j : partida.getEquipoB().getJugadores()) {
-            jugadores.add(toJugadorEntity(j, "B", entity));
-        }
-        entity.setJugadores(jugadores);
-
-        try {
-            entity.setEstadoMesaJson(jsonMapper.writeValueAsString(partida.getMesa().getBolas()));
-        } catch (Exception e) {
-            System.err.println("Error guardando mesa en JSON: " + e.getMessage());
-        }
-
-        return entity;
-    }
-
-    /**
-     * Reconstruye una entidad JPA a un objeto de dominio Partida,
-     * recuperando la lista de jugadores y el estado de la mesa desde el JSON.
-     *
-     * @param entity entidad de la base de datos
-     * @return objeto de dominio Partida
-     */
-    private Partida reconstruirPartida(PartidaEntity entity) {
-        // 1. Extraemos los jugadores
-        List<Jugador> jugadoresA = entity.getJugadores().stream()
-            .filter(j -> "A".equals(j.getEquipo()))
-            .map(j -> new Jugador(j.getId(), j.getNombre()))
-            .toList();
-            
-        List<Jugador> jugadoresB = entity.getJugadores().stream()
-            .filter(j -> "B".equals(j.getEquipo()))
-            .map(j -> new Jugador(j.getId(), j.getNombre()))
-            .toList();
-
-        String nombreA = jugadoresA.isEmpty() ? "Equipo A" : jugadoresA.get(0).nombre();
-        Equipo equipoA = new Equipo("eA-" + entity.getId(), nombreA);
-        jugadoresA.forEach(equipoA::agregarJugador);
-
-        String nombreB = jugadoresB.isEmpty() ? "Equipo B" : jugadoresB.get(0).nombre();
-        Equipo equipoB = new Equipo("eB-" + entity.getId(), nombreB);
-        jugadoresB.forEach(equipoB::agregarJugador);
-
-        // 2. Reconstruimos la mesa
-        Mesa mesaReconstruida = new Mesa();
-        if (entity.getEstadoMesaJson() != null && !entity.getEstadoMesaJson().isEmpty()) {
-            try {
-                List<Bola> bolasGuardadas = jsonMapper.readValue(
-                    entity.getEstadoMesaJson(), 
-                    jsonMapper.getTypeFactory().constructCollectionType(List.class, Bola.class)
-                );
-                for (Bola b : bolasGuardadas) {
-                    mesaReconstruida.agregarBola(b);
-                }
-            } catch (Exception e) {
-                System.err.println("Error leyendo mesa desde JSON: " + e.getMessage());
-            }
-        }
-
-        // 3. Creamos la partida
-        return new Partida(
-            entity.getId(),
-            TipoModalidad.valueOf(entity.getModalidad()),
-            equipoA,
-            equipoB,
-            mesaReconstruida,
-            entity.getFechaCreacion()
-        );
+        return new TiroEvent(UUID.randomUUID().toString(), partida.getId(), jugador,
+            primeraTocada, embolsadas, troneras, Instant.now(), duracion);
     }
 }

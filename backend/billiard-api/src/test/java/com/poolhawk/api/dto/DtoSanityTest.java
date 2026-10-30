@@ -15,16 +15,21 @@ class DtoSanityTest {
     @Test
     @DisplayName("Crea un CrearPartidaRequest válido")
     void crearPartidaRequest() {
+        // CORREGIDO: Se agregaron los parámetros anchoMesa y altoMesa
         CrearPartidaRequest request = new CrearPartidaRequest(
             TipoModalidad.BOLA_8,
             FormatoJuego.INDIVIDUAL,
-            List.of("Ana", "Beto", "Carlos")
+            List.of("Ana", "Beto", "Carlos"),
+            254.0, // anchoMesa
+            127.0  // altoMesa
         );
 
         assertEquals(TipoModalidad.BOLA_8, request.modalidad());
         assertEquals(FormatoJuego.INDIVIDUAL, request.formato());
         assertEquals(3, request.jugadores().size());
         assertEquals("Ana", request.jugadores().get(0));
+        assertEquals(254.0, request.anchoMesa());
+        assertEquals(127.0, request.altoMesa());
     }
 
     @Test
