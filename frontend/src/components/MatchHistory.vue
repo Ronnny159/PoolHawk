@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed, onUnmounted } from 'vue'
 import { listarPartidas, obtenerPartida } from '../api/matches'
-// Eliminamos la importación del toast para que no rompa
+import { toast } from '../utils/toast' 
 
 const emit = defineEmits(['partidaSeleccionada'])
 const partidas = ref([])
@@ -15,6 +15,7 @@ const cargarHistorial = async (silencioso = false) => {
     partidas.value = await listarPartidas()
   } catch (error) {
     console.error('Error al cargar historial', error)
+    if (!silencioso) toast.error('No se pudo cargar el historial de partidas')
   } finally {
     if (!silencioso) cargando.value = false
   }
@@ -25,8 +26,8 @@ const seleccionar = async (id) => {
     const partida = await obtenerPartida(id)
     emit('partidaSeleccionada', partida)
   } catch (error) {
-    console.error('No se pudo cargar la partida', error)
-    // toast?.error('No se pudo cargar la partida') // Comentado
+    console.error('Error al cargar la partida', error)
+    toast.error('No se pudo cargar la partida seleccionada')
   }
 }
 
@@ -44,6 +45,7 @@ const codigoCorto = (id) => id.substring(0, 6).toUpperCase()
 
 onMounted(() => {
   cargarHistorial()
+  // Recarga en silencio cada 3 segundos para ver las partidas nuevas
   intervalo = setInterval(() => cargarHistorial(true), 3000)
 })
 
@@ -63,7 +65,7 @@ onUnmounted(() => {
         placeholder="🔍 Buscar por nombre de jugador..." 
         class="buscador"
       />
-      <button @click="cargarHistorial" :disabled="cargando">
+      <button @click="cargarHistorial()" :disabled="cargando">
         {{ cargando ? '...' : '🔄' }}
       </button>
     </div>
