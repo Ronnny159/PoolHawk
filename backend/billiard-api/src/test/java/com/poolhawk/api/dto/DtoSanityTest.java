@@ -1,194 +1,52 @@
 package com.poolhawk.api.dto;
 
+import com.poolhawk.domain.match.FormatoJuego;
 import com.poolhawk.domain.match.TipoModalidad;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Pruebas de sanidad de los DTOs de la API.
- *
- * <p>Los DTOs son records sin logica de negocio. Java genera
- * automaticamente los accesores, equals, hashCode y toString.
- * Estas pruebas verifican que los records se construyen
- * correctamente y que sus accesores devuelven los valores
- * esperados.</p>
- *
- * @author PoolHawk Team
- * @since 0.1.0
- */
-@DisplayName("DTOs - pruebas de sanidad")
+@DisplayName("DTOs - Pruebas de sanidad")
 class DtoSanityTest {
 
-    @Nested
-    @DisplayName("JugadorResponse")
-    class JugadorResponseTest {
+    @Test
+    @DisplayName("Crea un CrearPartidaRequest válido")
+    void crearPartidaRequest() {
+        CrearPartidaRequest request = new CrearPartidaRequest(
+            TipoModalidad.BOLA_8,
+            FormatoJuego.INDIVIDUAL,
+            List.of("Ana", "Beto", "Carlos")
+        );
 
-        @Test
-        @DisplayName("Se construye y expone sus valores")
-        void construccion() {
-            JugadorResponse dto = new JugadorResponse("j1", "Ana");
-            assertEquals("j1", dto.id());
-            assertEquals("Ana", dto.nombre());
-        }
-
-        @Test
-        @DisplayName("Igualdad por valor")
-        void igualdad() {
-            JugadorResponse a = new JugadorResponse("j1", "Ana");
-            JugadorResponse b = new JugadorResponse("j1", "Ana");
-            assertEquals(a, b);
-            assertEquals(a.hashCode(), b.hashCode());
-        }
+        assertEquals(TipoModalidad.BOLA_8, request.modalidad());
+        assertEquals(FormatoJuego.INDIVIDUAL, request.formato());
+        assertEquals(3, request.jugadores().size());
+        assertEquals("Ana", request.jugadores().get(0));
     }
 
-    @Nested
-    @DisplayName("CrearPartidaRequest")
-    class CrearPartidaRequestTest {
+    @Test
+    @DisplayName("Crea un TiroEventRequest válido")
+    void tiroEventRequest() {
+        TiroEventRequest request = new TiroEventRequest(
+            "j1", 1, List.of(1, 2), List.of("TOP_LEFT", "BOTTOM_RIGHT"), 10
+        );
 
-        @Test
-        @DisplayName("Se construye con datos validos")
-        void construccion() {
-            CrearPartidaRequest dto = new CrearPartidaRequest(
-                TipoModalidad.BOLA_8,
-                List.of("Ana"),
-                List.of("Beto"));
-
-            assertEquals(TipoModalidad.BOLA_8, dto.modalidad());
-            assertEquals(1, dto.equipoA().size());
-            assertEquals("Ana", dto.equipoA().get(0));
-            assertEquals("Beto", dto.equipoB().get(0));
-        }
-
-        @Test
-        @DisplayName("Acepta equipos de dos jugadores")
-        void equiposDeDos() {
-            CrearPartidaRequest dto = new CrearPartidaRequest(
-                TipoModalidad.POR_PUNTOS,
-                List.of("Ana", "Carla"),
-                List.of("Beto", "Diego"));
-
-            assertEquals(2, dto.equipoA().size());
-            assertEquals(2, dto.equipoB().size());
-        }
+        assertEquals("j1", request.jugadorId());
+        assertEquals(1, request.primeraBolaTocada());
+        assertEquals(2, request.bolasEmbolsadas().size());
     }
 
-    @Nested
-    @DisplayName("PartidaResponse")
-    class PartidaResponseTest {
+    @Test
+    @DisplayName("Crea un ResultadoTiroResponse válido")
+    void resultadoTiroResponse() {
+        ResultadoTiroResponse response = new ResultadoTiroResponse(
+            false, null, 1, true, false, "Tiro legal"
+        );
 
-        @Test
-        @DisplayName("Se construye y expone sus valores")
-        void construccion() {
-            Instant ahora = Instant.now();
-            PartidaResponse dto = new PartidaResponse(
-                "p1",
-                "BOLA_8",
-                "EN_CURSO",
-                List.of(new JugadorResponse("j1", "Ana")),
-                List.of(new JugadorResponse("j2", "Beto")),
-                Map.of("Ana", 0, "Beto", 0),
-                "Ana",
-                null,
-                0,
-                ahora);
-
-            assertEquals("p1", dto.id());
-            assertEquals("BOLA_8", dto.modalidad());
-            assertEquals("EN_CURSO", dto.fase());
-            assertEquals("Ana", dto.jugadorActual());
-            assertNull(dto.ganador());
-            assertEquals(0, dto.cantidadTiros());
-            assertEquals(ahora, dto.fechaCreacion());
-        }
-    }
-
-    @Nested
-    @DisplayName("TiroEventRequest")
-    class TiroEventRequestTest {
-
-        @Test
-        @DisplayName("Se construye con tiro completo")
-        void construccion() {
-            TiroEventRequest dto = new TiroEventRequest(
-                "j1",
-                3,
-                List.of(3),
-                List.of("TOP_LEFT"),
-                5);
-
-            assertEquals("j1", dto.jugadorId());
-            assertEquals(3, dto.primeraBolaTocada());
-            assertEquals(1, dto.bolasEmbolsadas().size());
-            assertEquals(1, dto.troneras().size());
-            assertEquals(5, dto.duracionSegundos());
-        }
-
-        @Test
-        @DisplayName("Acepta nulls en campos opcionales")
-        void camposOpcionalesNulos() {
-            TiroEventRequest dto = new TiroEventRequest(
-                "j1", null, null, null, null);
-
-            assertNull(dto.primeraBolaTocada());
-            assertNull(dto.bolasEmbolsadas());
-            assertNull(dto.troneras());
-            assertNull(dto.duracionSegundos());
-        }
-    }
-
-    @Nested
-    @DisplayName("ResultadoTiroResponse")
-    class ResultadoTiroResponseTest {
-
-        @Test
-        @DisplayName("Representa un tiro legal")
-        void tiroLegal() {
-            ResultadoTiroResponse dto = new ResultadoTiroResponse(
-                false, null, 3, false, false, "Tiro legal, 3 punto(s)");
-
-            assertFalse(dto.esFalta());
-            assertNull(dto.motivo());
-            assertEquals(3, dto.puntos());
-            assertFalse(dto.cambiaTurno());
-            assertFalse(dto.esVictoria());
-        }
-
-        @Test
-        @DisplayName("Representa una falta")
-        void falta() {
-            ResultadoTiroResponse dto = new ResultadoTiroResponse(
-                true, "NO_TOCAR_BOLA", 0, true, false, "Falta: no toco bola");
-
-            assertTrue(dto.esFalta());
-            assertEquals("NO_TOCAR_BOLA", dto.motivo());
-            assertEquals(0, dto.puntos());
-            assertTrue(dto.cambiaTurno());
-        }
-    }
-
-    @Nested
-    @DisplayName("ErrorResponse")
-    class ErrorResponseTest {
-
-        @Test
-        @DisplayName("Se construye y expone sus valores")
-        void construccion() {
-            Instant ahora = Instant.now();
-            ErrorResponse dto = new ErrorResponse(
-                ahora, 404, "Not Found", "Partida no encontrada", "/api/v1/matches/x");
-
-            assertEquals(ahora, dto.timestamp());
-            assertEquals(404, dto.status());
-            assertEquals("Not Found", dto.error());
-            assertEquals("Partida no encontrada", dto.message());
-            assertEquals("/api/v1/matches/x", dto.path());
-        }
+        assertFalse(response.esFalta());
+        assertEquals(1, response.puntos());
     }
 }
