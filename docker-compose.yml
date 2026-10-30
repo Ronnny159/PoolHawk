@@ -41,8 +41,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/poolhawk_db
       SPRING_DATASOURCE_USERNAME: poolhawk_user
       SPRING_DATASOURCE_PASSWORD: poolhawk_password
-      # NUEVO: Variable para el Token JWT (el valor real se lee del archivo .env)
-      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en el archivo .env}
+      JWT_SECRET: "SuperSecretoPoolHawk2026_cambialo_por_algo_de_32_o_mas_caracteres"
     ports:
       - "8080:8080"
 
