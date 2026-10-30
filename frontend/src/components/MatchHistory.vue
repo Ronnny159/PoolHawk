@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { listarPartidas, obtenerPartida } from '../api/matches'
+import { toast } from '../utils/toast'
 
 const emit = defineEmits(['partidaSeleccionada'])
 const partidas = ref([])
@@ -13,6 +14,7 @@ const cargarHistorial = async () => {
     partidas.value = await listarPartidas()
   } catch (error) {
     console.error('Error al cargar historial', error)
+    toast.error('No se pudo cargar el historial de partidas')
   } finally {
     cargando.value = false
   }
@@ -23,7 +25,7 @@ const seleccionar = async (id) => {
     const partida = await obtenerPartida(id)
     emit('partidaSeleccionada', partida)
   } catch (error) {
-    alert('No se pudo cargar la partida')
+    toast.error('No se pudo cargar la partida')
   }
 }
 

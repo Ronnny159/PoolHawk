@@ -5,6 +5,7 @@ import CreateMatchForm from './components/CreateMatchForm.vue'
 import ScoreBoard from './components/ScoreBoard.vue'
 import ShotSimulator from './components/ShotSimulator.vue'
 import MatchHistory from './components/MatchHistory.vue'
+import ToastContainer from './components/ToastContainer.vue'
 
 
 const partidaActual = ref(null)
@@ -76,6 +77,7 @@ onUnmounted(() => {
 
 <template>
   <div class="app-container">
+    <ToastContainer />
     <header>
       <h1> PoolHawk</h1>
       <p class="subtitle">Sistema de Rastreo y Marcado Automático</p>
