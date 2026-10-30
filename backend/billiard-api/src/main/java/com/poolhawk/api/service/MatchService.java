@@ -31,7 +31,6 @@ public class MatchService {
     private final MatchLiveHandler liveHandler;
     private final PartidaMapper mapper;
     
-    // Se agregó tolerancia a campos desconocidos
     private final ObjectMapper jsonMapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -47,13 +46,11 @@ public class MatchService {
     public Partida crear(CrearPartidaRequest request) {
         String id = UUID.randomUUID().toString();
         
-        // TAREA 1.2: Dimensiones dinámicas con fallback
         double ancho = request.anchoMesa() != null ? request.anchoMesa() : Mesa.ANCHO_DEFECTO;
         double alto = request.altoMesa() != null ? request.altoMesa() : Mesa.ALTO_DEFECTO;
         
         Mesa mesa = construirMesaInicial(ancho, alto); 
         
-        // 1. Validaciones
         if (request.jugadores() == null || request.jugadores().size() < 2 || request.jugadores().size() > 4) {
             throw new IllegalArgumentException("Debe haber entre 2 y 4 jugadores.");
         }
@@ -61,34 +58,27 @@ public class MatchService {
             throw new IllegalArgumentException("Las parejas requieren un número par de jugadores.");
         }
 
-        // 2. Jugadores
         List<Jugador> listaJugadores = request.jugadores().stream()
             .map(nombre -> new Jugador(UUID.randomUUID().toString(), nombre))
             .toList();
 
-        // 3. Turnos
         Turnos<Jugador> turnos;
         if (request.formato() == FormatoJuego.INDIVIDUAL) {
             turnos = new Turnos<>(listaJugadores);
         } else {
-            List<Jugador> intercalados = new ArrayList<>();
-            int mitad = listaJugadores.size() / 2;
-            for (int i = 0; i < mitad; i++) {
-                intercalados.add(listaJugadores.get(i));
-                intercalados.add(listaJugadores.get(i + mitad));
-            }
-            turnos = new Turnos<>(intercalados);
+            // Para parejas, el frontend envía [A1, B1, A2, B2]. El turno ya es ese orden.
+            turnos = new Turnos<>(listaJugadores);
         }
 
-        // 4. Crear MatchState y Partida
         MatchState estado = new MatchState(id, request.modalidad(), turnos, mesa, Instant.now());
         estado.iniciar();
 
+        // El constructor de Partida ahora se encarga de armar los equipos correctamente (1v1 o 2v2)
         Partida partida = new Partida(id, request.modalidad(), listaJugadores, estado, Instant.now());
-        partidasEnMemoria.put(id, partida);
         
-        // 5. Guardar en BD
+        partidasEnMemoria.put(id, partida);
         storage.guardar(toEntity(partida));
+        
         return partida;
     }
 
@@ -132,9 +122,6 @@ public class MatchService {
         return resultado;
     }
 
-    // ─── Helpers ──────────────────────────────────────────────
-
-    // TAREA 1.1: Construcción dinámica con ancho y alto
     private Mesa construirMesaInicial(double ancho, double alto) {
         Mesa mesa = new Mesa(ancho, alto);
         mesa.agregarBola(Bola.crear(0, new Coordenada(ancho * 0.25, alto * 0.5)));
@@ -164,9 +151,11 @@ public class MatchService {
             .map(j -> new Jugador(j.getId(), j.getNombre()))
             .toList();
 
-        Equipo equipoA = new Equipo("eA-" + entity.getId(), jugadoresA.isEmpty() ? "Equipo A" : jugadoresA.get(0).nombre());
+        // Ahora reconstruimos de forma segura. Si por alguna razón vieja no hay jugadores, evitamos el crash.
+        Equipo equipoA = new Equipo("eA-" + entity.getId(), "Equipo A");
         jugadoresA.forEach(equipoA::agregarJugador);
-        Equipo equipoB = new Equipo("eB-" + entity.getId(), jugadoresB.isEmpty() ? "Equipo B" : jugadoresB.get(0).nombre());
+        
+        Equipo equipoB = new Equipo("eB-" + entity.getId(), "Equipo B");
         jugadoresB.forEach(equipoB::agregarJugador);
 
         Mesa mesa = new Mesa();
@@ -209,6 +198,7 @@ public class MatchService {
         }
 
         List<JugadorEntity> jugadores = new ArrayList<>();
+        // Guardamos explícitamente al Equipo A y Equipo B
         for (Jugador j : partida.getEquipoA().getJugadores()) {
             jugadores.add(toJugadorEntity(j, "A", entity));
         }
