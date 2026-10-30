@@ -146,3 +146,12 @@ En `application.yml` se configuró `server.error.include-stacktrace: never`, par
 
 - Para el desarrollo local, `application.yml` conserva las credenciales de la base de datos de desarrollo. En Docker, esos valores se sobrescriben con las variables del `.env`.
 - Los valores de ejemplo (`poolhawk_password`) son solo para desarrollo y deben cambiarse en cualquier entorno real.
+
+## Acceso (demostración)
+
+La pantalla de inicio de sesión usa el usuario de demostración definido en el backend:
+
+- Usuario: `arbitro`
+- Contraseña: `admin123`
+
+Solo para la demo: el backend deja abiertos todos los endpoints.
