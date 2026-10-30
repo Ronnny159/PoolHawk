@@ -332,7 +332,6 @@ public class Partida {
     }
 
     public Mesa getMesa() {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'getMesa'");
+        return estado.getMesa();
     }
 }

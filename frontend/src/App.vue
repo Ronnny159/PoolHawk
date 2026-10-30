@@ -6,7 +6,6 @@ import ScoreBoard from './components/ScoreBoard.vue'
 import ShotSimulator from './components/ShotSimulator.vue'
 import MatchHistory from './components/MatchHistory.vue'
 
-
 const partidaActual = ref(null)
 let socket = null
 
@@ -14,30 +13,26 @@ const iniciarPartida = (nuevaPartida) => {
   partidaActual.value = nuevaPartida
 }
 
-// Mantenemos esta función por si acaso el simulador la usa
 const recargarPartida = async () => {
   if (!partidaActual.value) return
   const datos = await obtenerPartida(partidaActual.value.id)
-  partidaActual.value = datos
+  partidaActual.value = { ...datos }
 }
 
 const cargarPartidaDelHistorial = (partida) => {
-  partidaActual.value = partida
+  partidaActual.value = { ...partida }
 }
 
-// Función para cerrar sesión
 const cerrarSesion = () => {
   localStorage.removeItem('token')
-  window.location.reload() // Recarga para volver al login
+  window.location.reload()
 }
 
 // ───────────────────────────────────────────────────────────
 // Lógica del WebSocket
 // ───────────────────────────────────────────────────────────
 const conectarWebSocket = () => {
-  // Nos conectamos al endpoint que creaste en Spring Boot
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-
   const wsHost = window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host;
   socket = new WebSocket(`${wsProtocol}//${wsHost}/ws/matches`)
 
@@ -46,19 +41,20 @@ const conectarWebSocket = () => {
   }
 
   socket.onmessage = (event) => {
-    // El backend envía la partida completa en formato JSON
     const partidaActualizada = JSON.parse(event.data)
     
-    // Solo actualizamos la pantalla si es la partida que estamos viendo
+    // Solo actualizamos si es la partida que estamos viendo
     if (partidaActual.value && partidaActual.value.id === partidaActualizada.id) {
-      console.log('⚡ Marcador actualizado en vivo')
-      partidaActual.value = partidaActualizada
+      console.log('⚡ Marcador actualizado en vivo:', partidaActualizada.puntajes)
+      
+      // LA MAGIA: Asignamos un nuevo objeto para forzar el re-render en Vue 3
+      partidaActual.value = { ...partidaActualizada }
     }
   }
 
   socket.onclose = () => {
     console.log('🔴 WebSocket desconectado. Reconectando en 3 segundos...')
-    setTimeout(conectarWebSocket, 3000) // Reconexión automática si se cae el server
+    setTimeout(conectarWebSocket, 3000)
   }
 
   socket.onerror = (error) => {
@@ -66,12 +62,10 @@ const conectarWebSocket = () => {
   }
 }
 
-// Conectamos el WebSocket cuando la app arranca
 onMounted(() => {
   conectarWebSocket()
 })
 
-// Cerramos el WebSocket cuando se cierra la pestaña
 onUnmounted(() => {
   if (socket) socket.close()
 })
@@ -95,7 +89,13 @@ onUnmounted(() => {
       <!-- Si hay partida, mostrar marcador y simulador -->
       <div v-else>
         <button @click="partidaActual = null" class="btn-salir">← Nueva Partida</button>
-        <ScoreBoard :partida="partidaActual" />
+        
+        <!-- EL TRUCO: El :key obliga a ScoreBoard a redibujarse si los puntajes o el turno cambian -->
+        <ScoreBoard 
+          :key="JSON.stringify(partidaActual.puntajes) + partidaActual.jugadorActual" 
+          :partida="partidaActual" 
+        />
+        
         <ShotSimulator :partida="partidaActual" @tiroRegistrado="recargarPartida" />
       </div>
     </main>
@@ -103,6 +103,7 @@ onUnmounted(() => {
 </template>
 
 <style>
+/* Tus estilos se mantienen igual */
 body {
   margin: 0;
   background-color: #121212;
