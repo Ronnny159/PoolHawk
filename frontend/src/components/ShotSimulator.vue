@@ -13,15 +13,14 @@ const simularTiro = async (tipo) => {
   try {
     cargando.value = true
 
+    // Buscamos al jugador actual comparando por nombre EXACTO, ya que el backend envía el nombre en el JSON.
     const todosLosJugadores = [...props.partida.equipoA, ...props.partida.equipoB]
     const jugadorActual = todosLosJugadores.find(j => j.nombre === props.partida.jugadorActual)
+    
     if (!jugadorActual) {
-      throw new Error('Jugador actual no encontrado en la partida')
+      throw new Error('Jugador actual no encontrado en la partida: ' + props.partida.jugadorActual)
     }
 
-    // Convención del simulador:
-    //   Equipo A → bola 1 (lisas)
-    //   Equipo B → bola 9 (rayadas)
     const esEquipoA = props.partida.equipoA.some(j => j.id === jugadorActual.id)
     const bolaObjetivo = esEquipoA ? 1 : 9
 
@@ -39,18 +38,18 @@ const simularTiro = async (tipo) => {
       payload.troneras = ['TOP_LEFT']
     }
 
+    console.log('Enviando tiro:', payload)
     await registrarTiro(props.partida.id, payload)
     emit('tiroRegistrado')
 
   } catch (error) {
     console.error('Error al registrar tiro:', error)
-    alert('Error al registrar el tiro')
+    alert('Error al registrar el tiro: ' + (error.response?.data?.message || error.message))
   } finally {
     cargando.value = false
   }
 }
 </script>
-
 
 <template>
   <div class="simulador">

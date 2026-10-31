@@ -1,13 +1,13 @@
 package com.poolhawk.api.mapper;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.poolhawk.api.entity.JugadorEntity;
 import com.poolhawk.api.entity.PartidaEntity;
 import com.poolhawk.domain.match.FasePartida;
+import com.poolhawk.domain.match.MatchState;
 import com.poolhawk.domain.match.Partida;
 import com.poolhawk.domain.match.TipoModalidad;
+import com.poolhawk.domain.match.Turnos;
 import com.poolhawk.domain.player.Equipo;
 import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.Bola;
@@ -40,11 +40,22 @@ public class MatchPersistenceMapper {
             .map(j -> new Jugador(j.getId(), j.getNombre()))
             .toList();
 
-        Equipo equipoA = new Equipo("eA-" + entity.getId(), "Equipo A");
-        jugadoresA.forEach(equipoA::agregarJugador);
-        
-        Equipo equipoB = new Equipo("eB-" + entity.getId(), "Equipo B");
-        jugadoresB.forEach(equipoB::agregarJugador);
+        // CORRECCIÓN: Reconstruimos la lista plana intercalada [A1, B1, A2, B2]
+        // para que el constructor de Partida arme los equipos correctamente sin explotar.
+        List<Jugador> listaPlana = new ArrayList<>();
+        if (jugadoresA.size() == 2 && jugadoresB.size() == 2) {
+            listaPlana.add(jugadoresA.get(0));
+            listaPlana.add(jugadoresB.get(0));
+            listaPlana.add(jugadoresA.get(1));
+            listaPlana.add(jugadoresB.get(1));
+        } else if (jugadoresA.size() == 1 && jugadoresB.size() == 1) {
+            listaPlana.add(jugadoresA.get(0));
+            listaPlana.add(jugadoresB.get(0));
+        } else {
+            // Fallback para partidas viejas corruptas (se va a ignorar en listarTodas)
+            listaPlana.addAll(jugadoresA);
+            listaPlana.addAll(jugadoresB);
+        }
 
         Mesa mesa = new Mesa();
         if (entity.getEstadoMesaJson() != null && !entity.getEstadoMesaJson().isEmpty()) {
@@ -58,11 +69,12 @@ public class MatchPersistenceMapper {
             }
         }
 
-        Partida partida = new Partida(
-            entity.getId(),
-            TipoModalidad.valueOf(entity.getModalidad()),
-            equipoA, equipoB, mesa, entity.getFechaCreacion()
-        );
+        // Usamos el constructor dinámico para que arme los equipos solo
+        MatchState estado = new MatchState(entity.getId(), TipoModalidad.valueOf(entity.getModalidad()), 
+            new Turnos<>(listaPlana), mesa, entity.getFechaCreacion());
+            
+        Partida partida = new Partida(entity.getId(), TipoModalidad.valueOf(entity.getModalidad()), 
+            listaPlana, estado, entity.getFechaCreacion());
         
         if (FasePartida.valueOf(entity.getFase()) == FasePartida.EN_CURSO) {
             partida.iniciar();

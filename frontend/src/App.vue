@@ -44,9 +44,10 @@ const conectarWebSocket = () => {
     console.log('🟢 Conectado al WebSocket de PoolHawk')
   }
 
-  socket.onmessage = (event) => {
+    socket.onmessage = (event) => {
     const partidaActualizada = JSON.parse(event.data)
-    // Solo actualizamos la pantalla si es la partida que estamos viendo
+    console.log('JSON del Backend:', partidaActualizada) // <-- AGREGA ESTO
+
     if (partidaActual.value && partidaActual.value.id === partidaActualizada.id) {
       console.log('⚡ Marcador actualizado en vivo')
       partidaActual.value = partidaActualizada

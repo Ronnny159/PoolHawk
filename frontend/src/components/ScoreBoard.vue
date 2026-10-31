@@ -5,39 +5,44 @@ const props = defineProps({
   partida: { type: Object, required: true }
 })
 
-// 1. Calculamos de quién es el turno
+// Verificamos si el jugador actual pertenece al Equipo A o B
 const turnoEsDeA = computed(() => {
+  if (!props.partida.jugadorActual || !props.partida.equipoA) return false
   return props.partida.equipoA.some(j => j.nombre === props.partida.jugadorActual)
 })
 
 const turnoEsDeB = computed(() => {
+  if (!props.partida.jugadorActual || !props.partida.equipoB) return false
   return props.partida.equipoB.some(j => j.nombre === props.partida.jugadorActual)
 })
 
-// 2. Calculamos los puntos (sumando los puntos de los jugadores de cada equipo)
+// Calculamos los puntos sumando a los jugadores de cada equipo
 const puntosEquipoA = computed(() => {
-  let total = 0
-  for (const jugador of props.partida.equipoA) {
-    total += props.partida.puntajes[jugador.nombre] || 0
-  }
-  return total
+  if (!props.partida.equipoA || !props.partida.puntajes) return 0
+  return props.partida.equipoA.reduce((total, jugador) => {
+    return total + (props.partida.puntajes[jugador.nombre] || 0)
+  }, 0)
 })
 
 const puntosEquipoB = computed(() => {
-  let total = 0
-  for (const jugador of props.partida.equipoB) {
-    total += props.partida.puntajes[jugador.nombre] || 0
-  }
-  return total
+  if (!props.partida.equipoB || !props.partida.puntajes) return 0
+  return props.partida.equipoB.reduce((total, jugador) => {
+    return total + (props.partida.puntajes[jugador.nombre] || 0)
+  }, 0)
 })
 
-// 3. Calculamos el nombre del equipo para mostrarlo en el marcador
+// Nombres de los equipos
 const nombreEquipoA = computed(() => {
-  return props.partida.equipoA.map(j => j.nombre).join(' & ')
+  return props.partida.equipoA ? props.partida.equipoA.map(j => j.nombre).join(' & ') : ''
 })
 
 const nombreEquipoB = computed(() => {
-  return props.partida.equipoB.map(j => j.nombre).join(' & ')
+  return props.partida.equipoB ? props.partida.equipoB.map(j => j.nombre).join(' & ') : ''
+})
+
+const ganadorNombre = computed(() => {
+  if (props.partida.fase !== 'FINALIZADA') return ''
+  return props.partida.ganador || 'Desconocido'
 })
 </script>
 
@@ -51,7 +56,7 @@ const nombreEquipoB = computed(() => {
     </div>
 
     <div class="jugadores">
-      <!-- EQUIPO A (Estilo Bola 1 - Amarilla) -->
+      <!-- EQUIPO A -->
       <div class="equipo equipo-a" :class="{ activo: turnoEsDeA }">
         <span class="nombre">{{ nombreEquipoA }}</span>
         <div class="bola-marcador">
@@ -61,7 +66,7 @@ const nombreEquipoB = computed(() => {
       
       <div class="vs">VS</div>
       
-      <!-- EQUIPO B (Estilo Bola 2 - Azul) -->
+      <!-- EQUIPO B -->
       <div class="equipo equipo-b" :class="{ activo: turnoEsDeB }">
         <span class="nombre">{{ nombreEquipoB }}</span>
         <div class="bola-marcador">
@@ -74,15 +79,15 @@ const nombreEquipoB = computed(() => {
       Turno de: <strong>{{ partida.jugadorActual }}</strong>
     </div>
     <div v-else class="turno ganador">
-      🏆 Ganador: <strong>{{ partida.equipoA.some(j => j.nombre === partida.ganador) ? nombreEquipoA : nombreEquipoB }}</strong>
+      🏆 Ganador: <strong>{{ ganadorNombre }}</strong>
     </div>
   </div>
 </template>
 
 <style scoped>
 .scoreboard { 
-  background: #1e293b; /* Madera oscura */
-  border: 4px solid #0f172a; /* Borde de la mesa */
+  background: #1e293b;
+  border: 4px solid #0f172a;
   border-radius: 12px; 
   padding: 2rem; 
   color: white; 
@@ -99,7 +104,6 @@ h2 { margin: 0; font-size: 2.5rem; color: #e2e8f0; text-shadow: 2px 2px 0 #000; 
 
 .jugadores { display: flex; align-items: center; justify-content: space-around; gap: 1rem; }
 
-/* Contenedor de cada equipo */
 .equipo { 
   flex: 1; 
   display: flex; 
@@ -111,7 +115,6 @@ h2 { margin: 0; font-size: 2.5rem; color: #e2e8f0; text-shadow: 2px 2px 0 #000; 
   transition: all 0.3s ease;
 }
 
-/* Cuando es su turno, se ilumina el paño detrás de ellos */
 .equipo.activo { 
   background: rgba(21, 128, 61, 0.2);
   border-color: var(--felt-light);
@@ -119,10 +122,9 @@ h2 { margin: 0; font-size: 2.5rem; color: #e2e8f0; text-shadow: 2px 2px 0 #000; 
   transform: scale(1.02);
 }
 
-.nombre { font-size: 1.4rem; font-weight: 800; color: #cbd5e1; margin-bottom: 1rem; text-transform: uppercase;}
+.nombre { font-size: 1.4rem; font-weight: 800; color: #cbd5e1; margin-bottom: 1rem; text-transform: uppercase; text-align: center;}
 .equipo.activo .nombre { color: var(--felt-light); }
 
-/* EL DISEÑO DE LA BOLA DE BILLAR */
 .bola-marcador {
   width: 120px;
   height: 120px;
@@ -132,12 +134,11 @@ h2 { margin: 0; font-size: 2.5rem; color: #e2e8f0; text-shadow: 2px 2px 0 #000; 
   align-items: center;
   position: relative;
   box-shadow: 
-    inset -15px -15px 25px rgba(0,0,0,0.5), /* Sombra inferior */
-    inset 10px 10px 15px rgba(255,255,255,0.6), /* Brillo superior */
-    5px 5px 15px rgba(0,0,0,0.5); /* Sombra proyectada */
+    inset -15px -15px 25px rgba(0,0,0,0.5),
+    inset 10px 10px 15px rgba(255,255,255,0.6),
+    5px 5px 15px rgba(0,0,0,0.5);
 }
 
-/* Círculo blanco interior (como el número de la bola) */
 .bola-marcador::before {
   content: '';
   position: absolute;
@@ -148,7 +149,6 @@ h2 { margin: 0; font-size: 2.5rem; color: #e2e8f0; text-shadow: 2px 2px 0 #000; 
   box-shadow: inset 2px 2px 5px rgba(0,0,0,0.3);
 }
 
-/* El número de la bola */
 .puntos {
   position: relative;
   z-index: 10;
@@ -158,10 +158,7 @@ h2 { margin: 0; font-size: 2.5rem; color: #e2e8f0; text-shadow: 2px 2px 0 #000; 
   font-weight: bold;
 }
 
-/* Color de la bola del Equipo A (Amarilla) */
 .equipo-a .bola-marcador { background: radial-gradient(circle at 30% 30%, #fef08a, var(--ball-yellow) 60%, #a16207 100%); }
-
-/* Color de la bola del Equipo B (Azul) */
 .equipo-b .bola-marcador { background: radial-gradient(circle at 30% 30%, #bfdbfe, var(--ball-blue) 60%, #1e3a8a 100%); }
 
 .vs { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; color: #475569; }
