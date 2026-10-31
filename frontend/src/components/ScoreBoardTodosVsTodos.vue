@@ -5,9 +5,16 @@ const props = defineProps({
   partida: { type: Object, required: true }
 })
 
-// Juntamos a todos los jugadores en una sola lista
 const todosLosJugadores = computed(() => {
   return [...(props.partida.equipoA || []), ...(props.partida.equipoB || [])]
+})
+
+// Extraemos el nombre del jugador actual (por si viene como objeto)
+const nombreJugadorActual = computed(() => {
+  if (!props.partida.jugadorActual) return ''
+  return typeof props.partida.jugadorActual === 'object' 
+    ? props.partida.jugadorActual.nombre 
+    : props.partida.jugadorActual
 })
 
 const coloresBolas = [
@@ -24,11 +31,11 @@ const coloresBolas = [
       v-for="(jugador, index) in todosLosJugadores" 
       :key="jugador.nombre"
       class="jugador-individual"
-      :class="{ activo: partida.jugadorActual === jugador.nombre }"
+      :class="{ activo: jugador.nombre === nombreJugadorActual }"
     >
       <span class="nombre">{{ jugador.nombre }}</span>
       <div class="bola-marcador" :style="{ background: coloresBolas[index % coloresBolas.length] }">
-        <span class="puntos">{{ partida.puntajes[jugador.nombre] || 0 }}</span>
+        <span class="puntos">{{ props.partida.puntajes?.[jugador.nombre] || 0 }}</span>
       </div>
     </div>
   </div>

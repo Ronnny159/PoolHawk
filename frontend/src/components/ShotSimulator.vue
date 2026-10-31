@@ -40,7 +40,6 @@ const simularTiro = async (tipo) => {
 
     console.log('Enviando tiro:', payload)
     await registrarTiro(props.partida.id, payload)
-    emit('tiroRegistrado')
 
   } catch (error) {
     console.error('Error al registrar tiro:', error)

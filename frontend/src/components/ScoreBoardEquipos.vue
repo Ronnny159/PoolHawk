@@ -5,26 +5,28 @@ const props = defineProps({
   partida: { type: Object, required: true }
 })
 
+// Obtenemos el nombre del jugador actual, sin importar si el backend envía un string o un objeto
+const nombreJugadorActual = computed(() => {
+  if (!props.partida.jugadorActual) return ''
+  // Si el backend envía un objeto (ej. {id: 1, nombre: 'j1'}), sacamos el nombre. Si es string, lo dejamos tal cual.
+  return typeof props.partida.jugadorActual === 'object' 
+    ? props.partida.jugadorActual.nombre 
+    : props.partida.jugadorActual
+})
+
 const turnoEsDeA = computed(() => {
-  if (!props.partida.jugadorActual || !props.partida.equipoA) return false
-  return props.partida.equipoA.some(j => j.nombre === props.partida.jugadorActual)
+  if (!nombreJugadorActual.value || !props.partida.equipoA) return false
+  return props.partida.equipoA.some(j => j.nombre === nombreJugadorActual.value)
 })
 
 const turnoEsDeB = computed(() => {
-  if (!props.partida.jugadorActual || !props.partida.equipoB) return false
-  return props.partida.equipoB.some(j => j.nombre === props.partida.jugadorActual)
+  if (!nombreJugadorActual.value || !props.partida.equipoB) return false
+  return props.partida.equipoB.some(j => j.nombre === nombreJugadorActual.value)
 })
 
-const puntosEquipoA = computed(() => {
-  if (!props.partida.equipoA || !props.partida.puntajes) return 0
-  return props.partida.equipoA.reduce((total, jugador) => total + (props.partida.puntajes[jugador.nombre] || 0), 0)
-})
-
-const puntosEquipoB = computed(() => {
-  if (!props.partida.equipoB || !props.partida.puntajes) return 0
-  return props.partida.equipoB.reduce((total, jugador) => total + (props.partida.puntajes[jugador.nombre] || 0), 0)
-})
-
+// ... (el resto de computed para puntos y nombres quedan igual) ...
+const puntosEquipoA = computed(() => props.partida.equipoA?.reduce((total, jugador) => total + (props.partida.puntajes?.[jugador.nombre] || 0), 0) || 0)
+const puntosEquipoB = computed(() => props.partida.equipoB?.reduce((total, jugador) => total + (props.partida.puntajes?.[jugador.nombre] || 0), 0) || 0)
 const nombreEquipoA = computed(() => props.partida.equipoA ? props.partida.equipoA.map(j => j.nombre).join(' & ') : '')
 const nombreEquipoB = computed(() => props.partida.equipoB ? props.partida.equipoB.map(j => j.nombre).join(' & ') : '')
 </script>
@@ -33,18 +35,12 @@ const nombreEquipoB = computed(() => props.partida.equipoB ? props.partida.equip
   <div class="jugadores">
     <div class="equipo equipo-a" :class="{ activo: turnoEsDeA }">
       <span class="nombre">{{ nombreEquipoA }}</span>
-      <div class="bola-marcador bola-amarilla">
-        <span class="puntos">{{ puntosEquipoA }}</span>
-      </div>
+      <div class="bola-marcador bola-amarilla"><span class="puntos">{{ puntosEquipoA }}</span></div>
     </div>
-    
     <div class="vs">VS</div>
-    
     <div class="equipo equipo-b" :class="{ activo: turnoEsDeB }">
       <span class="nombre">{{ nombreEquipoB }}</span>
-      <div class="bola-marcador bola-azul">
-        <span class="puntos">{{ puntosEquipoB }}</span>
-      </div>
+      <div class="bola-marcador bola-azul"><span class="puntos">{{ puntosEquipoB }}</span></div>
     </div>
   </div>
 </template>
