@@ -5,7 +5,7 @@ import { listarPartidas, obtenerPartida } from '../api/matches'
 const emit = defineEmits(['partidaSeleccionada'])
 const partidas = ref([])
 const cargando = ref(false)
-const busqueda = ref('') // Variable para el buscador
+const busqueda = ref('')
 
 const cargarHistorial = async () => {
   try {
@@ -27,21 +27,19 @@ const seleccionar = async (id) => {
   }
 }
 
-// 🪄 LA MAGIA: Filtramos las partidas en tiempo real según lo que escriba el usuario
 const partidasFiltradas = computed(() => {
   if (!busqueda.value) return partidas.value
   
   const termino = busqueda.value.toLowerCase()
   return partidas.value.filter(p => {
-    // Buscamos si el término está en el nombre de algún jugador del Equipo A o B
-    const nombresA = p.equipoA.map(j => j.nombre.toLowerCase()).join(' ')
-    const nombresB = p.equipoB.map(j => j.nombre.toLowerCase()).join(' ')
+    // Validación para evitar errores si equipoA o equipoB son nulos
+    const nombresA = p.equipoA && Array.isArray(p.equipoA) ? p.equipoA.map(j => j.nombre.toLowerCase()).join(' ') : ''
+    const nombresB = p.equipoB && Array.isArray(p.equipoB) ? p.equipoB.map(j => j.nombre.toLowerCase()).join(' ') : ''
     return nombresA.includes(termino) || nombresB.includes(termino)
   })
 })
 
-// Genera un código corto y bonito para mostrar en lugar del UUID feo
-const codigoCorto = (id) => id.substring(0, 6).toUpperCase()
+const codigoCorto = (id) => id ? id.substring(0, 6).toUpperCase() : 'ERR'
 
 onMounted(cargarHistorial)
 </script>
@@ -65,12 +63,12 @@ onMounted(cargarHistorial)
     <ul class="lista-partidas">
       <li v-for="p in partidasFiltradas" :key="p.id" @click="seleccionar(p.id)">
         <div class="info">
-          <strong>{{ p.modalidad }}</strong> - {{ p.equipoA[0]?.nombre || 'Equipo A' }} vs {{ p.equipoB[0]?.nombre || 'Equipo B' }}
+          <strong>{{ p.modalidad }}</strong> - 
+          {{ p.equipoA?.[0]?.nombre || 'Equipo A' }} vs {{ p.equipoB?.[0]?.nombre || 'Equipo B' }}
           <br>
           <small>
-            <!-- Mostramos un código amigable en vez del UUID completo -->
             Código: <strong>#{{ codigoCorto(p.id) }}</strong> | 
-            {{ p.fase }} | {{ new Date(p.fechaCreacion).toLocaleString() }}
+            {{ p.fase }} | {{ p.fechaCreacion ? new Date(p.fechaCreacion).toLocaleString() : 'Sin fecha' }}
           </small>
         </div>
         <button class="btn-cargar">Cargar ➔</button>
