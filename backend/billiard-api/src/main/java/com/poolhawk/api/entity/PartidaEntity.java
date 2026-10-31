@@ -15,8 +15,7 @@ public class PartidaEntity {
     private Instant fechaCreacion;
     private String ganadorId;
 
-    @Lob // Para que la base de datos acepte textos muy largos
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "estado_mesa_json", columnDefinition = "TEXT", length = 10000)
     private String estadoMesaJson;
 
     @OneToMany(mappedBy = "partida", cascade = CascadeType.ALL, fetch = FetchType.EAGER)

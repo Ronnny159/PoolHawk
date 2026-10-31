@@ -25,6 +25,10 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Servicio encargado de la lógica de negocio de las partidas.
+ * Gestiona la creación, búsqueda, registro de tiros y reconstrucción desde la base de datos.
+ */
 @Service
 public class MatchService {
     private final MatchStorage storage;
@@ -66,14 +70,12 @@ public class MatchService {
         if (request.formato() == FormatoJuego.INDIVIDUAL) {
             turnos = new Turnos<>(listaJugadores);
         } else {
-            // Para parejas, el frontend envía [A1, B1, A2, B2]. El turno ya es ese orden.
             turnos = new Turnos<>(listaJugadores);
         }
 
         MatchState estado = new MatchState(id, request.modalidad(), turnos, mesa, Instant.now());
         estado.iniciar();
 
-        // El constructor de Partida ahora se encarga de armar los equipos correctamente (1v1 o 2v2)
         Partida partida = new Partida(id, request.modalidad(), listaJugadores, estado, Instant.now());
         
         partidasEnMemoria.put(id, partida);
@@ -141,6 +143,10 @@ public class MatchService {
         return mesa;
     }
 
+    /**
+     * Reconstruye una partida desde la entidad de base de datos.
+     * Aquí estaba el error: leíamos mal el JSON de las bolas.
+     */
     private Partida reconstruirPartida(PartidaEntity entity) {
         List<Jugador> jugadoresA = entity.getJugadores().stream()
             .filter(j -> "A".equals(j.getEquipo()))
@@ -151,23 +157,24 @@ public class MatchService {
             .map(j -> new Jugador(j.getId(), j.getNombre()))
             .toList();
 
-        // Ahora reconstruimos de forma segura. Si por alguna razón vieja no hay jugadores, evitamos el crash.
         Equipo equipoA = new Equipo("eA-" + entity.getId(), "Equipo A");
         jugadoresA.forEach(equipoA::agregarJugador);
         
         Equipo equipoB = new Equipo("eB-" + entity.getId(), "Equipo B");
         jugadoresB.forEach(equipoB::agregarJugador);
 
+        // CORRECCIÓN: Creamos la mesa y le inyectamos las bolas leyendo el JSON correctamente
         Mesa mesa = new Mesa();
         if (entity.getEstadoMesaJson() != null && !entity.getEstadoMesaJson().isEmpty()) {
             try {
-                List<Bola> bolasGuardadas = jsonMapper.readValue(
-                    entity.getEstadoMesaJson(),
-                    jsonMapper.getTypeFactory().constructCollectionType(List.class, Bola.class)
-                );
-                bolasGuardadas.forEach(mesa::agregarBola);
+                // Leemos el JSON como un arreglo de Bola
+                Bola[] bolasGuardadas = jsonMapper.readValue(entity.getEstadoMesaJson(), Bola[].class);
+                for (Bola bola : bolasGuardadas) {
+                    mesa.agregarBola(bola);
+                }
             } catch (Exception e) {
                 System.err.println("Error leyendo mesa desde JSON: " + e.getMessage());
+                // Si falla, la mesa se queda vacía y no explota el backend
             }
         }
 
@@ -192,13 +199,13 @@ public class MatchService {
         entity.setGanadorId(partida.getGanador() != null ? partida.getGanador().id() : null);
 
         try {
+            // Guardamos solo la lista de bolas, que es lo que reconstruiremos
             entity.setEstadoMesaJson(jsonMapper.writeValueAsString(partida.getMesa().getBolas()));
         } catch (Exception e) {
             System.err.println("Error guardando mesa en JSON: " + e.getMessage());
         }
 
         List<JugadorEntity> jugadores = new ArrayList<>();
-        // Guardamos explícitamente al Equipo A y Equipo B
         for (Jugador j : partida.getEquipoA().getJugadores()) {
             jugadores.add(toJugadorEntity(j, "A", entity));
         }

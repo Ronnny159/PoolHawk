@@ -6,15 +6,14 @@ import ScoreBoard from './components/ScoreBoard.vue'
 import ShotSimulator from './components/ShotSimulator.vue'
 import MatchHistory from './components/MatchHistory.vue'
 
-
 const partidaActual = ref(null)
 let socket = null
+let reconnectTimeout = null
 
 const iniciarPartida = (nuevaPartida) => {
   partidaActual.value = nuevaPartida
 }
 
-// Mantenemos esta función por si acaso el simulador la usa
 const recargarPartida = async () => {
   if (!partidaActual.value) return
   const datos = await obtenerPartida(partidaActual.value.id)
@@ -25,17 +24,20 @@ const cargarPartidaDelHistorial = (partida) => {
   partidaActual.value = partida
 }
 
-// Función para cerrar sesión
 const cerrarSesion = () => {
   localStorage.removeItem('token')
-  window.location.reload() // Recarga para volver al login
+  window.location.reload()
 }
 
 // ───────────────────────────────────────────────────────────
 // Lógica del WebSocket
 // ───────────────────────────────────────────────────────────
 const conectarWebSocket = () => {
-  // Nos conectamos al endpoint que creaste en Spring Boot
+  // Si ya hay un socket conectado o conectando, no hacemos nada
+  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
   socket = new WebSocket('ws://localhost:8080/ws/matches')
 
   socket.onopen = () => {
@@ -43,9 +45,7 @@ const conectarWebSocket = () => {
   }
 
   socket.onmessage = (event) => {
-    // El backend envía la partida completa en formato JSON
     const partidaActualizada = JSON.parse(event.data)
-    
     // Solo actualizamos la pantalla si es la partida que estamos viendo
     if (partidaActual.value && partidaActual.value.id === partidaActualizada.id) {
       console.log('⚡ Marcador actualizado en vivo')
@@ -55,7 +55,15 @@ const conectarWebSocket = () => {
 
   socket.onclose = () => {
     console.log('🔴 WebSocket desconectado. Reconectando en 3 segundos...')
-    setTimeout(conectarWebSocket, 3000) // Reconexión automática si se cae el server
+    // Limpiamos el socket anterior
+    socket = null
+    // Solo reconectamos si no hay un temporizador ya corriendo
+    if (!reconnectTimeout) {
+      reconnectTimeout = setTimeout(() => {
+        reconnectTimeout = null
+        conectarWebSocket()
+      }, 3000)
+    }
   }
 
   socket.onerror = (error) => {
@@ -63,13 +71,13 @@ const conectarWebSocket = () => {
   }
 }
 
-// Conectamos el WebSocket cuando la app arranca
 onMounted(() => {
   conectarWebSocket()
 })
 
-// Cerramos el WebSocket cuando se cierra la pestaña
 onUnmounted(() => {
+  // Limpiamos el temporizador y cerramos el socket
+  if (reconnectTimeout) clearTimeout(reconnectTimeout)
   if (socket) socket.close()
 })
 </script>
@@ -77,7 +85,7 @@ onUnmounted(() => {
 <template>
   <div class="app-container">
     <header>
-      <h1> PoolHawk</h1>
+      <h1>🦅 PoolHawk</h1>
       <p class="subtitle">Sistema de Rastreo y Marcado Automático</p>
       <button @click="cerrarSesion">Salir</button>
     </header>
