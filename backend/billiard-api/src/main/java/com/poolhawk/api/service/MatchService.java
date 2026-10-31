@@ -37,7 +37,7 @@ public class MatchService {
     private final PartidaMapper responseMapper;
     private final MatchPersistenceMapper persistenceMapper;
     private final MatchFactory matchFactory;
-    private final ObjectMapper jsonMapper; // Inyectado de Spring
+    private final ObjectMapper jsonMapper;
 
     private final Map<String, Partida> partidasEnMemoria = new HashMap<>();
 
@@ -53,7 +53,6 @@ public class MatchService {
     }
 
     public Partida crear(CrearPartidaRequest request) {
-        // Validaciones simples (podrían ir a un Validator)
         if (request.jugadores() == null || request.jugadores().size() < 2 || request.jugadores().size() > 4) {
             throw new IllegalArgumentException("Debe haber entre 2 y 4 jugadores.");
         }
@@ -79,10 +78,21 @@ public class MatchService {
         return persistenceMapper.toDomain(entity);
     }
 
+    /**
+     * Lista todas las partidas, ignorando aquellas que estén corruptas (ej. datos viejos).
+     */
     @Transactional(readOnly = true)
     public List<Partida> listarTodas() {
         return storage.listarTodas().stream()
-            .map(persistenceMapper::toDomain) // Uso del mapper especializado
+            .map(entity -> {
+                try {
+                    return persistenceMapper.toDomain(entity);
+                } catch (Exception e) {
+                    System.err.println("Ignorando partida corrupta " + entity.getId() + ": " + e.getMessage());
+                    return null;
+                }
+            })
+            .filter(Objects::nonNull)
             .collect(Collectors.toList());
     }
 
