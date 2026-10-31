@@ -11,6 +11,7 @@ import com.poolhawk.domain.event.ResultadoTiro;
 import com.poolhawk.domain.event.TiroEvent;
 import com.poolhawk.domain.match.FormatoJuego;
 import com.poolhawk.domain.match.Partida;
+import com.poolhawk.domain.match.TipoModalidad;
 import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.Bola;
 import com.poolhawk.domain.table.TroneraNombre;
@@ -53,16 +54,25 @@ public class MatchService {
     }
 
     public Partida crear(CrearPartidaRequest request) {
+        // 1. Validaciones básicas
         if (request.jugadores() == null || request.jugadores().size() < 2 || request.jugadores().size() > 4) {
             throw new IllegalArgumentException("Debe haber entre 2 y 4 jugadores.");
         }
+        
         if (request.formato() == FormatoJuego.PAREJAS && request.jugadores().size() % 2 != 0) {
             throw new IllegalArgumentException("Las parejas requieren un número par de jugadores.");
         }
 
+        // 2. Regla de Negocio: Bola 8 solo permite 1v1 (para no romper el motor de reglas)
+        if (request.modalidad() == TipoModalidad.BOLA_8 && request.jugadores().size() > 2) {
+            throw new IllegalArgumentException("La modalidad Bola 8 solo permite 1 vs 1. Para jugar de a 4, usa Por Puntos.");
+        }
+
+        // 3. Creación usando el Factory
         String id = UUID.randomUUID().toString();
         Partida partida = matchFactory.crearDesdeRequest(id, request);
         
+        // 4. Guardado
         partidasEnMemoria.put(id, partida);
         storage.guardar(persistenceMapper.toEntity(partida));
         
@@ -79,7 +89,7 @@ public class MatchService {
     }
 
     /**
-     * Lista todas las partidas, ignorando aquellas que estén corruptas (ej. datos viejos).
+     * Lista todas las partidas, ignorando aquellas que estén corruptas o sean viejas.
      */
     @Transactional(readOnly = true)
     public List<Partida> listarTodas() {
@@ -98,15 +108,22 @@ public class MatchService {
 
     public ResultadoTiro registrarTiro(String partidaId, TiroEventRequest request) {
         Partida partida = buscar(partidaId);
+        
+        // 1. Evaluar el tiro con el motor de reglas
         TiroEvent evento = construirEvento(partida, request);
         ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
         ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
         
+        // 2. Aplicar el tiro a la partida
         partida.aplicarTiro(evento, resultado);
-        if (resultado.esVictoria()) partida.finalizar(evento.jugador());
+        if (resultado.esVictoria()) {
+            partida.finalizar(evento.jugador());
+        }
         
+        // 3. Persistir los cambios
         storage.guardar(persistenceMapper.toEntity(partida));
 
+        // 4. Notificar a los navegadores conectados por WebSocket
         try {
             String json = jsonMapper.writeValueAsString(responseMapper.toResponse(partida));
             liveHandler.broadcast(json);

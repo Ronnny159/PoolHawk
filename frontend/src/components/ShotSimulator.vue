@@ -6,23 +6,25 @@ const props = defineProps({
   partida: { type: Object, required: true }
 })
 
-const emit = defineEmits(['tiroRegistrado'])
 const cargando = ref(false)
 
 const simularTiro = async (tipo) => {
   try {
     cargando.value = true
 
-    // Buscamos al jugador actual comparando por nombre EXACTO, ya que el backend envía el nombre en el JSON.
+    // 1. Buscamos quién es el jugador actual (comparando nombre)
     const todosLosJugadores = [...props.partida.equipoA, ...props.partida.equipoB]
     const jugadorActual = todosLosJugadores.find(j => j.nombre === props.partida.jugadorActual)
     
-    if (!jugadorActual) {
-      throw new Error('Jugador actual no encontrado en la partida: ' + props.partida.jugadorActual)
-    }
+    if (!jugadorActual) throw new Error('Jugador actual no encontrado')
 
+    // 2. Determinamos a qué equipo pertenece
     const esEquipoA = props.partida.equipoA.some(j => j.id === jugadorActual.id)
-    const bolaObjetivo = esEquipoA ? 1 : 9
+    
+    // 3. Asignamos bolas válidas para su equipo (1 para lisas, 10 para rayadas)
+    // Si es equipo A y quiere embolsar, que meta la 2 (lisa). Si es B, que meta la 11 (rayada)
+    const bolaObjetivo = esEquipoA ? 1 : 10
+    const bolaAEmbolsar = esEquipoA ? 2 : 11
 
     let payload = { jugadorId: jugadorActual.id, duracionSegundos: 5 }
 
@@ -34,16 +36,19 @@ const simularTiro = async (tipo) => {
       payload.bolasEmbolsadas = []
     } else if (tipo === 'EMBOLSÓ') {
       payload.primeraBolaTocada = bolaObjetivo
-      payload.bolasEmbolsadas = [bolaObjetivo]
+      payload.bolasEmbolsadas = [bolaAEmbolsar]
       payload.troneras = ['TOP_LEFT']
     }
 
-    console.log('Enviando tiro:', payload)
+    console.log(`Simulando tiro para ${jugadorActual.nombre} (Equipo ${esEquipoA ? 'A' : 'B'})`, payload)
+    
     await registrarTiro(props.partida.id, payload)
-
+    
   } catch (error) {
     console.error('Error al registrar tiro:', error)
-    alert('Error al registrar el tiro: ' + (error.response?.data?.message || error.message))
+    // Extraemos el mensaje exacto del backend
+    const mensaje = error.response?.data?.message || error.message
+    alert('Error al registrar el tiro: ' + mensaje)
   } finally {
     cargando.value = false
   }
@@ -56,15 +61,9 @@ const simularTiro = async (tipo) => {
     <p>Usa estos botones para simular lo que la cámara enviaría.</p>
     
     <div class="botones">
-      <button @click="simularTiro('FALLO')" :disabled="cargando" class="btn-rojo">
-        Fallar (No tocar bola)
-      </button>
-      <button @click="simularTiro('LEGAL')" :disabled="cargando" class="btn-gris">
-        Tiro Legal (Sin embolsar)
-      </button>
-      <button @click="simularTiro('EMBOLSÓ')" :disabled="cargando" class="btn-verde">
-        Embolsar Bola
-      </button>
+      <button @click="simularTiro('FALLO')" :disabled="cargando" class="btn-rojo">Fallar (No tocar bola)</button>
+      <button @click="simularTiro('LEGAL')" :disabled="cargando" class="btn-gris">Tiro Legal (Toca bola)</button>
+      <button @click="simularTiro('EMBOLSÓ')" :disabled="cargando" class="btn-verde">Embolsar Bola</button>
     </div>
   </div>
 </template>

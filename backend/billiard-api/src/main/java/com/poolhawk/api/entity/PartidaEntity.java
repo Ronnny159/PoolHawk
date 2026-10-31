@@ -3,7 +3,6 @@ package com.poolhawk.api.entity;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 
 @Entity
 @Table(name = "partidas")
@@ -14,6 +13,8 @@ public class PartidaEntity {
     private String fase;
     private Instant fechaCreacion;
     private String ganadorId;
+    
+    private String formato; // <-- NUEVO CAMPO
 
     @Column(name = "estado_mesa_json", columnDefinition = "TEXT", length = 10000)
     private String estadoMesaJson;
@@ -32,6 +33,8 @@ public class PartidaEntity {
     public void setFechaCreacion(Instant fechaCreacion) { this.fechaCreacion = fechaCreacion; }
     public String getGanadorId() { return ganadorId; }
     public void setGanadorId(String ganadorId) { this.ganadorId = ganadorId; }
+    public String getFormato() { return formato; }
+    public void setFormato(String formato) { this.formato = formato; }
     public List<JugadorEntity> getJugadores() { return jugadores; }
     public void setJugadores(List<JugadorEntity> jugadores) { this.jugadores = jugadores; }
     public String getEstadoMesaJson() { return estadoMesaJson; }

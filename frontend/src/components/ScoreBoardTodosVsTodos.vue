@@ -9,12 +9,9 @@ const todosLosJugadores = computed(() => {
   return [...(props.partida.equipoA || []), ...(props.partida.equipoB || [])]
 })
 
-// Extraemos el nombre del jugador actual (por si viene como objeto)
 const nombreJugadorActual = computed(() => {
   if (!props.partida.jugadorActual) return ''
-  return typeof props.partida.jugadorActual === 'object' 
-    ? props.partida.jugadorActual.nombre 
-    : props.partida.jugadorActual
+  return typeof props.partida.jugadorActual === 'object' ? props.partida.jugadorActual.nombre : props.partida.jugadorActual
 })
 
 const coloresBolas = [
@@ -47,7 +44,6 @@ const coloresBolas = [
 .jugador-individual.activo { background: rgba(21, 128, 61, 0.2); border-color: var(--felt-light); box-shadow: 0 0 25px rgba(34, 197, 94, 0.4); transform: scale(1.02); }
 .nombre { font-size: 1.3rem; font-weight: 800; color: #cbd5e1; margin-bottom: 1rem; text-transform: uppercase; text-align: center; }
 .jugador-individual.activo .nombre { color: var(--felt-light); }
-
 .bola-marcador { width: 100px; height: 100px; border-radius: 50%; display: flex; justify-content: center; align-items: center; position: relative; box-shadow: inset -15px -15px 25px rgba(0,0,0,0.5), inset 10px 10px 15px rgba(255,255,255,0.6), 5px 5px 15px rgba(0,0,0,0.5); }
 .bola-marcador::before { content: ''; position: absolute; width: 45px; height: 45px; background: white; border-radius: 50%; box-shadow: inset 2px 2px 5px rgba(0,0,0,0.3); }
 .puntos { position: relative; z-index: 10; font-family: 'Bebas Neue', sans-serif; font-size: 2.2rem; color: black; font-weight: bold; }

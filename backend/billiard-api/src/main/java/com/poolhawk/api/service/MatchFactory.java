@@ -12,10 +12,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Fábrica encargada de construir las instancias de Partida a partir de la petición.
- * Aísla la lógica de inicialización del dominio.
- */
 @Component
 public class MatchFactory {
 
@@ -32,7 +28,7 @@ public class MatchFactory {
         MatchState estado = new MatchState(id, request.modalidad(), turnos, mesa, Instant.now());
         estado.iniciar();
 
-        return new Partida(id, request.modalidad(), listaJugadores, estado, Instant.now());
+        return new Partida(id, request.modalidad(), listaJugadores, estado, Instant.now(), request.formato());
     }
 
     private Mesa construirMesaInicial(double ancho, double alto) {

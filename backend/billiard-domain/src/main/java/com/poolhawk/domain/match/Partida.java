@@ -11,6 +11,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Entidad de dominio que representa una partida de billar.
+ * Contiene la lógica para gestionar los equipos, el estado y el formato de juego.
+ */
 public class Partida {
 
     private final String id;
@@ -19,6 +23,7 @@ public class Partida {
     private final Equipo equipoB;
     private final Instant fechaCreacion;
     private final MatchState estado;
+    private final FormatoJuego formato;
 
     // Constructor original (por si acaso se usa en tests)
     public Partida(String id, TipoModalidad modalidad, Equipo equipoA, Equipo equipoB, Mesa mesa, Instant fechaCreacion) {
@@ -40,6 +45,8 @@ public class Partida {
         this.equipoA = equipoA;
         this.equipoB = equipoB;
         this.fechaCreacion = fechaCreacion;
+        // Inferimos el formato en el constructor antiguo
+        this.formato = (equipoA.cantidadJugadores() == 2) ? FormatoJuego.PAREJAS : FormatoJuego.INDIVIDUAL;
 
         List<Jugador> jugadores = new ArrayList<>(equipoA.getJugadores());
         jugadores.addAll(equipoB.getJugadores());
@@ -49,14 +56,14 @@ public class Partida {
     }
 
     /**
-     * Constructor dinámico corregido: Arma los equipos A y B a partir de la lista plana.
-     * Si hay 2 jugadores, es 1v1. Si hay 4, es 2v2 (J1,J3 vs J2,J4).
+     * Constructor dinámico corregido con soporte para FormatoJuego.
      */
-    public Partida(String id, TipoModalidad modalidad, List<Jugador> jugadores, MatchState estado, Instant fechaCreacion) {
+    public Partida(String id, TipoModalidad modalidad, List<Jugador> jugadores, MatchState estado, Instant fechaCreacion, FormatoJuego formato) {
         this.id = id;
         this.modalidad = modalidad;
         this.estado = estado;
         this.fechaCreacion = fechaCreacion;
+        this.formato = formato;
 
         if (jugadores.size() == 2) {
             // 1 vs 1
@@ -67,7 +74,7 @@ public class Partida {
             this.equipoA = Equipo.pareja("eA-" + id, jugadores.get(0).nombre() + " & " + jugadores.get(2).nombre(), jugadores.get(0), jugadores.get(2));
             this.equipoB = Equipo.pareja("eB-" + id, jugadores.get(1).nombre() + " & " + jugadores.get(3).nombre(), jugadores.get(1), jugadores.get(3));
         } else {
-            // Fallback para 1v1v1v1 o casos raros: los primeros 2 forman los equipos base, el resto se maneja en el MatchState
+            // Fallback
             this.equipoA = Equipo.individual("eA-" + id, jugadores.get(0).nombre(), jugadores.get(0));
             this.equipoB = Equipo.individual("eB-" + id, jugadores.get(1).nombre(), jugadores.get(1));
         }
@@ -99,6 +106,7 @@ public class Partida {
         return new Partida(id, TipoModalidad.POR_PUNTOS, eqA, eqB, mesa, Instant.now());
     }
 
+    // --- GETTERS RESTAURADOS ---
     public String getId() { return id; }
     public TipoModalidad getModalidad() { return modalidad; }
     public Equipo getEquipoA() { return equipoA; }
@@ -109,7 +117,9 @@ public class Partida {
     public Jugador getGanador() { return estado.getGanador(); }
     public List<Equipo> getEquipos() { return List.of(equipoA, equipoB); }
     public Mesa getMesa() { return estado.getMesa(); }
+    public FormatoJuego getFormato() { return formato; }
 
+    // --- MÉTODOS DELEGADOS AL ESTADO ---
     public void iniciar() { estado.iniciar(); }
     public void pausar() { estado.pausar(); }
     public void reanudar() { estado.reanudar(); }

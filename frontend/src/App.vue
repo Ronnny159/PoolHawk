@@ -6,15 +6,19 @@ import ShotSimulator from './components/ShotSimulator.vue'
 import MatchHistory from './components/MatchHistory.vue'
 
 const partidaActual = ref(null)
+const formatoPartida = ref('INDIVIDUAL') // NUEVO: Guarda el formato
 let socket = null
 let reconnectTimeout = null
 
 const iniciarPartida = (nuevaPartida) => {
   partidaActual.value = nuevaPartida
+  // Si la partida trae formato lo usa, si no, asume PAREJAS si hay 4 jugadores
+  formatoPartida.value = nuevaPartida.formato || (nuevaPartida.equipoA.length === 2 ? 'PAREJAS' : 'INDIVIDUAL')
 }
 
 const cargarPartidaDelHistorial = (partida) => {
   partidaActual.value = partida
+  formatoPartida.value = partida.formato || (partida.equipoA.length === 2 ? 'PAREJAS' : 'INDIVIDUAL')
 }
 
 const cerrarSesion = () => {
@@ -32,7 +36,7 @@ const conectarWebSocket = () => {
   socket.onmessage = (event) => {
     const partidaActualizada = JSON.parse(event.data)
     if (partidaActual.value && partidaActual.value.id === partidaActualizada.id) {
-      // USAMOS ASIGNACIÓN DIRECTA SIN RECARGAS
+      console.log('⚡ Marcador actualizado en vivo')
       partidaActual.value = partidaActualizada
     }
   }
@@ -75,9 +79,9 @@ onUnmounted(() => {
 
       <div v-else>
         <button @click="partidaActual = null" class="btn-salir">← Nueva Partida</button>
-        <ScoreBoard :partida="partidaActual" />
         
-        <!-- ¡ELIMINAMOS EL EVENTO @tiroRegistrado! -->
+        <!-- Le pasamos el formato al ScoreBoard -->
+        <ScoreBoard :partida="partidaActual" :formato="formatoPartida" />
         <ShotSimulator :partida="partidaActual" />
       </div>
     </main>
@@ -85,7 +89,6 @@ onUnmounted(() => {
 </template>
 
 <style>
-/* Tus estilos de App.vue quedan igual */
 body { margin: 0; background-color: #121212; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
 .app-container { min-height: 100vh; padding: 2rem; }
 header { text-align: center; margin-bottom: 3rem; color: white; }

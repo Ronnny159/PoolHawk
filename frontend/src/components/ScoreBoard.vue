@@ -4,13 +4,18 @@ import ScoreBoardEquipos from './ScoreBoardEquipos.vue'
 import ScoreBoardTodosVsTodos from './ScoreBoardTodosVsTodos.vue'
 
 const props = defineProps({
-  partida: { type: Object, required: true }
+  partida: { type: Object, required: true },
+  formato: { type: String, default: 'INDIVIDUAL' }
 })
 
-// La lógica para saber si es "Todos vs Todos" (4 jugadores)
 const esTodosVsTodos = computed(() => {
-  const cantidadJugadores = (props.partida.equipoA?.length || 0) + (props.partida.equipoB?.length || 0)
-  return cantidadJugadores === 4
+  // Si el formato es PAREJAS, JAMÁS será Todos vs Todos (aunque haya 4 jugadores)
+  if (props.formato === 'PAREJAS') return false
+  
+  // Si es INDIVIDUAL y suman 4 jugadores en total, es Todos vs Todos
+  const cantA = props.partida.equipoA?.length || 0
+  const cantB = props.partida.equipoB?.length || 0
+  return (cantA + cantB) === 4
 })
 </script>
 
@@ -23,7 +28,7 @@ const esTodosVsTodos = computed(() => {
       </span>
     </div>
 
-    <!-- Enrutador visual: Dependiendo de la cantidad de jugadores, muestra un componente u otro -->
+    <!-- ENRUTADOR VISUAL: Muestra 4 bolas o 2 bolas según corresponda -->
     <ScoreBoardTodosVsTodos v-if="esTodosVsTodos" :partida="partida" />
     <ScoreBoardEquipos v-else :partida="partida" />
 
@@ -37,7 +42,6 @@ const esTodosVsTodos = computed(() => {
 </template>
 
 <style scoped>
-/* Solo dejamos los estilos del contenedor principal, header y turno */
 .scoreboard { background: #1e293b; border: 4px solid #0f172a; border-radius: 12px; padding: 2rem; color: white; max-width: 900px; margin: 0 auto; box-shadow: inset 0 0 30px rgba(0,0,0,0.8), 0 20px 40px rgba(0,0,0,0.6); }
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 1px solid #334155; padding-bottom: 1rem; }
 h2 { margin: 0; font-size: 2.5rem; color: #e2e8f0; text-shadow: 2px 2px 0 #000; }

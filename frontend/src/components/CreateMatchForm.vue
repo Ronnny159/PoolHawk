@@ -29,7 +29,7 @@ const cantidadJugadores = computed(() => {
   return 2
 })
 
-// REGLA DE NEGOCIO: Si es Bola 8, solo se permiten 2 jugadores
+// MAGIA: Si la modalidad cambia a BOLA_8, reseteamos a 1 vs 1 (2 jugadores)
 watch(modalidad, (nuevaModalidad) => {
   if (nuevaModalidad === 'BOLA_8') {
     formato.value = 'INDIVIDUAL'
@@ -101,12 +101,11 @@ const crear = async () => {
           <div class="opciones-mesa">
             <button :class="{ active: formato === 'INDIVIDUAL' && cantidadJugadores === 2 }" @click="formato = 'INDIVIDUAL'; jugador3 = ''; jugador4 = ''">1 vs 1</button>
             
-            <!-- Deshabilitado si es Bola 8 -->
+            <!-- OCULTAMOS el botón de Todos vs Todos si es BOLA_8 -->
             <button 
+              v-if="modalidad === 'POR_PUNTOS'"
               :class="{ active: formato === 'INDIVIDUAL' && cantidadJugadores === 4 }" 
               @click="formato = 'INDIVIDUAL'; jugador3 = 'J3'; jugador4 = 'J4'"
-              :disabled="modalidad === 'BOLA_8'"
-              :title="modalidad === 'BOLA_8' ? 'Bola 8 solo permite 1 vs 1' : ''"
             >
               Todos vs Todos (4)
             </button>
@@ -162,7 +161,9 @@ const crear = async () => {
 </template>
 
 <style scoped>
-/* ... (Mantén todo tu CSS original aquí, no lo toqué) ... */
+/* ============================================================
+   MARCO EXTERIOR
+   ============================================================ */
 .mesa-wrapper { 
   max-width: 920px; 
   margin: 0 auto; 
@@ -327,5 +328,4 @@ const crear = async () => {
   transition: all 0.2s; 
 }
 .opciones-mesa button.active { background: #22c55e; color: #fff; border-color: #22c55e; }
-.opciones-mesa button:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>
