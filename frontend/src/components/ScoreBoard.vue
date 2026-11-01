@@ -42,12 +42,64 @@ const esTodosVsTodos = computed(() => {
 </template>
 
 <style scoped>
-.scoreboard { background: #1e293b; border: 4px solid #0f172a; border-radius: 12px; padding: 2rem; color: white; max-width: 900px; margin: 0 auto; box-shadow: inset 0 0 30px rgba(0,0,0,0.8), 0 20px 40px rgba(0,0,0,0.6); }
-.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 1px solid #334155; padding-bottom: 1rem; }
-h2 { margin: 0; font-size: 2.5rem; color: #e2e8f0; text-shadow: 2px 2px 0 #000; }
-.fase { background: #334155; color: #94a3b8; padding: 0.4rem 1rem; border-radius: 4px; font-family: monospace; font-weight: bold; }
-.fase.finalizada { background: var(--ball-red); color: white; }
-.turno { text-align: center; margin-top: 2rem; font-size: 1.2rem; color: #94a3b8; padding: 1rem; background: #0f172a; border-radius: 8px; border: 1px solid #334155; }
-.turno strong { color: var(--ball-yellow); font-size: 1.4rem; }
-.turno.ganador { color: var(--ball-yellow); }
+.scoreboard { 
+  background: #1e293b; 
+  border: 4px solid #0f172a; 
+  border-radius: 12px; 
+  padding: 2rem; 
+  color: white; 
+  max-width: 900px; 
+  margin: 0 auto; 
+  box-shadow: inset 0 0 30px rgba(0,0,0,0.8), 0 20px 40px rgba(0,0,0,0.6); 
+}
+
+.header { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  margin-bottom: 2rem; 
+  border-bottom: 1px solid #334155; 
+  padding-bottom: 1rem; 
+}
+
+h2 { 
+  margin: 0; 
+  font-size: 2.5rem; 
+  color: #e2e8f0; 
+  text-shadow: 2px 2px 0 #000; 
+}
+
+.fase { 
+  background: #334155; 
+  color: #94a3b8; 
+  padding: 0.4rem 1rem; 
+  border-radius: 4px; 
+  font-family: monospace; 
+  font-weight: bold; 
+}
+
+.fase.finalizada { 
+  background: #ef4444; 
+  color: white; 
+}
+
+.turno { 
+  text-align: center; 
+  margin-top: 2rem; 
+  font-size: 1.2rem; 
+  color: #94a3b8; 
+  padding: 1rem; 
+  background: #0f172a; 
+  border-radius: 8px; 
+  border: 1px solid #334155; 
+}
+
+.turno strong { 
+  color: #eab308; 
+  font-size: 1.4rem; 
+}
+
+.turno.ganador { 
+  color: #eab308; 
+}
 </style>

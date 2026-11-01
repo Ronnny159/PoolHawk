@@ -1,25 +1,30 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, onUnmounted, watch } from 'vue'
 import { listarPartidas, obtenerPartida } from '../api/matches'
+import { toast } from '../utils/toast' 
 
 const emit = defineEmits(['partidaSeleccionada'])
 const partidas = ref([])
 const cargando = ref(false)
 const busqueda = ref('')
 
-// Variables para la paginación
+// Variables para la paginación (de feature/dynamic-game-config)
 const paginaActual = ref(1)
 const partidasPorPagina = 10
 
-const cargarHistorial = async () => {
+// Variable para la recarga automática (de develop)
+let intervalo = null
+
+const cargarHistorial = async (silencioso = false) => {
   try {
-    cargando.value = true
+    if (!silencioso) cargando.value = true
     partidas.value = await listarPartidas()
     paginaActual.value = 1 // Reseteamos a la primera página al recargar
   } catch (error) {
     console.error('Error al cargar historial', error)
+    if (!silencioso) toast.error('No se pudo cargar el historial de partidas')
   } finally {
-    cargando.value = false
+    if (!silencioso) cargando.value = false
   }
 }
 
@@ -28,14 +33,14 @@ const seleccionar = async (id) => {
     const partida = await obtenerPartida(id)
     emit('partidaSeleccionada', partida)
   } catch (error) {
-    alert('No se pudo cargar la partida')
+    console.error('Error al cargar la partida', error)
+    toast.error('No se pudo cargar la partida seleccionada')
   }
 }
 
-// 1. Filtramos por el buscador
+// 1. Filtramos por el buscador (con validación de nulos de tu rama)
 const partidasFiltradas = computed(() => {
   if (!busqueda.value) return partidas.value
-  
   const termino = busqueda.value.toLowerCase()
   return partidas.value.filter(p => {
     const nombresA = p.equipoA && Array.isArray(p.equipoA) ? p.equipoA.map(j => j.nombre.toLowerCase()).join(' ') : ''
@@ -71,14 +76,22 @@ const anteriorPagina = () => {
 
 const codigoCorto = (id) => id ? id.substring(0, 6).toUpperCase() : 'ERR'
 
-onMounted(cargarHistorial)
+onMounted(() => {
+  cargarHistorial()
+  // Recarga en silencio cada 3 segundos (de develop)
+  intervalo = setInterval(() => cargarHistorial(true), 3000)
+})
+
+onUnmounted(() => {
+  if (intervalo) clearInterval(intervalo)
+})
 </script>
 
 <template>
   <div class="historial-container">
     <div class="header-historial">
       <h2>Historial de Partidas</h2>
-      <button @click="cargarHistorial" :disabled="cargando" class="btn-refrescar" title="Actualizar lista">
+      <button @click="cargarHistorial()" :disabled="cargando" class="btn-refrescar" title="Actualizar lista">
         {{ cargando ? 'Cargando...' : '🔄 Actualizar' }}
       </button>
     </div>
@@ -90,10 +103,10 @@ onMounted(cargarHistorial)
         placeholder="🔍 Buscar por nombre de jugador..." 
         class="buscador"
       />
+      <!-- Se eliminó el botón extra del input porque ya está el botón de arriba -->
     </div>
 
     <ul class="lista-partidas">
-      <!-- Usamos partidasPaginadas en lugar de partidasFiltradas -->
       <li v-for="p in partidasPaginadas" :key="p.id" @click="seleccionar(p.id)">
         <div class="info">
           <strong>{{ p.modalidad }} ({{ p.formato || 'INDIVIDUAL' }})</strong> - 

@@ -1,5 +1,7 @@
 # PoolHawk
 
+[![Maven CI](https://github.com/Ronnny159/PoolHawk/actions/workflows/maven.yml/badge.svg?branch=develop)](https://github.com/Ronnny159/PoolHawk/actions/workflows/maven.yml)
+
 PoolHawk es un marcador automático de partidas de billar mediante visión por computadora. Elimina el conteo manual y garantiza la aplicación objetiva de las reglas (Bola 8 y Por Puntos). Los tiros se registran por una API REST, pasan por el motor de reglas y el marcador se actualiza en vivo en el navegador mediante WebSockets.
 
 **Stack:** Java 21 + Spring Boot (Maven multi-módulo), Vue 3 (Vite), PostgreSQL y Docker.
@@ -144,3 +146,12 @@ En `application.yml` se configuró `server.error.include-stacktrace: never`, par
 
 - Para el desarrollo local, `application.yml` conserva las credenciales de la base de datos de desarrollo. En Docker, esos valores se sobrescriben con las variables del `.env`.
 - Los valores de ejemplo (`poolhawk_password`) son solo para desarrollo y deben cambiarse en cualquier entorno real.
+
+## Acceso (demostración)
+
+La pantalla de inicio de sesión usa el usuario de demostración definido en el backend:
+
+- Usuario: `arbitro`
+- Contraseña: `admin123`
+
+Solo para la demo: el backend deja abiertos todos los endpoints.
