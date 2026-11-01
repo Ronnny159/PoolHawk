@@ -2,28 +2,26 @@ package com.poolhawk.api.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 
 @Entity
 @Table(name = "partidas")
 public class PartidaEntity {
-
     @Id
     private String id;
     private String modalidad;
     private String fase;
     private Instant fechaCreacion;
     private String ganadorId;
+    private String formato;
 
-    // NUEVO: Campo para guardar el JSON de la mesa
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "estado_mesa_json", columnDefinition = "TEXT", length = 10000)
     private String estadoMesaJson;
 
-    @OneToMany(mappedBy = "partida", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<JugadorEntity> jugadores = new ArrayList<>();
+    @OneToMany(mappedBy = "partida", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    private List<JugadorEntity> jugadores;
 
-    // Getters y Setters (si usas Lombok, omite esto y usa @Getter @Setter)
+    // Getters y Setters
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getModalidad() { return modalidad; }
@@ -34,11 +32,10 @@ public class PartidaEntity {
     public void setFechaCreacion(Instant fechaCreacion) { this.fechaCreacion = fechaCreacion; }
     public String getGanadorId() { return ganadorId; }
     public void setGanadorId(String ganadorId) { this.ganadorId = ganadorId; }
-    
-    // Getters y Setters del nuevo campo
-    public String getEstadoMesaJson() { return estadoMesaJson; }
-    public void setEstadoMesaJson(String estadoMesaJson) { this.estadoMesaJson = estadoMesaJson; }
-
+    public String getFormato() { return formato; }
+    public void setFormato(String formato) { this.formato = formato; }
     public List<JugadorEntity> getJugadores() { return jugadores; }
     public void setJugadores(List<JugadorEntity> jugadores) { this.jugadores = jugadores; }
+    public String getEstadoMesaJson() { return estadoMesaJson; }
+    public void setEstadoMesaJson(String estadoMesaJson) { this.estadoMesaJson = estadoMesaJson; }
 }

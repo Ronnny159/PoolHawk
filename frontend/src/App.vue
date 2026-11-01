@@ -1,27 +1,33 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { obtenerPartida } from './api/matches'
 import CreateMatchForm from './components/CreateMatchForm.vue'
 import ScoreBoard from './components/ScoreBoard.vue'
 import ShotSimulator from './components/ShotSimulator.vue'
 import MatchHistory from './components/MatchHistory.vue'
+
+// Imports que vienen de develop
 import ToastContainer from './components/ToastContainer.vue'
 import LoginView from './components/LoginView.vue'
 import CorrectionModal from './components/CorrectionModal.vue'
 import { AUTH_REQUERIDA } from './api/endpoints'
+import { obtenerPartida } from './api/matches' // Necesario para recargarPartida
 
 const partidaActual = ref(null)
-const token = ref(localStorage.getItem('token'))
-const mostrarCorreccion = ref(false)
+const formatoPartida = ref('INDIVIDUAL') // Guarda el formato (de tu rama)
+const token = ref(localStorage.getItem('token')) // De develop
+const mostrarCorreccion = ref(false) // De develop
 
-// Guarda el token que entrega LoginView (el propio LoginView ya lo puso en localStorage)
+let socket = null
+let reconnectTimeout = null
+
 const iniciarSesion = (nuevoToken) => {
   token.value = nuevoToken
 }
-let socket = null
 
 const iniciarPartida = (nuevaPartida) => {
   partidaActual.value = nuevaPartida
+  // Lógica de tu rama para el formato
+  formatoPartida.value = nuevaPartida.formato || (nuevaPartida.equipoA.length === 2 ? 'PAREJAS' : 'INDIVIDUAL')
 }
 
 const recargarPartida = async () => {
@@ -32,6 +38,7 @@ const recargarPartida = async () => {
 
 const cargarPartidaDelHistorial = (partida) => {
   partidaActual.value = { ...partida }
+  formatoPartida.value = partida.formato || (partida.equipoA.length === 2 ? 'PAREJAS' : 'INDIVIDUAL')
 }
 
 const cerrarSesion = () => {
@@ -39,40 +46,40 @@ const cerrarSesion = () => {
   token.value = null
   partidaActual.value = null
   mostrarCorreccion.value = false
+  window.location.reload()
 }
 
-// ───────────────────────────────────────────────────────────
-// Lógica del WebSocket
-// ───────────────────────────────────────────────────────────
 const conectarWebSocket = () => {
+  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
+
+  // Lógica de conexión robusta (soporta local y producción)
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsHost = window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host;
   socket = new WebSocket(`${wsProtocol}//${wsHost}/ws/matches`)
 
-  socket.onopen = () => {
-    console.log('🟢 Conectado al WebSocket de PoolHawk')
-  }
+  socket.onopen = () => console.log('🟢 Conectado al WebSocket de PoolHawk')
 
   socket.onmessage = (event) => {
     const partidaActualizada = JSON.parse(event.data)
-    
-    // Solo actualizamos si es la partida que estamos viendo
     if (partidaActual.value && partidaActual.value.id === partidaActualizada.id) {
       console.log('⚡ Marcador actualizado en vivo:', partidaActualizada.puntajes)
-      
-      // LA MAGIA: Asignamos un nuevo objeto para forzar el re-render en Vue 3
+      // Forzamos la reactividad de Vue con un nuevo objeto
       partidaActual.value = { ...partidaActualizada }
     }
   }
 
   socket.onclose = () => {
     console.log('🔴 WebSocket desconectado. Reconectando en 3 segundos...')
-    setTimeout(conectarWebSocket, 3000)
+    socket = null
+    if (!reconnectTimeout) {
+      reconnectTimeout = setTimeout(() => {
+        reconnectTimeout = null
+        conectarWebSocket()
+      }, 3000)
+    }
   }
 
-  socket.onerror = (error) => {
-    console.error('Error en WebSocket:', error)
-  }
+  socket.onerror = (error) => console.error('Error en WebSocket:', error)
 }
 
 onMounted(() => {
@@ -80,6 +87,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (reconnectTimeout) clearTimeout(reconnectTimeout)
   if (socket) socket.close()
 })
 </script>
@@ -88,49 +96,51 @@ onUnmounted(() => {
   <div class="app-container">
     <ToastContainer />
     <header>
-      <h1> PoolHawk</h1>
+      <h1>🦅 PoolHawk</h1>
       <p class="subtitle">Sistema de Rastreo y Marcado Automático</p>
-      <button v-if="token || !AUTH_REQUERIDA" @click="cerrarSesion">Cerrar sesi&oacute;n</button>
+      <button v-if="token || !AUTH_REQUERIDA" @click="cerrarSesion">Cerrar sesión</button>
     </header>
 
     <main>
-      <!-- Login: solo se muestra si AUTH_REQUERIDA esta activa (ver api/endpoints.js) -->
+      <!-- Login: solo se muestra si AUTH_REQUERIDA esta activa -->
       <LoginView v-if="AUTH_REQUERIDA && !token" @ingreso="iniciarSesion" />
 
       <template v-else>
-      <!-- Si no hay partida, mostrar formulario -->
-      <div v-if="!partidaActual">
-        <CreateMatchForm @partidaIniciada="iniciarPartida" />
-        <MatchHistory @partidaSeleccionada="cargarPartidaDelHistorial" />
-      </div>
+        <!-- Si no hay partida, mostrar formulario -->
+        <div v-if="!partidaActual">
+          <CreateMatchForm @partidaIniciada="iniciarPartida" />
+          <MatchHistory @partidaSeleccionada="cargarPartidaDelHistorial" />
+        </div>
 
-      <!-- Si hay partida, mostrar marcador y simulador -->
-      <div v-else>
-        <button @click="partidaActual = null; mostrarCorreccion = false" class="btn-salir">← Nueva Partida</button>
-        
-        <!-- EL TRUCO: El :key obliga a ScoreBoard a redibujarse si los puntajes o el turno cambian -->
-        <ScoreBoard 
-          :key="JSON.stringify(partidaActual.puntajes) + partidaActual.jugadorActual" 
-          :partida="partidaActual" 
-        />
-        
-        <ShotSimulator :partida="partidaActual" @tiroRegistrado="recargarPartida" />
-        <button @click="mostrarCorreccion = true" class="btn-corregir">Corregir &uacute;ltimo tiro</button>
-        <CorrectionModal
-          v-if="mostrarCorreccion"
-          :partida="partidaActual"
-          @cerrar="mostrarCorreccion = false"
-          @corregido="recargarPartida"
-        />
-      </div>
-    </template>
-      <!-- fin del contenido protegido por login -->
+        <!-- Si hay partida, mostrar marcador y simulador -->
+        <div v-else>
+          <button @click="partidaActual = null; mostrarCorreccion = false" class="btn-salir">← Nueva Partida</button>
+          
+          <!-- El ScoreBoard ahora recibe el formato y la key para forzar el re-render -->
+          <ScoreBoard 
+            :key="JSON.stringify(partidaActual.puntajes) + partidaActual.jugadorActual" 
+            :partida="partidaActual" 
+            :formato="formatoPartida" 
+          />
+          
+          <!-- El ShotSimulator ya no emite tiroRegistrado porque el WebSocket se encarga -->
+          <ShotSimulator :partida="partidaActual" />
+          
+          <button @click="mostrarCorreccion = true" class="btn-corregir">Corregir último tiro</button>
+          
+          <CorrectionModal
+            v-if="mostrarCorreccion"
+            :partida="partidaActual"
+            @cerrar="mostrarCorreccion = false"
+            @corregido="recargarPartida"
+          />
+        </div>
+      </template>
     </main>
   </div>
 </template>
 
 <style>
-/* Tus estilos se mantienen igual */
 body {
   margin: 0;
   background-color: #121212;
@@ -171,6 +181,7 @@ header h1 {
 .btn-salir:hover {
   color: white;
 }
+
 .btn-corregir {
   display: block;
   width: 100%;
