@@ -13,8 +13,7 @@ public class PartidaEntity {
     private String fase;
     private Instant fechaCreacion;
     private String ganadorId;
-    
-    private String formato; // <-- NUEVO CAMPO
+    private String formato;
 
     @Column(name = "estado_mesa_json", columnDefinition = "TEXT", length = 10000)
     private String estadoMesaJson;

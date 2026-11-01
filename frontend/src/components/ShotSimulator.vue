@@ -1,12 +1,24 @@
 <script setup>
 import { registrarTiro } from '../api/matches'
 import { ref } from 'vue'
+import { toast } from '../utils/toast'
 
 const props = defineProps({
   partida: { type: Object, required: true }
 })
 
+const emit = defineEmits(['tiroRegistrado'])
 const cargando = ref(false)
+
+// Muestra el veredicto del motor de reglas como notificacion
+const avisarResultado = (resultado) => {
+  const mensaje = resultado?.descripcion ?? 'Tiro registrado'
+  if (mensaje.startsWith('Falta')) {
+    toast.warning(mensaje)
+  } else {
+    toast.success(mensaje)
+  }
+}
 
 const simularTiro = async (tipo) => {
   try {
@@ -22,7 +34,6 @@ const simularTiro = async (tipo) => {
     const esEquipoA = props.partida.equipoA.some(j => j.id === jugadorActual.id)
     
     // 3. Asignamos bolas válidas para su equipo (1 para lisas, 10 para rayadas)
-    // Si es equipo A y quiere embolsar, que meta la 2 (lisa). Si es B, que meta la 11 (rayada)
     const bolaObjetivo = esEquipoA ? 1 : 10
     const bolaAEmbolsar = esEquipoA ? 2 : 11
 
@@ -42,13 +53,20 @@ const simularTiro = async (tipo) => {
 
     console.log(`Simulando tiro para ${jugadorActual.nombre} (Equipo ${esEquipoA ? 'A' : 'B'})`, payload)
     
-    await registrarTiro(props.partida.id, payload)
+    // Ejecutamos el tiro y capturamos el resultado
+    const resultado = await registrarTiro(props.partida.id, payload)
     
+    // Mantenemos el emit (aunque el App.vue ya no lo escuche, no está de más)
+    emit('tiroRegistrado')
+    
+    // Mostramos el mensaje de éxito o falta
+    avisarResultado(resultado)
+
   } catch (error) {
     console.error('Error al registrar tiro:', error)
-    // Extraemos el mensaje exacto del backend
+    // Extraemos el mensaje exacto del backend (Fusión de ambas ramas)
     const mensaje = error.response?.data?.message || error.message
-    alert('Error al registrar el tiro: ' + mensaje)
+    toast.error('Error: ' + mensaje)
   } finally {
     cargando.value = false
   }

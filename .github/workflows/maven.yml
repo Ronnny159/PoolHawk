@@ -1,0 +1,43 @@
+name: Maven CI
+
+on:
+  push:
+    branches: [ main, develop, 'feature/**' ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # Base de datos por si alguna prueba de integracion la necesita
+    # (mismos datos que usa application.yml en desarrollo).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: poolhawk_user
+          POSTGRES_PASSWORD: poolhawk_password
+          POSTGRES_DB: poolhawk_db
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U poolhawk_user -d poolhawk_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Compilar y ejecutar las pruebas
+        run: mvn -B verify
+        working-directory: backend
