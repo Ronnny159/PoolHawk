@@ -9,20 +9,23 @@ import com.poolhawk.domain.table.Mesa;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 @Component
 public class MatchFactory {
 
-    public Partida crearDesdeRequest(String id, CrearPartidaRequest request) {
+        public Partida crearDesdeRequest(String id, CrearPartidaRequest request) {
         double ancho = request.anchoMesa() != null ? request.anchoMesa() : Mesa.ANCHO_DEFECTO;
         double alto = request.altoMesa() != null ? request.altoMesa() : Mesa.ALTO_DEFECTO;
         Mesa mesa = construirMesaInicial(ancho, alto);
 
-        List<Jugador> listaJugadores = request.jugadores().stream()
-            .map(nombre -> new Jugador(UUID.randomUUID().toString(), nombre))
-            .toList();
+        // Aseguramos que el orden se mantenga usando ArrayList y un for
+        List<Jugador> listaJugadores = new ArrayList<>();
+        for (String nombre : request.jugadores()) {
+            listaJugadores.add(new Jugador(UUID.randomUUID().toString(), nombre));
+        }
 
         Turnos<Jugador> turnos = new Turnos<>(listaJugadores);
         MatchState estado = new MatchState(id, request.modalidad(), turnos, mesa, Instant.now());
