@@ -80,10 +80,12 @@ const crear = async () => {
   <div class="mesa-wrapper">
     <div class="form-container">
       
+      <!-- BOTÓN DE ENGRANAJE -->
       <div class="config-icon" @click="mostrarConfig = !mostrarConfig" title="Configuración de mesa">
         ⚙️
       </div>
 
+      <!-- PANEL DE CONFIGURACIÓN -->
       <div v-if="mostrarConfig" class="config-panel">
         <h4>Configuración Avanzada</h4>
         
@@ -101,7 +103,6 @@ const crear = async () => {
           <div class="opciones-mesa">
             <button :class="{ active: formato === 'INDIVIDUAL' && cantidadJugadores === 2 }" @click="formato = 'INDIVIDUAL'; jugador3 = ''; jugador4 = ''">1 vs 1</button>
             
-            <!-- OCULTAMOS el botón de Todos vs Todos si es BOLA_8 -->
             <button 
               v-if="modalidad === 'POR_PUNTOS'"
               :class="{ active: formato === 'INDIVIDUAL' && cantidadJugadores === 4 }" 
@@ -115,6 +116,7 @@ const crear = async () => {
         </div>
       </div>
 
+      <!-- TÍTULO -->
       <div class="header-form">
         <h2>NUEVA PARTIDA</h2>
         <p class="subtitulo-form">Configura tu mesa y prepara el taco</p>
@@ -125,27 +127,32 @@ const crear = async () => {
         </div>
       </div>
 
+      <!-- DISEÑO 2 BOLAS (Para Parejas o 1v1 o Todos vs Todos con nombres) -->
       <div class="equipos-container">
+        <!-- BOLA EQUIPO A -->
         <div class="bola-wrapper">
           <div class="bola-equipo equipo-a">
             <div class="brillo"></div>
             <div class="centro-blanco">
-              <label>Jugador 1</label>
-              <input v-model="jugador1" placeholder="Nombre" maxlength="12" />
-              <input v-if="formato === 'PAREJAS' || cantidadJugadores === 4" v-model="jugador3" placeholder="Jugador 3" maxlength="12" />
+              <label>Equipo A</label>
+              <input v-model="jugador1" placeholder="Jugador 1" maxlength="12" />
+              <!-- Si es Parejas, mostramos el segundo input adentro -->
+              <input v-if="formato === 'PAREJAS'" v-model="jugador3" placeholder="Jugador 3" maxlength="12" />
             </div>
           </div>
         </div>
 
         <div class="vs-badge">VS</div>
 
+        <!-- BOLA EQUIPO B -->
         <div class="bola-wrapper">
           <div class="bola-equipo equipo-b">
             <div class="brillo"></div>
             <div class="centro-blanco">
-              <label>Jugador 2</label>
-              <input v-model="jugador2" placeholder="Nombre" maxlength="12" />
-              <input v-if="formato === 'PAREJAS' || cantidadJugadores === 4" v-model="jugador4" placeholder="Jugador 4" maxlength="12" />
+              <label>Equipo B</label>
+              <input v-model="jugador2" placeholder="Jugador 2" maxlength="12" />
+              <!-- Si es Parejas, mostramos el segundo input adentro -->
+              <input v-if="formato === 'PAREJAS'" v-model="jugador4" placeholder="Jugador 4" maxlength="12" />
             </div>
           </div>
         </div>
@@ -247,7 +254,7 @@ const crear = async () => {
   z-index: 10; 
   box-shadow: inset 3px 3px 10px rgba(0, 0, 0, 0.18), inset -2px -2px 6px rgba(255, 255, 255, 0.9), 0 3px 8px rgba(0, 0, 0, 0.35); 
 }
-.centro-blanco label { color: #0f172a; font-family: 'Bebas Neue', sans-serif; font-size: 1.05rem; margin-bottom: 0.45rem; }
+.centro-blanco label { color: #0f172a; font-family: 'Bebas Neue', sans-serif; font-size: 1.05rem; margin-bottom: 0.45rem; text-transform: uppercase; }
 .centro-blanco input { 
   width: 128px; 
   padding: 0.42rem; 
@@ -284,7 +291,7 @@ const crear = async () => {
 .error { color: #fecaca; background: rgba(239, 68, 68, 0.12); border-left: 4px solid var(--ball-red); padding: 0.85rem; border-radius: 6px; text-align: left; margin: 0 auto 1.5rem; max-width: 420px; }
 
 /* ============================================================
-   NUEVOS ESTILOS (Engranaje y Panel Flotante)
+   ESTILOS DEL ENGRANAJE Y PANEL
    ============================================================ */
 .config-icon { 
   position: absolute; 

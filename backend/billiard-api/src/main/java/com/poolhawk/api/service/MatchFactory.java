@@ -13,18 +13,28 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Fábrica encargada de construir las instancias de Partida a partir de la petición.
+ * Aísla la lógica de inicialización del dominio.
+ */
 @Component
 public class MatchFactory {
 
-        public Partida crearDesdeRequest(String id, CrearPartidaRequest request) {
+    /**
+     * Crea una partida a partir de la solicitud REST.
+     *
+     * @param id identificador único de la partida
+     * @param request datos de creación
+     * @return la partida construida e iniciada
+     */
+    public Partida crearDesdeRequest(String id, CrearPartidaRequest request) {
         double ancho = request.anchoMesa() != null ? request.anchoMesa() : Mesa.ANCHO_DEFECTO;
         double alto = request.altoMesa() != null ? request.altoMesa() : Mesa.ALTO_DEFECTO;
         Mesa mesa = construirMesaInicial(ancho, alto);
 
-        // Aseguramos que el orden se mantenga usando ArrayList y un for
         List<Jugador> listaJugadores = new ArrayList<>();
         for (String nombre : request.jugadores()) {
-            listaJugadores.add(new Jugador(UUID.randomUUID().toString(), nombre));
+            listaJugadores.add(new Jugador(UUID.randomUUID().toString(), nombre.trim()));
         }
 
         Turnos<Jugador> turnos = new Turnos<>(listaJugadores);
@@ -34,6 +44,9 @@ public class MatchFactory {
         return new Partida(id, request.modalidad(), listaJugadores, estado, Instant.now(), request.formato());
     }
 
+    /**
+     * Construye la mesa inicial con las 16 bolas en formación de triángulo.
+     */
     private Mesa construirMesaInicial(double ancho, double alto) {
         Mesa mesa = new Mesa(ancho, alto);
         mesa.agregarBola(Bola.crear(0, new Coordenada(ancho * 0.25, alto * 0.5)));
