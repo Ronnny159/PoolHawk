@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -40,7 +41,10 @@ public class MatchService {
     private final MatchFactory matchFactory;
     private final ObjectMapper jsonMapper;
 
-    private final Map<String, Partida> partidasEnMemoria = new HashMap<>();
+    private final Map<String, Partida> partidasEnMemoria = new ConcurrentHashMap<>();
+    
+    // MAPA DE LOCKS PARA EVITAR CONDICIONES DE CARRERA EN LOS TIROS
+    private final Map<String, Object> locksPorPartida = new ConcurrentHashMap<>();
 
     public MatchService(MatchStorage storage, MatchLiveHandler liveHandler, 
                         PartidaMapper responseMapper, MatchPersistenceMapper persistenceMapper, 
@@ -53,19 +57,33 @@ public class MatchService {
         this.jsonMapper = jsonMapper;
     }
 
+    /**
+     * Crea una nueva partida aplicando las validaciones estrictas de la matriz de juego.
+     *
+     * @param request datos de creación
+     * @return la partida creada
+     * @throws IllegalArgumentException si la combinación de modalidad, formato y jugadores es inválida
+     */
     public Partida crear(CrearPartidaRequest request) {
-        // 1. Validaciones básicas
-        if (request.jugadores() == null || request.jugadores().size() < 2 || request.jugadores().size() > 4) {
-            throw new IllegalArgumentException("Debe haber entre 2 y 4 jugadores.");
-        }
-        
-        if (request.formato() == FormatoJuego.PAREJAS && request.jugadores().size() % 2 != 0) {
-            throw new IllegalArgumentException("Las parejas requieren un número par de jugadores.");
+        // 1. Validaciones estructurales
+        if (request.modalidad() == null || request.formato() == null || request.jugadores() == null) {
+            throw new IllegalArgumentException("Configuración incompleta: Modalidad, formato y jugadores son obligatorios.");
         }
 
-        // 2. Regla de Negocio: Bola 8 solo permite 1v1 (para no romper el motor de reglas)
-        if (request.modalidad() == TipoModalidad.BOLA_8 && request.jugadores().size() > 2) {
-            throw new IllegalArgumentException("La modalidad Bola 8 solo permite 1 vs 1. Para jugar de a 4, usa Por Puntos.");
+        int cantidad = request.jugadores().size();
+        if (request.jugadores().stream().anyMatch(String::isBlank)) {
+            throw new IllegalArgumentException("Los nombres de los jugadores no pueden estar vacíos.");
+        }
+
+        // 2. Matriz de validación estricta
+        if (request.formato() == FormatoJuego.PAREJAS && cantidad != 4) {
+            throw new IllegalArgumentException("El formato de Parejas requiere exactamente 4 jugadores.");
+        }
+        if (request.formato() == FormatoJuego.INDIVIDUAL && cantidad != 2 && cantidad != 4) {
+            throw new IllegalArgumentException("El formato Individual requiere 2 o 4 jugadores.");
+        }
+        if (request.modalidad() == TipoModalidad.BOLA_8 && cantidad != 2) {
+            throw new IllegalArgumentException("La modalidad Bola 8 solo permite 1 vs 1.");
         }
 
         // 3. Creación usando el Factory
@@ -106,40 +124,59 @@ public class MatchService {
             .collect(Collectors.toList());
     }
 
+    /**
+     * Registra un tiro en una partida.
+     * Utiliza un bloqueo (lock) por partida para garantizar que no haya condiciones de carrera.
+     */
     public ResultadoTiro registrarTiro(String partidaId, TiroEventRequest request) {
-        Partida partida = buscar(partidaId);
+        // Obtenemos o creamos un lock para esta partida específica
+        Object lock = locksPorPartida.computeIfAbsent(partidaId, k -> new Object());
         
-        // 1. Evaluar el tiro con el motor de reglas
-        TiroEvent evento = construirEvento(partida, request);
-        ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
-        ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
-        
-        // 2. Aplicar el tiro a la partida
-        partida.aplicarTiro(evento, resultado);
-        if (resultado.esVictoria()) {
-            partida.finalizar(evento.jugador());
-        }
-        
-        // 3. Persistir los cambios
-        storage.guardar(persistenceMapper.toEntity(partida));
+        synchronized (lock) {
+            try {
+                Partida partida = buscar(partidaId);
+                
+                // VALIDACIÓN DE TURNO: El jugador debe ser el del turno actual
+                Jugador jugadorActual = partida.jugadorActual();
+                if (!jugadorActual.id().equals(request.jugadorId())) {
+                    throw new IllegalArgumentException("No es el turno de este jugador. Turno actual: " + jugadorActual.nombre());
+                }
 
-        // 4. Notificar a los navegadores conectados por WebSocket
-        try {
-            String json = jsonMapper.writeValueAsString(responseMapper.toResponse(partida));
-            liveHandler.broadcast(json);
-        } catch (Exception e) {
-            System.err.println("Error serializando partida: " + e.getMessage());
-        }
+                // 1. Evaluar el tiro con el motor de reglas
+                TiroEvent evento = construirEvento(partida, request, jugadorActual);
+                ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
+                ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
+                
+                // 2. Aplicar el tiro a la partida
+                partida.aplicarTiro(evento, resultado);
+                if (resultado.esVictoria()) {
+                    partida.finalizar(evento.jugador());
+                }
+                
+                // 3. Persistir los cambios
+                storage.guardar(persistenceMapper.toEntity(partida));
 
-        return resultado;
+                // 4. Notificar a los navegadores conectados por WebSocket
+                try {
+                    String json = jsonMapper.writeValueAsString(responseMapper.toResponse(partida));
+                    liveHandler.broadcast(json);
+                } catch (Exception e) {
+                    System.err.println("Error serializando partida: " + e.getMessage());
+                }
+
+                return resultado;
+            } finally {
+                // Limpieza de memoria: si la partida terminó, eliminamos el lock
+                Partida partida = partidasEnMemoria.get(partidaId);
+                if (partida != null && partida.estaTerminada()) {
+                    locksPorPartida.remove(partidaId);
+                }
+            }
+        }
     }
 
-    private TiroEvent construirEvento(Partida partida, TiroEventRequest request) {
-        Jugador jugador = partida.getEstado().getTurnos().jugadores().stream()
-            .filter(j -> j.id().equals(request.jugadorId()))
-            .findFirst()
-            .orElseThrow(() -> new IllegalArgumentException("Jugador no encontrado"));
-
+    private TiroEvent construirEvento(Partida partida, TiroEventRequest request, Jugador jugadorActual) {
+        // Ya no buscamos al jugador por ID, porque validamos que sea el jugadorActual
         Bola primeraTocada = request.primeraBolaTocada() != null ? 
             partida.getMesa().buscarBola(request.primeraBolaTocada()).orElse(null) : null;
 
@@ -156,7 +193,7 @@ public class MatchService {
         Duration duracion = request.duracionSegundos() != null ? 
             Duration.ofSeconds(request.duracionSegundos()) : Duration.ofSeconds(5);
 
-        return new TiroEvent(UUID.randomUUID().toString(), partida.getId(), jugador,
+        return new TiroEvent(UUID.randomUUID().toString(), partida.getId(), jugadorActual,
             primeraTocada, embolsadas, troneras, Instant.now(), duracion);
     }
 }
