@@ -11,23 +11,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Mapper entre el dominio {@link Partida} y los DTOs de la API.
- *
- * <p>Su responsabilidad es traducir el modelo de dominio a la vista
- * publica que expone la API, sin filtrar detalles internos.</p>
- *
- * @author PoolHawk Team
- * @since 0.1.0
+ * Mapper entre el dominio Partida y los DTOs de la API.
  */
 @Component
 public class PartidaMapper {
 
-    /**
-     * Convierte una partida del dominio en su DTO de respuesta.
-     *
-     * @param partida partida del dominio
-     * @return DTO con la vista publica de la partida
-     */
     public PartidaResponse toResponse(Partida partida) {
         List<JugadorResponse> equipoA = partida.getEquipoA().getJugadores()
             .stream().map(this::toJugadorResponse).toList();
@@ -41,6 +29,7 @@ public class PartidaMapper {
         return new PartidaResponse(
             partida.getId(),
             partida.getModalidad().name(),
+            partida.getFormato().name(), // <-- AGREGADO AQUI
             partida.getFase().name(),
             equipoA,
             equipoB,

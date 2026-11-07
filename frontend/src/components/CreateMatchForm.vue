@@ -23,13 +23,19 @@ const medidasMesa = {
   '9': { ancho: 254, alto: 127 }
 }
 
+// Sabemos que es "Todos vs Todos" si el formato es INDIVIDUAL 
+// y el usuario ha decidido meter 4 jugadores.
+const esTodosVsTodos = computed(() => {
+  return formato.value === 'INDIVIDUAL' && (jugador3.value !== '' || jugador4.value !== '')
+})
+
 const cantidadJugadores = computed(() => {
   if (formato.value === 'PAREJAS') return 4
   if (jugador3.value !== '' || jugador4.value !== '') return 4
   return 2
 })
 
-// MAGIA: Si la modalidad cambia a BOLA_8, reseteamos a 1 vs 1 (2 jugadores)
+// MAGIA: Si la modalidad cambia a BOLA_8, reseteamos a 1 vs 1
 watch(modalidad, (nuevaModalidad) => {
   if (nuevaModalidad === 'BOLA_8') {
     formato.value = 'INDIVIDUAL'
@@ -44,13 +50,10 @@ const crear = async () => {
     error.value = ''
 
     let nombres = []
-    if (formato.value === 'PAREJAS') {
+    if (formato.value === 'PAREJAS' || esTodosVsTodos.value) {
       nombres = [jugador1.value, jugador2.value, jugador3.value, jugador4.value]
     } else {
       nombres = [jugador1.value, jugador2.value]
-      if (jugador3.value || jugador4.value) {
-        nombres.push(jugador3.value, jugador4.value)
-      }
     }
 
     if (nombres.some(n => !n.trim())) {
@@ -127,36 +130,77 @@ const crear = async () => {
         </div>
       </div>
 
-      <!-- DISEÑO 2 BOLAS (Para Parejas o 1v1 o Todos vs Todos con nombres) -->
-      <div class="equipos-container">
-        <!-- BOLA EQUIPO A -->
-        <div class="bola-wrapper">
-          <div class="bola-equipo equipo-a">
-            <div class="brillo"></div>
-            <div class="centro-blanco">
-              <label>Equipo A</label>
-              <input v-model="jugador1" placeholder="Jugador 1" maxlength="12" />
-              <!-- Si es Parejas, mostramos el segundo input adentro -->
-              <input v-if="formato === 'PAREJAS'" v-model="jugador3" placeholder="Jugador 3" maxlength="12" />
+      <!-- ENVOLVEMOS TODO EN UN SOLO TEMPLATE IF/ELSE PARA EVITAR EL ERROR -->
+      <template v-if="!esTodosVsTodos">
+        <!-- MODO 1: DISEÑO 2 BOLAS (1v1 o 2v2) -->
+        <div class="equipos-container">
+          <div class="bola-wrapper">
+            <div class="bola-equipo equipo-a">
+              <div class="brillo"></div>
+              <div class="centro-blanco">
+                <label>Equipo A</label>
+                <input v-model="jugador1" placeholder="Jugador 1" maxlength="12" />
+                <input v-if="formato === 'PAREJAS'" v-model="jugador3" placeholder="Jugador 3" maxlength="12" />
+              </div>
+            </div>
+          </div>
+
+          <div class="vs-badge">VS</div>
+
+          <div class="bola-wrapper">
+            <div class="bola-equipo equipo-b">
+              <div class="brillo"></div>
+              <div class="centro-blanco">
+                <label>Equipo B</label>
+                <input v-model="jugador2" placeholder="Jugador 2" maxlength="12" />
+                <input v-if="formato === 'PAREJAS'" v-model="jugador4" placeholder="Jugador 4" maxlength="12" />
+              </div>
             </div>
           </div>
         </div>
+      </template>
 
-        <div class="vs-badge">VS</div>
-
-        <!-- BOLA EQUIPO B -->
-        <div class="bola-wrapper">
-          <div class="bola-equipo equipo-b">
-            <div class="brillo"></div>
-            <div class="centro-blanco">
-              <label>Equipo B</label>
-              <input v-model="jugador2" placeholder="Jugador 2" maxlength="12" />
-              <!-- Si es Parejas, mostramos el segundo input adentro -->
-              <input v-if="formato === 'PAREJAS'" v-model="jugador4" placeholder="Jugador 4" maxlength="12" />
+      <template v-else>
+        <!-- MODO 2: DISEÑO 4 BOLAS (Todos vs Todos) -->
+        <div class="grilla-4-inputs">
+          <!-- Jugador 1 -->
+          <div class="jugador-wrapper">
+            <div class="bola-pequena bola-color-0">
+              <div class="centro-blanco-pequeno">
+                <label>Jugador 1</label>
+                <input v-model="jugador1" placeholder="Nombre" maxlength="12" />
+              </div>
+            </div>
+          </div>
+          <!-- Jugador 2 -->
+          <div class="jugador-wrapper">
+            <div class="bola-pequena bola-color-1">
+              <div class="centro-blanco-pequeno">
+                <label>Jugador 2</label>
+                <input v-model="jugador2" placeholder="Nombre" maxlength="12" />
+              </div>
+            </div>
+          </div>
+          <!-- Jugador 3 -->
+          <div class="jugador-wrapper">
+            <div class="bola-pequena bola-color-2">
+              <div class="centro-blanco-pequeno">
+                <label>Jugador 3</label>
+                <input v-model="jugador3" placeholder="Nombre" maxlength="12" />
+              </div>
+            </div>
+          </div>
+          <!-- Jugador 4 -->
+          <div class="jugador-wrapper">
+            <div class="bola-pequena bola-color-3">
+              <div class="centro-blanco-pequeno">
+                <label>Jugador 4</label>
+                <input v-model="jugador4" placeholder="Nombre" maxlength="12" />
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </template>
 
       <p v-if="error" class="error" role="alert">{{ error }}</p>
 
@@ -169,7 +213,7 @@ const crear = async () => {
 
 <style scoped>
 /* ============================================================
-   MARCO EXTERIOR
+   MARCO EXTERIOR Y FORMULARIO
    ============================================================ */
 .mesa-wrapper { 
   max-width: 920px; 
@@ -222,6 +266,9 @@ const crear = async () => {
   box-shadow: 0 3px 10px rgba(21, 128, 61, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.25); 
 }
 
+/* ============================================================
+   DISEÑO 2 BOLAS (1v1 y 2v2)
+   ============================================================ */
 .equipos-container { display: flex; gap: 1rem; justify-content: center; align-items: center; margin-bottom: 2.5rem; flex-wrap: wrap; position: relative; z-index: 1; }
 .vs-badge { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; color: #475569; letter-spacing: 2px; }
 .bola-wrapper { position: relative; }
@@ -270,6 +317,64 @@ const crear = async () => {
 }
 .centro-blanco input:focus { border-color: var(--felt-light); box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.22); }
 
+/* ============================================================
+   DISEÑO 4 BOLAS (Todos vs Todos)
+   ============================================================ */
+.grilla-4-inputs { 
+  display: grid; 
+  grid-template-columns: 1fr 1fr; 
+  gap: 2rem; 
+  max-width: 600px; 
+  margin: 0 auto 2.5rem; 
+  position: relative; 
+  z-index: 1; 
+}
+.jugador-wrapper { display: flex; justify-content: center; }
+.bola-pequena { 
+  width: 160px; 
+  height: 160px; 
+  border-radius: 50%; 
+  display: flex; 
+  justify-content: center; 
+  align-items: center; 
+  box-shadow: inset -12px -12px 30px rgba(0,0,0,0.6), inset 8px 8px 20px rgba(255,255,255,0.4), 0 10px 20px rgba(0,0,0,0.5); 
+}
+.centro-blanco-pequeno { 
+  width: 90px; 
+  height: 90px; 
+  background: radial-gradient(circle at 38% 30%, #ffffff 0%, #f1f5f9 65%, #dbe3ec 100%); 
+  border-radius: 50%; 
+  display: flex; 
+  flex-direction: column; 
+  justify-content: center; 
+  align-items: center; 
+  padding: 0.4rem; 
+  box-shadow: inset 2px 2px 6px rgba(0,0,0,0.2); 
+}
+.centro-blanco-pequeno label { color: #0f172a; font-family: 'Bebas Neue', sans-serif; font-size: 0.8rem; margin-bottom: 0.2rem; }
+.centro-blanco-pequeno input { 
+  width: 76px; 
+  padding: 0.25rem; 
+  border: 1px solid #cbd5e1; 
+  border-radius: 4px; 
+  text-align: center; 
+  font-family: 'Inter', sans-serif; 
+  font-size: 0.75rem; 
+  font-weight: 700; 
+  color: #0f172a; 
+  outline: none; 
+}
+.centro-blanco-pequeno input:focus { border-color: var(--felt-light); }
+
+/* Colores de las 4 bolas */
+.bola-color-0 { background: radial-gradient(circle at 30% 25%, #fef9c3 0%, var(--ball-yellow) 42%, #ca8a04 78%, #713f12 100%); }
+.bola-color-1 { background: radial-gradient(circle at 30% 25%, #dbeafe 0%, var(--ball-blue) 42%, #1d4ed8 78%, #1e3a8a 100%); }
+.bola-color-2 { background: radial-gradient(circle at 30% 25%, #fecaca 0%, var(--ball-red) 42%, #b91c1c 78%, #7f1d1d 100%); }
+.bola-color-3 { background: radial-gradient(circle at 30% 25%, #dcfce7 0%, #22c55e 42%, #15803d 78%, #14532d 100%); }
+
+/* ============================================================
+   BOTÓN Y ERROR
+   ============================================================ */
 .btn-iniciar { 
   display: block; 
   width: 100%; 
@@ -291,7 +396,7 @@ const crear = async () => {
 .error { color: #fecaca; background: rgba(239, 68, 68, 0.12); border-left: 4px solid var(--ball-red); padding: 0.85rem; border-radius: 6px; text-align: left; margin: 0 auto 1.5rem; max-width: 420px; }
 
 /* ============================================================
-   ESTILOS DEL ENGRANAJE Y PANEL
+   ENGRANAJE Y PANEL
    ============================================================ */
 .config-icon { 
   position: absolute; 
