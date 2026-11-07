@@ -8,23 +8,13 @@ import com.poolhawk.domain.match.Partida;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 /**
- * Controlador REST para la gestion de partidas.
- *
- * <p>Expone endpoints para crear partidas, consultarlas por id y
- * listar todas las partidas existentes.</p>
- *
- * @author PoolHawk Team
- * @since 0.1.0
+ * Controlador REST para la gestión de partidas.
+ * Expone endpoints para crear, consultar y listar partidas.
  */
 @RestController
 @RequestMapping("/api/v1/matches")
@@ -40,23 +30,21 @@ public class MatchController {
 
     /**
      * Crea una nueva partida.
-     *
-     * @param request datos de creacion
+     * 
+     * @param request datos de creación validados
      * @return la partida creada con HTTP 201
      */
     @PostMapping
-    public ResponseEntity<PartidaResponse> crear(
-            @Valid @RequestBody CrearPartidaRequest request) {
+    public ResponseEntity<PartidaResponse> crear(@Valid @RequestBody CrearPartidaRequest request) {
         Partida partida = matchService.crear(request);
-        return ResponseEntity.status(HttpStatus.CREATED)
-            .body(mapper.toResponse(partida));
+        return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(partida));
     }
 
     /**
      * Consulta una partida por su id.
-     *
+     * 
      * @param id identificador de la partida
-     * @return la partida con HTTP 200, o 404 si no existe
+     * @return la partida con HTTP 200
      */
     @GetMapping("/{id}")
     public ResponseEntity<PartidaResponse> obtener(@PathVariable String id) {
@@ -66,7 +54,7 @@ public class MatchController {
 
     /**
      * Lista todas las partidas almacenadas.
-     *
+     * 
      * @return lista de partidas con HTTP 200
      */
     @GetMapping
