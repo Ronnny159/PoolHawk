@@ -4,30 +4,38 @@ import CreateMatchForm from './components/CreateMatchForm.vue'
 import ScoreBoard from './components/ScoreBoard.vue'
 import ShotSimulator from './components/ShotSimulator.vue'
 import MatchHistory from './components/MatchHistory.vue'
-
-// Imports que vienen de develop
 import ToastContainer from './components/ToastContainer.vue'
 import LoginView from './components/LoginView.vue'
 import CorrectionModal from './components/CorrectionModal.vue'
 import { AUTH_REQUERIDA } from './api/endpoints'
-import { obtenerPartida } from './api/matches' // Necesario para recargarPartida
+import { obtenerPartida } from './api/matches'
 
+// 1. VALIDACIÓN ESTRICTA DEL TOKEN (Evita saltarse el login por caché)
+const tokenGuardado = localStorage.getItem('token')
+const token = ref(tokenGuardado && tokenGuardado.length > 20 ? tokenGuardado : null)
+if (!token.value) {
+  localStorage.removeItem('token') // Limpiamos basura
+}
+
+// Estados globales
 const partidaActual = ref(null)
-const formatoPartida = ref('INDIVIDUAL') // Guarda el formato (de tu rama)
-const token = ref(localStorage.getItem('token')) // De develop
-const mostrarCorreccion = ref(false) // De develop
+const formatoPartida = ref('INDIVIDUAL')
+const mostrarCorreccion = ref(false)
+
+// Estado para la navegación del Lobby
+const vistaLobby = ref('CREAR') // Puede ser 'CREAR' o 'HISTORIAL'
 
 let socket = null
 let reconnectTimeout = null
 
 const iniciarSesion = (nuevoToken) => {
   token.value = nuevoToken
+  localStorage.setItem('token', nuevoToken) // Guardamos el token real
 }
 
 const iniciarPartida = (nuevaPartida) => {
   partidaActual.value = nuevaPartida
-  // Lógica de tu rama para el formato
-  formatoPartida.value = nuevaPartida.formato || (nuevaPartida.equipoA.length === 2 ? 'PAREJAS' : 'INDIVIDUAL')
+  formatoPartida.value = nuevaPartida.formato || 'INDIVIDUAL'
 }
 
 const recargarPartida = async () => {
@@ -38,7 +46,7 @@ const recargarPartida = async () => {
 
 const cargarPartidaDelHistorial = (partida) => {
   partidaActual.value = { ...partida }
-  formatoPartida.value = partida.formato || (partida.equipoA.length === 2 ? 'PAREJAS' : 'INDIVIDUAL')
+  formatoPartida.value = partida.formato || 'INDIVIDUAL'
 }
 
 const cerrarSesion = () => {
@@ -49,10 +57,15 @@ const cerrarSesion = () => {
   window.location.reload()
 }
 
+const volverAlLobby = () => {
+  partidaActual.value = null
+  mostrarCorreccion.value = false
+  vistaLobby.value = 'CREAR'
+}
+
 const conectarWebSocket = () => {
   if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
 
-  // Lógica de conexión robusta (soporta local y producción)
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsHost = window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host;
   socket = new WebSocket(`${wsProtocol}//${wsHost}/ws/matches`)
@@ -60,16 +73,19 @@ const conectarWebSocket = () => {
   socket.onopen = () => console.log('🟢 Conectado al WebSocket de PoolHawk')
 
   socket.onmessage = (event) => {
-    const partidaActualizada = JSON.parse(event.data)
-    if (partidaActual.value && partidaActual.value.id === partidaActualizada.id) {
-      console.log('⚡ Marcador actualizado en vivo:', partidaActualizada.puntajes)
-      // Forzamos la reactividad de Vue con un nuevo objeto
-      partidaActual.value = { ...partidaActualizada }
+    try {
+      const partidaActualizada = JSON.parse(event.data)
+      if (partidaActual.value && partidaActual.value.id === partidaActualizada.id) {
+        console.log('⚡ Marcador actualizado en vivo')
+        partidaActual.value = { ...partidaActualizada }
+      }
+    } catch (e) {
+      console.error('Error parseando mensaje WebSocket', e)
     }
   }
 
   socket.onclose = () => {
-    console.log('🔴 WebSocket desconectado. Reconectando en 3 segundos...')
+    console.log('🔴 WebSocket desconectado. Reconectando...')
     socket = null
     if (!reconnectTimeout) {
       reconnectTimeout = setTimeout(() => {
@@ -95,46 +111,65 @@ onUnmounted(() => {
 <template>
   <div class="app-container">
     <ToastContainer />
+
     <header>
       <h1>🦅 PoolHawk</h1>
       <p class="subtitle">Sistema de Rastreo y Marcado Automático</p>
-      <button v-if="token || !AUTH_REQUERIDA" @click="cerrarSesion">Cerrar sesión</button>
+      <button v-if="token || !AUTH_REQUERIDA" @click="cerrarSesion" class="btn-logout">Cerrar sesión</button>
     </header>
 
     <main>
-      <!-- Login: solo se muestra si AUTH_REQUERIDA esta activa -->
+      <!-- FLUJO 1: LOGIN -->
       <LoginView v-if="AUTH_REQUERIDA && !token" @ingreso="iniciarSesion" />
 
-      <template v-else>
-        <!-- Si no hay partida, mostrar formulario -->
-        <div v-if="!partidaActual">
-          <CreateMatchForm @partidaIniciada="iniciarPartida" />
-          <MatchHistory @partidaSeleccionada="cargarPartidaDelHistorial" />
+      <!-- FLUJO 2: LOBBY (Crear o Historial) -->
+      <template v-else-if="!partidaActual">
+        
+        <!-- Navegación del Lobby -->
+        <div class="lobby-nav">
+          <button :class="{ active: vistaLobby === 'CREAR' }" @click="vistaLobby = 'CREAR'">
+            🎱 Nueva Partida
+          </button>
+          <button :class="{ active: vistaLobby === 'HISTORIAL' }" @click="vistaLobby = 'HISTORIAL'">
+            📜 Historial
+          </button>
         </div>
 
-        <!-- Si hay partida, mostrar marcador y simulador -->
-        <div v-else>
-          <button @click="partidaActual = null; mostrarCorreccion = false" class="btn-salir">← Nueva Partida</button>
-          
-          <!-- El ScoreBoard ahora recibe el formato y la key para forzar el re-render -->
-          <ScoreBoard 
-            :key="JSON.stringify(partidaActual.puntajes) + partidaActual.jugadorActual" 
-            :partida="partidaActual" 
-            :formato="formatoPartida" 
-          />
-          
-          <!-- El ShotSimulator ya no emite tiroRegistrado porque el WebSocket se encarga -->
-          <ShotSimulator :partida="partidaActual" />
-          
-          <button @click="mostrarCorreccion = true" class="btn-corregir">Corregir último tiro</button>
-          
-          <CorrectionModal
-            v-if="mostrarCorreccion"
-            :partida="partidaActual"
-            @cerrar="mostrarCorreccion = false"
-            @corregido="recargarPartida"
-          />
-        </div>
+        <!-- Vista de Crear Partida (Aquí está el engranaje ⚙️) -->
+        <CreateMatchForm 
+          v-if="vistaLobby === 'CREAR'" 
+          @partidaIniciada="iniciarPartida" 
+        />
+
+        <!-- Vista de Historial -->
+        <MatchHistory 
+          v-if="vistaLobby === 'HISTORIAL'" 
+          @partidaSeleccionada="cargarPartidaDelHistorial" 
+        />
+      </template>
+
+      <!-- FLUJO 3: PARTIDA ACTIVA -->
+      <template v-else>
+        <button @click="volverAlLobby" class="btn-salir">← Volver al Lobby</button>
+        
+        <ScoreBoard 
+          :key="JSON.stringify(partidaActual.puntajes) + partidaActual.jugadorActual" 
+          :partida="partidaActual" 
+          :formato="formatoPartida" 
+        />
+        
+        <ShotSimulator :partida="partidaActual" />
+        
+        <button @click="mostrarCorreccion = true" class="btn-corregir">
+          ✏️ Corregir último tiro
+        </button>
+        
+        <CorrectionModal
+          v-if="mostrarCorreccion"
+          :partida="partidaActual"
+          @cerrar="mostrarCorreccion = false"
+          @corregido="recargarPartida"
+        />
       </template>
     </main>
   </div>
@@ -156,6 +191,7 @@ header {
   text-align: center;
   margin-bottom: 3rem;
   color: white;
+  position: relative;
 }
 
 header h1 {
@@ -166,6 +202,23 @@ header h1 {
 .subtitle {
   color: #888;
   margin-top: 0.5rem;
+}
+
+.btn-logout {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: transparent;
+  color: #aaa;
+  border: 1px solid #444;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-logout:hover {
+  color: white;
+  border-color: #666;
 }
 
 .btn-salir {
@@ -194,9 +247,41 @@ header h1 {
   border-radius: 8px;
   font-weight: bold;
   cursor: pointer;
+  transition: all 0.2s;
 }
 
 .btn-corregir:hover {
   background: rgba(245, 158, 11, 0.12);
+}
+
+/* Estilos del menú de navegación del Lobby */
+.lobby-nav {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.lobby-nav button {
+  padding: 0.8rem 2rem;
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.lobby-nav button:hover {
+  background: #334155;
+  color: white;
+}
+
+.lobby-nav button.active {
+  background: #22c55e;
+  color: white;
+  border-color: #22c55e;
 }
 </style>

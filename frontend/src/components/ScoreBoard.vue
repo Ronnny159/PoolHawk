@@ -8,13 +8,20 @@ const props = defineProps({
   formato: { type: String, default: 'INDIVIDUAL' }
 })
 
+// Lógica robusta para decidir cuál marcador mostrar
 const esTodosVsTodos = computed(() => {
-  // Si el formato es PAREJAS, JAMÁS será Todos vs Todos (aunque haya 4 jugadores)
+  // 1. Si el formato es explícitamente PAREJAS, mostramos el de equipos.
   if (props.formato === 'PAREJAS') return false
   
-  // Si es INDIVIDUAL y suman 4 jugadores en total, es Todos vs Todos
+  // 2. Si es un 2v2 clásico (2 en eqA y 2 en eqB), es Parejas, aunque el backend no lo diga.
   const cantA = props.partida.equipoA?.length || 0
   const cantB = props.partida.equipoB?.length || 0
+  
+  if (cantA === 2 && cantB === 2) {
+    return false // Es PAREJAS
+  }
+  
+  // 3. Si son 4 jugadores pero no son equipos de 2, es Todos vs Todos
   return (cantA + cantB) === 4
 })
 </script>
@@ -28,7 +35,7 @@ const esTodosVsTodos = computed(() => {
       </span>
     </div>
 
-    <!-- ENRUTADOR VISUAL: Muestra 4 bolas o 2 bolas según corresponda -->
+    <!-- ENRUTADOR VISUAL -->
     <ScoreBoardTodosVsTodos v-if="esTodosVsTodos" :partida="partida" />
     <ScoreBoardEquipos v-else :partida="partida" />
 
