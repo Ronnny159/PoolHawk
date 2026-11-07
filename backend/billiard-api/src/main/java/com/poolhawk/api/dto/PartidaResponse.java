@@ -6,27 +6,23 @@ import java.util.Map;
 
 /**
  * DTO con el estado completo de una partida.
- *
- * <p>Es la vista publica de una {@code Partida} del dominio. Expone
- * unicamente la informacion relevante para el cliente REST, sin
- * acoplar la API a las clases internas del dominio.</p>
- *
- * @param id            identificador de la partida
- * @param modalidad     modalidad actual
- * @param fase          fase actual del ciclo de vida
- * @param equipoA       jugadores del equipo A
- * @param equipoB       jugadores del equipo B
- * @param puntajes      puntaje actual por nombre de jugador
+ * 
+ * @param id identificador de la partida
+ * @param modalidad modalidad actual
+ * @param formato formato de juego (INDIVIDUAL, PAREJAS, TODOS_VS_TODOS)
+ * @param fase fase actual
+ * @param equipoA jugadores del equipo A
+ * @param equipoB jugadores del equipo B
+ * @param puntajes puntajes
  * @param jugadorActual nombre del jugador con el turno
- * @param ganador       nombre del ganador, o {@code null} si no ha terminado
+ * @param ganador nombre del ganador
  * @param cantidadTiros cantidad de tiros registrados
- * @param fechaCreacion momento de creacion de la partida
- * @author PoolHawk Team
- * @since 0.1.0
+ * @param fechaCreacion fecha de creación
  */
 public record PartidaResponse(
         String id,
         String modalidad,
+        String formato, // <-- AGREGADO
         String fase,
         List<JugadorResponse> equipoA,
         List<JugadorResponse> equipoB,
