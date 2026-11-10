@@ -88,9 +88,8 @@ public class ReglasBola8 extends AbstractReglasBillar {
         if (grupoDetectado == null) return;
 
         Jugador jugador = tiro.jugador();
-        Jugador companero = estado.getCompanero(jugador); // <-- USAMOS EL COMPAÑERO
+        Jugador companero = estado.getCompanero(jugador);
 
-        // Validamos que ninguno tenga grupo asignado antes de asignar
         if (!estado.grupoDe(jugador).estaAsignado() && !estado.grupoDe(companero).estaAsignado()) {
             estado.asignarGrupo(jugador, grupoDetectado);
             estado.asignarGrupo(companero, grupoDetectado);

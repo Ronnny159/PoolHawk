@@ -45,7 +45,6 @@ public class ReglasPorPuntos extends AbstractReglasBillar {
 
         int puntosDelTiro = calcularPuntos(tiro);
 
-        // CORRECCIÓN: Calculamos el total del equipo usando getCompanero()
         int puntajeActualJugador = estado.puntajeDe(jugador);
         int puntajeCompanero = estado.puntajeDe(estado.getCompanero(jugador));
         int puntajeNuevo = puntajeActualJugador + puntajeCompanero + puntosDelTiro;
@@ -82,8 +81,6 @@ public class ReglasPorPuntos extends AbstractReglasBillar {
     @Override
     public boolean partidaTerminada(MatchState estado) {
         Objects.requireNonNull(estado, "El estado no puede ser nulo");
-        // Para parejas, comprobamos si la suma de ambos alcanza el objetivo.
-        // Para individual, solo el jugador.
         return estado.getPuntajes().keySet().stream()
             .anyMatch(j -> (estado.puntajeDe(j) + estado.puntajeDe(estado.getCompanero(j))) >= config.puntajeObjetivo());
     }

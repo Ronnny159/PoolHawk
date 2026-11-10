@@ -234,7 +234,7 @@ public class MatchState {
      * Restaura el estado de una partida desde persistencia.
      * Esto es usado por el MatchPersistenceMapper.
      */
-    public void restaurarEstado(FasePartida faseGuardada, Jugador ganadorGuardado, Map<Jugador, Integer> puntajesGuardados, Map<Jugador, Grupo> gruposGuardados, List<TiroEvent> historialGuardado) {
+    public void restaurarEstado(FasePartida faseGuardada, Jugador ganadorGuardado, Map<Jugador, Integer> puntajesGuardados, Map<Jugador, Grupo> gruposGuardados) {
         this.fase = faseGuardada;
         this.ganador = ganadorGuardado;
         
@@ -243,9 +243,6 @@ public class MatchState {
         }
         if (gruposGuardados != null) {
             this.gruposAsignados.putAll(gruposGuardados);
-        }
-        if (historialGuardado != null) {
-            this.historial.addAll(historialGuardado);
         }
     }
 

@@ -62,25 +62,33 @@ public class MatchPersistenceMapper {
         MatchState estado = new MatchState(entity.getId(), TipoModalidad.valueOf(entity.getModalidad()), 
             new Turnos<>(listaPlana), mesa, entity.getFechaCreacion());
 
+        // Restauración completa del estado
         if (entity.getEstadoPartidaJson() != null && !entity.getEstadoPartidaJson().isEmpty()) {
             try {
                 Map<String, Object> snapshot = jsonMapper.readValue(entity.getEstadoPartidaJson(), Map.class);
+
+                // Restaurar puntajes y grupos
+                Map<Jugador, Integer> puntajesGuardados = new HashMap<>();
                 if (snapshot.containsKey("puntajes")) {
                     Map<String, Integer> puntajesMap = (Map<String, Integer>) snapshot.get("puntajes");
                     for (Jugador j : listaPlana) {
                         if (puntajesMap.containsKey(j.id())) {
-                            estado.sumarPuntos(j, puntajesMap.get(j.id()));
+                            puntajesGuardados.put(j, puntajesMap.get(j.id()));
                         }
                     }
                 }
+
+                Map<Jugador, Grupo> gruposGuardados = new HashMap<>();
                 if (snapshot.containsKey("grupos")) {
                     Map<String, String> gruposMap = (Map<String, String>) snapshot.get("grupos");
                     for (Jugador j : listaPlana) {
                         if (gruposMap.containsKey(j.id()) && !gruposMap.get(j.id()).equals("SIN_ASIGNAR")) {
-                            estado.asignarGrupo(j, Grupo.valueOf(gruposMap.get(j.id())));
+                            gruposGuardados.put(j, Grupo.valueOf(gruposMap.get(j.id())));
                         }
                     }
                 }
+
+                // Restaurar turno actual
                 if (snapshot.containsKey("turnoActualId")) {
                     String turnoId = (String) snapshot.get("turnoActualId");
                     for (int i = 0; i < listaPlana.size(); i++) {
@@ -88,6 +96,18 @@ public class MatchPersistenceMapper {
                         estado.avanzarTurno();
                     }
                 }
+
+                // Restaurar fase y ganador
+                FasePartida faseGuardada = FasePartida.valueOf(entity.getFase());
+                Jugador ganadorGuardado = null;
+                if (entity.getGanadorId() != null) {
+                    ganadorGuardado = listaPlana.stream()
+                        .filter(j -> j.id().equals(entity.getGanadorId()))
+                        .findFirst().orElse(null);
+                }
+
+                estado.restaurarEstado(faseGuardada, ganadorGuardado, puntajesGuardados, gruposGuardados);
+
             } catch (Exception e) {
                 System.err.println("Error leyendo estado desde JSON: " + e.getMessage());
             }
@@ -100,9 +120,8 @@ public class MatchPersistenceMapper {
         Partida partida = new Partida(entity.getId(), TipoModalidad.valueOf(entity.getModalidad()), 
             listaPlana, estado, entity.getFechaCreacion(), formatoGuardado);
         
-        if (FasePartida.valueOf(entity.getFase()) == FasePartida.EN_CURSO) {
-            partida.iniciar();
-        }
+        // NO llamamos a partida.iniciar() aquí porque la fase ya está restaurada en el estado.
+        
         return partida;
     }
 
