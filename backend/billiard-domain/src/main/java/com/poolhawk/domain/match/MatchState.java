@@ -90,6 +90,28 @@ public class MatchState {
     public boolean estaTerminada() { return fase.esTerminal(); }
     public boolean estaActiva() { return fase.estaActiva(); }
 
+    /**
+     * Retorna el compañero de equipo de un jugador en formato Parejas.
+     * Si el jugador no tiene compañero (individual), retorna el mismo jugador.
+     */
+    public Jugador getCompanero(Jugador jugador) {
+        List<Jugador> jugadores = turnos.jugadores();
+        int indice = jugadores.indexOf(jugador);
+        
+        if (indice == -1) return jugador;
+        
+        // Si hay 4 jugadores, asumimos que A=[0,2] y B=[1,3].
+        // Si el índice es 0, el compañero es 2. Si es 2, es 0.
+        // Si es 1, es 3. Si es 3, es 1.
+        if (jugadores.size() == 4) {
+            int indiceCompanero = (indice % 2 == 0) ? (indice + 2) % 4 : (indice - 1);
+            return jugadores.get(indiceCompanero);
+        }
+        
+        // En individual o 1v1, no hay compañero
+        return jugador;
+    }
+
     public boolean quedanBolasDeGrupo(Grupo grupo) {
         if (!grupo.estaAsignado()) {
             throw new IllegalArgumentException("El grupo debe estar asignado (LISAS o RAYADAS)");
@@ -179,14 +201,7 @@ public class MatchState {
     }
 
     /**
-     * Aplica un resultado de tiro al estado: registra el evento, 
-     * actualiza las bolas en la mesa, suma puntos y avanza turno.
-     * 
-     * <p>Si el tiro fue una falta, las bolas embolsadas no se retiran 
-     * de la mesa (se devuelven), respetando las reglas oficiales.</p>
-     * 
-     * @param evento   evento registrado
-     * @param resultado veredicto del motor de reglas
+     * Aplica un resultado de tiro al estado.
      */
     public void aplicarTiro(TiroEvent evento, ResultadoTiro resultado) {
         Objects.requireNonNull(evento, "El evento no puede ser nulo");
@@ -198,10 +213,8 @@ public class MatchState {
 
         registrarTiro(evento);
 
-        // LOGICA CLAVE: Retirar las bolas embolsadas de la mesa (si no fue falta)
         if (!resultado.esFalta()) {
             for (Bola bola : evento.bolasEmbolsadas()) {
-                // Solo intentamos embolsar si la bola sigue en la mesa para evitar excepciones
                 if (bola.enMesa()) {
                     mesa.embolsarBola(bola.numero());
                 }
@@ -214,6 +227,25 @@ public class MatchState {
 
         if (resultado.cambiaTurno()) {
             avanzarTurno();
+        }
+    }
+
+    /**
+     * Restaura el estado de una partida desde persistencia.
+     * Esto es usado por el MatchPersistenceMapper.
+     */
+    public void restaurarEstado(FasePartida faseGuardada, Jugador ganadorGuardado, Map<Jugador, Integer> puntajesGuardados, Map<Jugador, Grupo> gruposGuardados, List<TiroEvent> historialGuardado) {
+        this.fase = faseGuardada;
+        this.ganador = ganadorGuardado;
+        
+        if (puntajesGuardados != null) {
+            this.puntajes.putAll(puntajesGuardados);
+        }
+        if (gruposGuardados != null) {
+            this.gruposAsignados.putAll(gruposGuardados);
+        }
+        if (historialGuardado != null) {
+            this.historial.addAll(historialGuardado);
         }
     }
 

@@ -15,10 +15,6 @@ import java.util.Objects;
 
 /**
  * Reglas de la modalidad Bola 8.
- * 
- * <p>Se encarga de validar que se toque la bola correcta, que no se
- * embolse la blanca y de asignar los grupos (Lisas/Rayadas) en el
- * primer tiro legal.</p>
  */
 public class ReglasBola8 extends AbstractReglasBillar {
 
@@ -39,36 +35,24 @@ public class ReglasBola8 extends AbstractReglasBillar {
         Jugador jugador = tiro.jugador();
         Grupo grupoJugador = estado.grupoDe(jugador);
 
-        // 1. ¿Tocó alguna bola?
         if (!tiro.tocoAlgunaBola()) {
             return ResultadoTiro.falta(FaltaMotivo.NO_TOCAR_BOLA);
         }
-
-        // 2. ¿Embolsó la blanca?
         if (tiro.embolsoLaBlanca()) {
             return ResultadoTiro.falta(FaltaMotivo.BLANCA_EMBOLSADA);
         }
-
-        // 3. ¿Tocó primero una bola legal? (AHORA ESTO VA ANTES DE LA BOLA 8)
         if (!esPrimerContactoLegal(tiro, grupoJugador)) {
             return ResultadoTiro.falta(FaltaMotivo.BOLA_EQUIVOCADA);
         }
-
-        // 4. ¿Embolsó la bola 8?
-        //    (Si llegamos aquí, el primer contacto fue legal)
         if (tiro.embolsoLaOcho()) {
             if (!grupoLimpio(estado, jugador)) {
                 return ResultadoTiro.falta(FaltaMotivo.BOLA_8_ANTES_DE_TIEMPO);
             }
             return ResultadoTiro.victoria(0);
         }
-
-        // 5. Asignación de grupo si aún no tenía
         if (!grupoJugador.estaAsignado()) {
             asignarGrupoSiCorresponde(estado, tiro);
         }
-
-        // 6. Tiro legal
         if (tiro.embolsoAlgunaBola()) {
             return construirResultadoLegalSigueTirando(tiro);
         }
@@ -80,10 +64,8 @@ public class ReglasBola8 extends AbstractReglasBillar {
         if (tocada == null) return false;
 
         if (!grupoJugador.estaAsignado()) {
-            // Si no tiene grupo, puede tocar cualquier bola menos la 8 o la blanca
             return !tocada.esOcho() && !tocada.esBlanca();
         }
-        // Si tiene grupo, debe tocar una de su grupo
         return tocada.tipo() == grupoJugador.getTipoBolaAsociado();
     }
 
@@ -106,12 +88,12 @@ public class ReglasBola8 extends AbstractReglasBillar {
         if (grupoDetectado == null) return;
 
         Jugador jugador = tiro.jugador();
-        Jugador oponente = estado.getTurnos().turnoSiguiente();
+        Jugador companero = estado.getCompanero(jugador); // <-- USAMOS EL COMPAÑERO
 
         // Validamos que ninguno tenga grupo asignado antes de asignar
-        if (!estado.grupoDe(jugador).estaAsignado() && !estado.grupoDe(oponente).estaAsignado()) {
+        if (!estado.grupoDe(jugador).estaAsignado() && !estado.grupoDe(companero).estaAsignado()) {
             estado.asignarGrupo(jugador, grupoDetectado);
-            estado.asignarGrupo(oponente, grupoDetectado.opuesto());
+            estado.asignarGrupo(companero, grupoDetectado);
         }
     }
 
