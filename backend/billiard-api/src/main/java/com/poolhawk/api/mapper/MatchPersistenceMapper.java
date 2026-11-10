@@ -24,7 +24,6 @@ public class MatchPersistenceMapper {
     }
 
     public Partida toDomain(PartidaEntity entity) {
-        // 1. Reconstruir lista de jugadores
         List<Jugador> jugadoresA = entity.getJugadores().stream()
             .filter(j -> "A".equals(j.getEquipo()))
             .map(j -> new Jugador(j.getId(), j.getNombre()))
@@ -48,7 +47,6 @@ public class MatchPersistenceMapper {
             listaPlana.addAll(jugadoresB);
         }
 
-        // 2. Reconstruir la mesa
         Mesa mesa = new Mesa();
         if (entity.getEstadoMesaJson() != null && !entity.getEstadoMesaJson().isEmpty()) {
             try {
@@ -61,16 +59,12 @@ public class MatchPersistenceMapper {
             }
         }
 
-        // 3. Reconstruir el estado (turnos, puntajes, grupos)
         MatchState estado = new MatchState(entity.getId(), TipoModalidad.valueOf(entity.getModalidad()), 
             new Turnos<>(listaPlana), mesa, entity.getFechaCreacion());
 
         if (entity.getEstadoPartidaJson() != null && !entity.getEstadoPartidaJson().isEmpty()) {
             try {
-                // Leemos el snapshot como un Map genérico
                 Map<String, Object> snapshot = jsonMapper.readValue(entity.getEstadoPartidaJson(), Map.class);
-                
-                // Restaurar puntajes (por ID de jugador)
                 if (snapshot.containsKey("puntajes")) {
                     Map<String, Integer> puntajesMap = (Map<String, Integer>) snapshot.get("puntajes");
                     for (Jugador j : listaPlana) {
@@ -79,8 +73,6 @@ public class MatchPersistenceMapper {
                         }
                     }
                 }
-
-                // Restaurar grupos (por ID de jugador)
                 if (snapshot.containsKey("grupos")) {
                     Map<String, String> gruposMap = (Map<String, String>) snapshot.get("grupos");
                     for (Jugador j : listaPlana) {
@@ -89,24 +81,18 @@ public class MatchPersistenceMapper {
                         }
                     }
                 }
-
-                // Restaurar turno actual
                 if (snapshot.containsKey("turnoActualId")) {
                     String turnoId = (String) snapshot.get("turnoActualId");
-                    // Avanzamos el turno hasta que coincida con el guardado
-                    // (Es un parche, pero funciona para el MVP)
                     for (int i = 0; i < listaPlana.size(); i++) {
                         if (estado.jugadorActual().id().equals(turnoId)) break;
                         estado.avanzarTurno();
                     }
                 }
-
             } catch (Exception e) {
-                System.err.println("Error leyendo estado de partida desde JSON: " + e.getMessage());
+                System.err.println("Error leyendo estado desde JSON: " + e.getMessage());
             }
         }
 
-        // 4. Reconstruir la Partida
         FormatoJuego formatoGuardado = entity.getFormato() != null 
             ? FormatoJuego.valueOf(entity.getFormato()) 
             : (listaPlana.size() == 4 ? FormatoJuego.PAREJAS : FormatoJuego.INDIVIDUAL);
@@ -130,12 +116,9 @@ public class MatchPersistenceMapper {
         entity.setFormato(partida.getFormato().name());
 
         try {
-            // Guardar mesa
             entity.setEstadoMesaJson(jsonMapper.writeValueAsString(partida.getMesa().getBolas()));
 
-            // Guardar snapshot del estado
             Map<String, Object> snapshot = new HashMap<>();
-            
             Map<String, Integer> puntajes = new HashMap<>();
             partida.getEstado().getPuntajes().forEach((j, p) -> puntajes.put(j.id(), p));
             snapshot.put("puntajes", puntajes);

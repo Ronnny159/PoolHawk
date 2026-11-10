@@ -133,8 +133,6 @@ public class MatchService {
             }
 
             return resultado;
-            // ELIMINADO: El finally que hacía locksPorPartida.remove(partidaId)
-            // Ahora los locks viven en memoria para evitar condiciones de carrera.
         }
     }
 
