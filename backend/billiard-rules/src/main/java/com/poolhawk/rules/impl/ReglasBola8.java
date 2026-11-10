@@ -49,17 +49,18 @@ public class ReglasBola8 extends AbstractReglasBillar {
             return ResultadoTiro.falta(FaltaMotivo.BLANCA_EMBOLSADA);
         }
 
-        // 3. ¿Embolsó la bola 8?
+        // 3. ¿Tocó primero una bola legal? (AHORA ESTO VA ANTES DE LA BOLA 8)
+        if (!esPrimerContactoLegal(tiro, grupoJugador)) {
+            return ResultadoTiro.falta(FaltaMotivo.BOLA_EQUIVOCADA);
+        }
+
+        // 4. ¿Embolsó la bola 8?
+        //    (Si llegamos aquí, el primer contacto fue legal)
         if (tiro.embolsoLaOcho()) {
             if (!grupoLimpio(estado, jugador)) {
                 return ResultadoTiro.falta(FaltaMotivo.BOLA_8_ANTES_DE_TIEMPO);
             }
             return ResultadoTiro.victoria(0);
-        }
-
-        // 4. ¿Tocó primero una bola legal?
-        if (!esPrimerContactoLegal(tiro, grupoJugador)) {
-            return ResultadoTiro.falta(FaltaMotivo.BOLA_EQUIVOCADA);
         }
 
         // 5. Asignación de grupo si aún no tenía
@@ -79,8 +80,10 @@ public class ReglasBola8 extends AbstractReglasBillar {
         if (tocada == null) return false;
 
         if (!grupoJugador.estaAsignado()) {
+            // Si no tiene grupo, puede tocar cualquier bola menos la 8 o la blanca
             return !tocada.esOcho() && !tocada.esBlanca();
         }
+        // Si tiene grupo, debe tocar una de su grupo
         return tocada.tipo() == grupoJugador.getTipoBolaAsociado();
     }
 
