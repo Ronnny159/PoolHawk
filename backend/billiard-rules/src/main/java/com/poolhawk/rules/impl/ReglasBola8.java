@@ -41,7 +41,7 @@ public class ReglasBola8 extends AbstractReglasBillar {
         if (tiro.embolsoLaBlanca()) {
             return ResultadoTiro.falta(FaltaMotivo.BLANCA_EMBOLSADA);
         }
-        if (!esPrimerContactoLegal(tiro, grupoJugador)) {
+        if (!esPrimerContactoLegal(estado, tiro, jugador, grupoJugador)) {
             return ResultadoTiro.falta(FaltaMotivo.BOLA_EQUIVOCADA);
         }
         if (tiro.embolsoLaOcho()) {
@@ -59,13 +59,19 @@ public class ReglasBola8 extends AbstractReglasBillar {
         return ResultadoTiro.tiroLegalSinPuntos(true);
     }
 
-    private boolean esPrimerContactoLegal(TiroEvent tiro, Grupo grupoJugador) {
+    private boolean esPrimerContactoLegal(MatchState estado, TiroEvent tiro, Jugador jugador, Grupo grupoJugador) {
         Bola tocada = tiro.primeraBolaTocada();
-        if (tocada == null) return false;
+        if (tocada == null || tocada.esBlanca()) return false;
 
         if (!grupoJugador.estaAsignado()) {
-            return !tocada.esOcho() && !tocada.esBlanca();
+            return !tocada.esOcho();
         }
+
+        // Si el grupo está limpio, la bola 8 es un primer contacto legal
+        if (grupoLimpio(estado, jugador)) {
+            return true;
+        }
+
         return tocada.tipo() == grupoJugador.getTipoBolaAsociado();
     }
 
@@ -90,9 +96,17 @@ public class ReglasBola8 extends AbstractReglasBillar {
         Jugador jugador = tiro.jugador();
         Jugador companero = estado.getCompanero(jugador);
 
-        if (!estado.grupoDe(jugador).estaAsignado() && !estado.grupoDe(companero).estaAsignado()) {
+        if (companero.equals(jugador)) {
+            // Bola 8 individual: el oponente es el siguiente en el turno
+            Jugador oponente = estado.getTurnos().turnoSiguiente();
             estado.asignarGrupo(jugador, grupoDetectado);
-            estado.asignarGrupo(companero, grupoDetectado);
+            estado.asignarGrupo(oponente, grupoDetectado.opuesto());
+        } else {
+            // Parejas: ambos reciben el mismo grupo
+            if (!estado.grupoDe(jugador).estaAsignado() && !estado.grupoDe(companero).estaAsignado()) {
+                estado.asignarGrupo(jugador, grupoDetectado);
+                estado.asignarGrupo(companero, grupoDetectado);
+            }
         }
     }
 

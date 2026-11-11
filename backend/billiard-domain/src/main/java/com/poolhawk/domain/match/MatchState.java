@@ -16,13 +16,6 @@ import java.util.Objects;
 
 /**
  * Estado completo de una partida de billar en un momento dado.
- * 
- * <p>Contiene la información de quién juega, los puntajes, los grupos 
- * asignados y las bolas en la mesa. Es un objeto mutable que el motor 
- * de reglas modifica al aplicar cada {@link ResultadoTiro}.</p>
- * 
- * @author PoolHawk Team
- * @since 0.1.0
  */
 public class MatchState {
 
@@ -66,10 +59,7 @@ public class MatchState {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // GETTERS Y CONSULTAS DE ESTADO
-    // ═══════════════════════════════════════════════════════════
-
+    // GETTERS Y CONSULTAS
     public String getPartidaId() { return partidaId; }
     public TipoModalidad getModalidad() { return modalidad; }
     public Turnos<Jugador> getTurnos() { return turnos; }
@@ -92,7 +82,7 @@ public class MatchState {
 
     /**
      * Retorna el compañero de equipo de un jugador en formato Parejas.
-     * Si el jugador no tiene compañero (individual), retorna el mismo jugador.
+     * CONVENCIÓN: A1(0), A2(1), B1(2), B2(3).
      */
     public Jugador getCompanero(Jugador jugador) {
         List<Jugador> jugadores = turnos.jugadores();
@@ -100,16 +90,14 @@ public class MatchState {
         
         if (indice == -1) return jugador;
         
-        // Si hay 4 jugadores, asumimos que A=[0,2] y B=[1,3].
-        // Si el índice es 0, el compañero es 2. Si es 2, es 0.
-        // Si es 1, es 3. Si es 3, es 1.
         if (jugadores.size() == 4) {
-            int indiceCompanero = (indice % 2 == 0) ? (indice + 2) % 4 : (indice - 1);
-            return jugadores.get(indiceCompanero);
+            if (indice == 0) return jugadores.get(1); // A1 -> A2
+            if (indice == 1) return jugadores.get(0); // A2 -> A1
+            if (indice == 2) return jugadores.get(3); // B1 -> B2
+            if (indice == 3) return jugadores.get(2); // B2 -> B1
         }
         
-        // En individual o 1v1, no hay compañero
-        return jugador;
+        return jugador; // Individual: es su propio compañero
     }
 
     public boolean quedanBolasDeGrupo(Grupo grupo) {
@@ -125,10 +113,7 @@ public class MatchState {
         return !quedanBolasDeGrupo(grupo);
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // MODIFICACIÓN DE ESTADO (TRANSICIONES)
-    // ═══════════════════════════════════════════════════════════
-
+    // MODIFICACIÓN DE ESTADO
     public void iniciar() {
         if (fase != FasePartida.CREADA) {
             throw new IllegalStateException("Solo se puede iniciar una partida en fase CREADA. Fase actual: " + fase);
@@ -200,9 +185,6 @@ public class MatchState {
         historial.add(evento);
     }
 
-    /**
-     * Aplica un resultado de tiro al estado.
-     */
     public void aplicarTiro(TiroEvent evento, ResultadoTiro resultado) {
         Objects.requireNonNull(evento, "El evento no puede ser nulo");
         Objects.requireNonNull(resultado, "El resultado no puede ser nulo");
@@ -230,10 +212,6 @@ public class MatchState {
         }
     }
 
-    /**
-     * Restaura el estado de una partida desde persistencia.
-     * Esto es usado por el MatchPersistenceMapper.
-     */
     public void restaurarEstado(FasePartida faseGuardada, Jugador ganadorGuardado, Map<Jugador, Integer> puntajesGuardados, Map<Jugador, Grupo> gruposGuardados) {
         this.fase = faseGuardada;
         this.ganador = ganadorGuardado;

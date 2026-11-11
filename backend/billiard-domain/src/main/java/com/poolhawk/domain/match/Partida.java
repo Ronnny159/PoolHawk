@@ -13,7 +13,6 @@ import java.util.Objects;
 
 /**
  * Entidad de dominio que representa una partida de billar.
- * Contiene la lógica para gestionar los equipos, el estado y el formato de juego.
  */
 public class Partida {
 
@@ -25,7 +24,6 @@ public class Partida {
     private final MatchState estado;
     private final FormatoJuego formato;
 
-    // Constructor original (por si acaso se usa en tests)
     public Partida(String id, TipoModalidad modalidad, Equipo equipoA, Equipo equipoB, Mesa mesa, Instant fechaCreacion) {
         Objects.requireNonNull(id, "El id de la partida no puede ser nulo");
         Objects.requireNonNull(modalidad, "La modalidad no puede ser nula");
@@ -45,7 +43,6 @@ public class Partida {
         this.equipoA = equipoA;
         this.equipoB = equipoB;
         this.fechaCreacion = fechaCreacion;
-        // Inferimos el formato en el constructor antiguo
         this.formato = (equipoA.cantidadJugadores() == 2) ? FormatoJuego.PAREJAS : FormatoJuego.INDIVIDUAL;
 
         List<Jugador> jugadores = new ArrayList<>(equipoA.getJugadores());
@@ -56,7 +53,7 @@ public class Partida {
     }
 
     /**
-     * Constructor dinámico corregido con soporte para FormatoJuego.
+     * Constructor dinámico con convención A1, A2, B1, B2.
      */
     public Partida(String id, TipoModalidad modalidad, List<Jugador> jugadores, MatchState estado, Instant fechaCreacion, FormatoJuego formato) {
         this.id = id;
@@ -70,9 +67,9 @@ public class Partida {
             this.equipoA = Equipo.individual("eA-" + id, jugadores.get(0).nombre(), jugadores.get(0));
             this.equipoB = Equipo.individual("eB-" + id, jugadores.get(1).nombre(), jugadores.get(1));
         } else if (jugadores.size() == 4) {
-            // 2 vs 2 (Asumimos que el frontend envía A1, B1, A2, B2)
-            this.equipoA = Equipo.pareja("eA-" + id, jugadores.get(0).nombre() + " & " + jugadores.get(2).nombre(), jugadores.get(0), jugadores.get(2));
-            this.equipoB = Equipo.pareja("eB-" + id, jugadores.get(1).nombre() + " & " + jugadores.get(3).nombre(), jugadores.get(1), jugadores.get(3));
+            // CONVENCIÓN UNIFICADA: A1(0), A2(1), B1(2), B2(3)
+            this.equipoA = Equipo.pareja("eA-" + id, jugadores.get(0).nombre() + " & " + jugadores.get(1).nombre(), jugadores.get(0), jugadores.get(1));
+            this.equipoB = Equipo.pareja("eB-" + id, jugadores.get(2).nombre() + " & " + jugadores.get(3).nombre(), jugadores.get(2), jugadores.get(3));
         } else {
             // Fallback
             this.equipoA = Equipo.individual("eA-" + id, jugadores.get(0).nombre(), jugadores.get(0));
@@ -106,7 +103,7 @@ public class Partida {
         return new Partida(id, TipoModalidad.POR_PUNTOS, eqA, eqB, mesa, Instant.now());
     }
 
-    // --- GETTERS RESTAURADOS ---
+    // --- GETTERS ---
     public String getId() { return id; }
     public TipoModalidad getModalidad() { return modalidad; }
     public Equipo getEquipoA() { return equipoA; }
@@ -119,7 +116,7 @@ public class Partida {
     public Mesa getMesa() { return estado.getMesa(); }
     public FormatoJuego getFormato() { return formato; }
 
-    // --- MÉTODOS DELEGADOS AL ESTADO ---
+    // --- MÉTODOS DELEGADOS ---
     public void iniciar() { estado.iniciar(); }
     public void pausar() { estado.pausar(); }
     public void reanudar() { estado.reanudar(); }

@@ -44,10 +44,8 @@ public class ReglasPorPuntos extends AbstractReglasBillar {
         }
 
         int puntosDelTiro = calcularPuntos(tiro);
-
-        int puntajeActualJugador = estado.puntajeDe(jugador);
-        int puntajeCompanero = estado.puntajeDe(estado.getCompanero(jugador));
-        int puntajeNuevo = puntajeActualJugador + puntajeCompanero + puntosDelTiro;
+        int puntajeEquipo = calcularPuntajeEquipo(estado, jugador);
+        int puntajeNuevo = puntajeEquipo + puntosDelTiro;
 
         if (puntajeNuevo >= config.puntajeObjetivo()) {
             return ResultadoTiro.victoria(puntosDelTiro);
@@ -57,6 +55,23 @@ public class ReglasPorPuntos extends AbstractReglasBillar {
             return ResultadoTiro.tiroLegalConPuntos(puntosDelTiro);
         }
         return ResultadoTiro.tiroLegalSinPuntos(true);
+    }
+
+    /**
+     * Calcula el puntaje del equipo.
+     * En individual (compañero == jugador), retorna solo el puntaje del jugador.
+     * En parejas, suma el puntaje del jugador y su compañero.
+     */
+    private int calcularPuntajeEquipo(MatchState estado, Jugador jugador) {
+        Jugador companero = estado.getCompanero(jugador);
+        
+        if (companero.equals(jugador)) {
+            // Individual: no duplicar
+            return estado.puntajeDe(jugador);
+        }
+        
+        // Parejas: sumar ambos
+        return estado.puntajeDe(jugador) + estado.puntajeDe(companero);
     }
 
     private boolean esContactoIlegalConOcho(MatchState estado, TiroEvent tiro) {
@@ -81,16 +96,16 @@ public class ReglasPorPuntos extends AbstractReglasBillar {
     @Override
     public boolean partidaTerminada(MatchState estado) {
         Objects.requireNonNull(estado, "El estado no puede ser nulo");
+        // Verificar si algún equipo alcanzó el objetivo
         return estado.getPuntajes().keySet().stream()
-            .anyMatch(j -> (estado.puntajeDe(j) + estado.puntajeDe(estado.getCompanero(j))) >= config.puntajeObjetivo());
+            .anyMatch(j -> calcularPuntajeEquipo(estado, j) >= config.puntajeObjetivo());
     }
 
     @Override
     public Jugador determinarGanador(MatchState estado) {
         Objects.requireNonNull(estado, "El estado no puede ser nulo");
-        return estado.getPuntajes().entrySet().stream()
-            .filter(e -> (e.getValue() + estado.puntajeDe(estado.getCompanero(e.getKey()))) >= config.puntajeObjetivo())
-            .map(java.util.Map.Entry::getKey)
+        return estado.getPuntajes().keySet().stream()
+            .filter(j -> calcularPuntajeEquipo(estado, j) >= config.puntajeObjetivo())
             .findFirst()
             .orElse(null);
     }
