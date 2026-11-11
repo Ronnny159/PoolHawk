@@ -51,6 +51,7 @@ public class MatchService {
         this.jsonMapper = jsonMapper;
     }
 
+    @Transactional
     public Partida crear(CrearPartidaRequest request) {
         if (request.modalidad() == null || request.formato() == null || request.jugadores() == null) {
             throw new IllegalArgumentException("Configuración incompleta.");
@@ -72,8 +73,12 @@ public class MatchService {
         String id = UUID.randomUUID().toString();
         Partida partida = matchFactory.crearDesdeRequest(id, request);
         
+        // 1. Guardar primero en BD
+        PartidaEntity entity = persistenceMapper.toEntity(partida);
+        storage.guardar(entity);
+        
+        // 2. Si todo sale bien, guardar en memoria
         partidasEnMemoria.put(id, partida);
-        storage.guardar(persistenceMapper.toEntity(partida));
         
         return partida;
     }
@@ -123,7 +128,15 @@ public class MatchService {
                 partida.finalizar(evento.jugador());
             }
             
-            storage.guardar(persistenceMapper.toEntity(partida));
+            // Obtenemos la entidad existente para copiar la versión
+            PartidaEntity entityExistente = storage.buscar(partidaId).orElse(null);
+            PartidaEntity entityNueva = persistenceMapper.toEntity(partida);
+            
+            if (entityExistente != null) {
+                entityNueva.setVersion(entityExistente.getVersion()); // COPIAMOS LA VERSIÓN
+            }
+            
+            storage.guardar(entityNueva);
 
             try {
                 String json = jsonMapper.writeValueAsString(responseMapper.toResponse(partida));

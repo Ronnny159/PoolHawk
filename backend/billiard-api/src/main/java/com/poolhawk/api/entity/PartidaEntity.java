@@ -4,10 +4,6 @@ import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.List;
 
-/**
- * Entidad JPA que representa una partida en la base de datos.
- * Incluye control de concurrencia optimista mediante @Version.
- */
 @Entity
 @Table(name = "partidas")
 public class PartidaEntity {
@@ -25,11 +21,12 @@ public class PartidaEntity {
     @Column(name = "estado_mesa_json", columnDefinition = "TEXT", length = 10000)
     private String estadoMesaJson;
 
-    // Control de concurrencia optimista
     @Version
     private Long version;
 
+    // AGREGADO: @OrderColumn para garantizar el orden A1, B1, A2, B2
     @OneToMany(mappedBy = "partida", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @OrderColumn(name = "orden")
     private List<JugadorEntity> jugadores;
 
     // Getters y Setters
