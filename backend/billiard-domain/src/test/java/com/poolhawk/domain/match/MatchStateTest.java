@@ -3,6 +3,7 @@ package com.poolhawk.domain.match;
 import com.poolhawk.domain.event.FaltaMotivo;
 import com.poolhawk.domain.event.ResultadoTiro;
 import com.poolhawk.domain.event.TiroEvent;
+import com.poolhawk.domain.player.Equipo;
 import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.Bola;
 import com.poolhawk.domain.table.Coordenada;
@@ -19,12 +20,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Pruebas unitarias de {@link MatchState}.
- *
- * @author PoolHawk Team
- * @since 0.1.0
- */
 @DisplayName("MatchState - estado de una partida")
 class MatchStateTest {
 
@@ -34,19 +29,24 @@ class MatchStateTest {
     private static final Jugador ANA = new Jugador("j1", "Ana");
     private static final Jugador BETO = new Jugador("j2", "Beto");
 
-    private Turnos turnos;
+    private Turnos<Jugador> turnos;
+    private Equipo equipoA;
+    private Equipo equipoB;
     private Mesa mesa;
     private MatchState state;
 
     @BeforeEach
     void setUp() {
-        turnos = new Turnos(List.of(ANA, BETO));
+        turnos = new Turnos<>(List.of(ANA, BETO));
+        equipoA = Equipo.individual("eA", ANA.nombre(), ANA);
+        equipoB = Equipo.individual("eB", BETO.nombre(), BETO);
+        
         mesa = new Mesa();
-        // Colocar la blanca y algunas bolas en la mesa
         mesa.agregarBola(Bola.crear(0, new Coordenada(50, 50)));
         mesa.agregarBola(Bola.crear(1, new Coordenada(60, 60)));
         mesa.agregarBola(Bola.crear(8, new Coordenada(70, 70)));
-        state = new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, turnos, mesa, FECHA);
+        
+        state = new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, equipoA, equipoB, turnos, mesa, FECHA);
     }
 
     private TiroEvent tiroDe(Jugador jugador) {
@@ -94,42 +94,56 @@ class MatchStateTest {
         @DisplayName("Rechaza partidaId nulo")
         void rechazaIdNulo() {
             assertThrows(NullPointerException.class,
-                () -> new MatchState(null, TipoModalidad.BOLA_8, turnos, mesa, FECHA));
+                () -> new MatchState(null, TipoModalidad.BOLA_8, equipoA, equipoB, turnos, mesa, FECHA));
         }
 
         @Test
         @DisplayName("Rechaza partidaId en blanco")
         void rechazaIdBlanco() {
             assertThrows(IllegalArgumentException.class,
-                () -> new MatchState("", TipoModalidad.BOLA_8, turnos, mesa, FECHA));
+                () -> new MatchState("", TipoModalidad.BOLA_8, equipoA, equipoB, turnos, mesa, FECHA));
         }
 
         @Test
         @DisplayName("Rechaza modalidad nula")
         void rechazaModalidadNula() {
             assertThrows(NullPointerException.class,
-                () -> new MatchState(PARTIDA_ID, null, turnos, mesa, FECHA));
+                () -> new MatchState(PARTIDA_ID, null, equipoA, equipoB, turnos, mesa, FECHA));
+        }
+
+        @Test
+        @DisplayName("Rechaza equipoA nulo")
+        void rechazaEquipoANulo() {
+            assertThrows(NullPointerException.class,
+                () -> new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, null, equipoB, turnos, mesa, FECHA));
+        }
+
+        @Test
+        @DisplayName("Rechaza equipoB nulo")
+        void rechazaEquipoBNulo() {
+            assertThrows(NullPointerException.class,
+                () -> new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, equipoA, null, turnos, mesa, FECHA));
         }
 
         @Test
         @DisplayName("Rechaza turnos nulos")
         void rechazaTurnosNulos() {
             assertThrows(NullPointerException.class,
-                () -> new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, null, mesa, FECHA));
+                () -> new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, equipoA, equipoB, null, mesa, FECHA));
         }
 
         @Test
         @DisplayName("Rechaza mesa nula")
         void rechazaMesaNula() {
             assertThrows(NullPointerException.class,
-                () -> new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, turnos, null, FECHA));
+                () -> new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, equipoA, equipoB, turnos, null, FECHA));
         }
 
         @Test
         @DisplayName("Rechaza fechaInicio nula")
         void rechazaFechaNula() {
             assertThrows(NullPointerException.class,
-                () -> new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, turnos, mesa, null));
+                () -> new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, equipoA, equipoB, turnos, mesa, null));
         }
     }
 
@@ -395,7 +409,7 @@ class MatchStateTest {
             state.aplicarTiro(evento, resultado);
 
             assertEquals(3, state.puntajeDe(ANA));
-            assertEquals(ANA, state.jugadorActual()); // no cambió
+            assertEquals(ANA, state.jugadorActual());
             assertEquals(1, state.cantidadTiros());
         }
 
@@ -408,7 +422,7 @@ class MatchStateTest {
             state.aplicarTiro(evento, resultado);
 
             assertEquals(0, state.puntajeDe(ANA));
-            assertEquals(BETO, state.jugadorActual()); // cambió
+            assertEquals(BETO, state.jugadorActual());
         }
 
         @Test
@@ -439,7 +453,7 @@ class MatchStateTest {
         @Test
         @DisplayName("Aplicar tiro sin partida activa lanza excepción")
         void aplicarSinActiva() {
-            state.pausar(); // no está activa
+            state.pausar();
             TiroEvent evento = tiroDe(ANA);
             ResultadoTiro resultado = ResultadoTiro.tiroLegalConPuntos(3);
 
@@ -498,7 +512,6 @@ class MatchStateTest {
         @Test
         @DisplayName("quedanBolasDeGrupo RAYADAS cuando no hay rayadas")
         void noQuedanRayadas() {
-            // La mesa de prueba solo tiene blanca, lisa y la 8, sin rayadas
             assertFalse(state.quedanBolasDeGrupo(Grupo.RAYADAS));
         }
 
@@ -519,7 +532,6 @@ class MatchStateTest {
         @DisplayName("jugadorLimpioSuGrupo false cuando quedan bolas de su grupo")
         void conBolasDeGrupo() {
             state.asignarGrupo(ANA, Grupo.LISAS);
-            // La mesa tiene bola 1 (lisa), entonces no está limpio
             assertFalse(state.jugadorLimpioSuGrupo(ANA));
         }
     }
@@ -531,10 +543,10 @@ class MatchStateTest {
         @Test
         @DisplayName("Dos MatchState con mismo partidaId son iguales")
         void igualdadPorPartidaId() {
-            Turnos otrosTurnos = new Turnos(List.of(ANA, BETO));
+            Turnos<Jugador> otrosTurnos = new Turnos<>(List.of(ANA, BETO));
             Mesa otraMesa = new Mesa();
             MatchState otro = new MatchState(
-                PARTIDA_ID, TipoModalidad.BOLA_8, otrosTurnos, otraMesa, FECHA);
+                PARTIDA_ID, TipoModalidad.BOLA_8, equipoA, equipoB, otrosTurnos, otraMesa, FECHA);
 
             assertEquals(state, otro);
             assertEquals(state.hashCode(), otro.hashCode());
@@ -543,10 +555,10 @@ class MatchStateTest {
         @Test
         @DisplayName("Dos MatchState con distinto partidaId no son iguales")
         void distintoId() {
-            Turnos otrosTurnos = new Turnos(List.of(ANA, BETO));
+            Turnos<Jugador> otrosTurnos = new Turnos<>(List.of(ANA, BETO));
             Mesa otraMesa = new Mesa();
             MatchState otro = new MatchState(
-                "otra-partida", TipoModalidad.BOLA_8, otrosTurnos, otraMesa, FECHA);
+                "otra-partida", TipoModalidad.BOLA_8, equipoA, equipoB, otrosTurnos, otraMesa, FECHA);
 
             assertNotEquals(state, otro);
         }

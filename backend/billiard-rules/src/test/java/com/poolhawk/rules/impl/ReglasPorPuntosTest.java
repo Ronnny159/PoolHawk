@@ -6,6 +6,7 @@ import com.poolhawk.domain.event.TiroEvent;
 import com.poolhawk.domain.match.MatchState;
 import com.poolhawk.domain.match.TipoModalidad;
 import com.poolhawk.domain.match.Turnos;
+import com.poolhawk.domain.player.Equipo;
 import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.Bola;
 import com.poolhawk.domain.table.Coordenada;
@@ -46,8 +47,12 @@ class ReglasPorPuntosTest {
         for (int i = 1; i <= 15; i++) {
             mesa.agregarBola(Bola.crear(i, new Coordenada(60 + i * 5, 80)));
         }
+        
+        Equipo eqA = Equipo.pareja("eA", "Equipo A", ANA, CARLA);
+        Equipo eqB = Equipo.pareja("eB", "Equipo B", BETO, DIEGO);
         turnos = new Turnos<>(List.of(ANA, BETO, CARLA, DIEGO));
-        estado = new MatchState(PARTIDA_ID, TipoModalidad.POR_PUNTOS, turnos, mesa, FECHA);
+        
+        estado = new MatchState(PARTIDA_ID, TipoModalidad.POR_PUNTOS, eqA, eqB, turnos, mesa, FECHA);
         estado.iniciar();
     }
 
@@ -160,13 +165,11 @@ class ReglasPorPuntosTest {
         void victoria() {
             ReglasPorPuntos reglas50 = new ReglasPorPuntos(ReglasConfig.porDefecto());
 
-            // Simular que Ana ya tiene 49 puntos
             for (int i = 0; i < 49; i++) {
                 estado.sumarPuntos(ANA, 1);
             }
             assertEquals(49, estado.puntajeDe(ANA));
 
-            // Un tiro que le da 1 punto más
             TiroEvent t = tiro(ANA, bola(1), List.of(bola(1)));
             ResultadoTiro r = reglas50.evaluar(estado, t);
             assertTrue(r.esVictoria());
@@ -217,14 +220,11 @@ class ReglasPorPuntosTest {
         @Test
         @DisplayName("Partida terminada cuando un jugador alcanza el objetivo")
         void terminadaConGanador() {
-            // CORREGIDO: Sumamos 25 puntos a ANA (índice 0) y 25 a BETO (índice 1)
-            // para que el equipo A (A1 + A2) llegue a 50
             for (int i = 0; i < 25; i++) {
                 estado.sumarPuntos(ANA, 1);
                 estado.sumarPuntos(BETO, 1);
             }
             assertTrue(reglas.partidaTerminada(estado));
-            // El ganador puede ser ANA o BETO (ambos del equipo A)
             Jugador ganador = reglas.determinarGanador(estado);
             assertTrue(ganador.equals(ANA) || ganador.equals(BETO));
         }
@@ -232,8 +232,6 @@ class ReglasPorPuntosTest {
         @Test
         @DisplayName("Partida terminada cuando el equipo B alcanza el objetivo")
         void terminadaConGanadorEquipoB() {
-            // Sumamos 25 a CARLA (índice 2) y 25 a DIEGO (índice 3)
-            // para que el equipo B (B1 + B2) llegue a 50
             for (int i = 0; i < 25; i++) {
                 estado.sumarPuntos(CARLA, 1);
                 estado.sumarPuntos(DIEGO, 1);
