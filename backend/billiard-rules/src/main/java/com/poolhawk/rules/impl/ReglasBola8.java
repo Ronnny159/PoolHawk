@@ -67,9 +67,8 @@ public class ReglasBola8 extends AbstractReglasBillar {
             return !tocada.esOcho();
         }
 
-        // Si el grupo está limpio, la bola 8 es un primer contacto legal
         if (grupoLimpio(estado, jugador)) {
-            return true;
+            return tocada.esOcho(); // Si el grupo está limpio, SOLO la 8 es legal
         }
 
         return tocada.tipo() == grupoJugador.getTipoBolaAsociado();

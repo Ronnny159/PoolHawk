@@ -35,7 +35,7 @@ class ReglasPorPuntosTest {
 
     private ReglasPorPuntos reglas;
     private Mesa mesa;
-    private Turnos turnos;
+    private Turnos<Jugador> turnos;
     private MatchState estado;
 
     @BeforeEach
@@ -217,13 +217,30 @@ class ReglasPorPuntosTest {
         @Test
         @DisplayName("Partida terminada cuando un jugador alcanza el objetivo")
         void terminadaConGanador() {
-            // Sumamos 50 puntos a Ana (índice 0) y 50 a Carla (índice 2) para que el equipo A llegue a 50
+            // CORREGIDO: Sumamos 25 puntos a ANA (índice 0) y 25 a BETO (índice 1)
+            // para que el equipo A (A1 + A2) llegue a 50
             for (int i = 0; i < 25; i++) {
                 estado.sumarPuntos(ANA, 1);
-                estado.sumarPuntos(CARLA, 1);
+                estado.sumarPuntos(BETO, 1);
             }
             assertTrue(reglas.partidaTerminada(estado));
-            assertEquals(ANA, reglas.determinarGanador(estado));
+            // El ganador puede ser ANA o BETO (ambos del equipo A)
+            Jugador ganador = reglas.determinarGanador(estado);
+            assertTrue(ganador.equals(ANA) || ganador.equals(BETO));
+        }
+
+        @Test
+        @DisplayName("Partida terminada cuando el equipo B alcanza el objetivo")
+        void terminadaConGanadorEquipoB() {
+            // Sumamos 25 a CARLA (índice 2) y 25 a DIEGO (índice 3)
+            // para que el equipo B (B1 + B2) llegue a 50
+            for (int i = 0; i < 25; i++) {
+                estado.sumarPuntos(CARLA, 1);
+                estado.sumarPuntos(DIEGO, 1);
+            }
+            assertTrue(reglas.partidaTerminada(estado));
+            Jugador ganador = reglas.determinarGanador(estado);
+            assertTrue(ganador.equals(CARLA) || ganador.equals(DIEGO));
         }
     }
 
@@ -259,12 +276,10 @@ class ReglasPorPuntosTest {
         @Test
         @DisplayName("Acierta al ganar con puntaje exacto")
         void victoriaConPuntajeExacto() {
-            // Ana tiene 49; un tiro de 1 punto la lleva a 50
             for (int i = 0; i < 49; i++) {
                 estado.sumarPuntos(ANA, 1);
             }
-            // Carla tiene 1 punto para que el equipo tenga 50
-            estado.sumarPuntos(CARLA, 1);
+            estado.sumarPuntos(BETO, 1);
 
             TiroEvent t = tiro(ANA, bola(1), List.of(bola(1)));
             ResultadoTiro r = reglas.evaluar(estado, t);

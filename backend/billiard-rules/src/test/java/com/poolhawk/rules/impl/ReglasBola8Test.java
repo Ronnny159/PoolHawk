@@ -34,7 +34,7 @@ class ReglasBola8Test {
 
     private ReglasBola8 reglas;
     private Mesa mesa;
-    private Turnos turnos;
+    private Turnos<Jugador> turnos;
     private MatchState estado;
 
     @BeforeEach
@@ -152,7 +152,7 @@ class ReglasBola8Test {
         }
 
         @Test
-        @DisplayName("Falta si toca primero la bola 8")
+        @DisplayName("Falta si toca primero la bola 8 (grupo sucio)")
         void tocaOcho() {
             TiroEvent t = tiroSimple(ANA, bola(8));
             ResultadoTiro r = reglas.evaluar(estado, t);
@@ -171,6 +171,7 @@ class ReglasBola8Test {
             estado.asignarGrupo(ANA, Grupo.LISAS);
             estado.asignarGrupo(BETO, Grupo.RAYADAS);
 
+            // Embolsar todas las lisas
             for (int i = 1; i <= 7; i++) {
                 mesa.embolsarBola(i);
             }
@@ -213,7 +214,7 @@ class ReglasBola8Test {
             TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
             ResultadoTiro r = reglas.evaluar(estado, t);
             
-            // Ahora el primer contacto con la 8 es ilegal, por lo que devuelve BOLA_EQUIVOCADA
+            // CORREGIDO: Como el primer contacto es la 8 con grupo sucio, devuelve BOLA_EQUIVOCADA
             assertTrue(r.esFalta());
             assertEquals(FaltaMotivo.BOLA_EQUIVOCADA, r.motivo());
         }
@@ -230,6 +231,15 @@ class ReglasBola8Test {
             reglas.evaluar(estado, t);
             assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(ANA));
             assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(BETO));
+        }
+
+        @Test
+        @DisplayName("Asigna grupo al tirador y opuesto al oponente")
+        void asignaGrupoAlEmbolsar() {
+            TiroEvent t = tiroConEmbolsada(ANA, bola(3), bola(3));
+            reglas.evaluar(estado, t);
+            assertEquals(Grupo.LISAS, estado.grupoDe(ANA));
+            assertEquals(Grupo.RAYADAS, estado.grupoDe(BETO));
         }
     }
 

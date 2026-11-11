@@ -33,19 +33,10 @@ public class MatchPersistenceMapper {
             .map(j -> new Jugador(j.getId(), j.getNombre()))
             .toList();
 
+        // CORREGIDO: Reconstruir como A1, A2, B1, B2 (convención unificada)
         List<Jugador> listaPlana = new ArrayList<>();
-        if (jugadoresA.size() == 2 && jugadoresB.size() == 2) {
-            listaPlana.add(jugadoresA.get(0));
-            listaPlana.add(jugadoresB.get(0));
-            listaPlana.add(jugadoresA.get(1));
-            listaPlana.add(jugadoresB.get(1));
-        } else if (jugadoresA.size() == 1 && jugadoresB.size() == 1) {
-            listaPlana.add(jugadoresA.get(0));
-            listaPlana.add(jugadoresB.get(0));
-        } else {
-            listaPlana.addAll(jugadoresA);
-            listaPlana.addAll(jugadoresB);
-        }
+        listaPlana.addAll(jugadoresA);
+        listaPlana.addAll(jugadoresB);
 
         Mesa mesa = new Mesa();
         if (entity.getEstadoMesaJson() != null && !entity.getEstadoMesaJson().isEmpty()) {
@@ -67,7 +58,6 @@ public class MatchPersistenceMapper {
             try {
                 Map<String, Object> snapshot = jsonMapper.readValue(entity.getEstadoPartidaJson(), Map.class);
 
-                // Restaurar puntajes y grupos
                 Map<Jugador, Integer> puntajesGuardados = new HashMap<>();
                 if (snapshot.containsKey("puntajes")) {
                     Map<String, Integer> puntajesMap = (Map<String, Integer>) snapshot.get("puntajes");
@@ -88,7 +78,6 @@ public class MatchPersistenceMapper {
                     }
                 }
 
-                // Restaurar turno actual
                 if (snapshot.containsKey("turnoActualId")) {
                     String turnoId = (String) snapshot.get("turnoActualId");
                     for (int i = 0; i < listaPlana.size(); i++) {
@@ -97,7 +86,6 @@ public class MatchPersistenceMapper {
                     }
                 }
 
-                // Restaurar fase y ganador
                 FasePartida faseGuardada = FasePartida.valueOf(entity.getFase());
                 Jugador ganadorGuardado = null;
                 if (entity.getGanadorId() != null) {
@@ -119,8 +107,6 @@ public class MatchPersistenceMapper {
 
         Partida partida = new Partida(entity.getId(), TipoModalidad.valueOf(entity.getModalidad()), 
             listaPlana, estado, entity.getFechaCreacion(), formatoGuardado);
-        
-        // NO llamamos a partida.iniciar() aquí porque la fase ya está restaurada en el estado.
         
         return partida;
     }
