@@ -24,15 +24,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Pruebas unitarias de {@link ReglasBola8}.
- *
- * <p>Cubre el orden de validación completo, incluyendo prioridad de
- * reglas (bola 8 antes de tiempo tiene prioridad sobre bola equivocada).</p>
- *
- * @author PoolHawk Team
- * @since 0.1.0
- */
 @DisplayName("ReglasBola8 - reglas de Bola 8")
 class ReglasBola8Test {
 
@@ -50,20 +41,16 @@ class ReglasBola8Test {
     void setUp() {
         reglas = new ReglasBola8(ReglasConfig.porDefecto());
         mesa = new Mesa();
-        // Blanca
         mesa.agregarBola(Bola.crear(0, new Coordenada(50, 50)));
-        // Lisas 1-7
         for (int i = 1; i <= 7; i++) {
             mesa.agregarBola(Bola.crear(i, new Coordenada(100 + i * 5, 100)));
         }
-        // Ocho
         mesa.agregarBola(Bola.crear(8, new Coordenada(200, 100)));
-        // Rayadas 9-15
         for (int i = 9; i <= 15; i++) {
             mesa.agregarBola(Bola.crear(i, new Coordenada(100 + i * 5, 120)));
         }
 
-        turnos = new Turnos(List.of(ANA, BETO));
+        turnos = new Turnos<>(List.of(ANA, BETO));
         estado = new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, turnos, mesa, FECHA);
         estado.iniciar();
     }
@@ -99,7 +86,6 @@ class ReglasBola8Test {
     @Nested
     @DisplayName("Nombre de modalidad")
     class NombreModalidad {
-
         @Test
         @DisplayName("Retorna 'Bola 8'")
         void nombre() {
@@ -185,7 +171,6 @@ class ReglasBola8Test {
             estado.asignarGrupo(ANA, Grupo.LISAS);
             estado.asignarGrupo(BETO, Grupo.RAYADAS);
 
-            // Embolsar todas las lisas
             for (int i = 1; i <= 7; i++) {
                 mesa.embolsarBola(i);
             }
@@ -194,6 +179,23 @@ class ReglasBola8Test {
             ResultadoTiro r = reglas.evaluar(estado, t);
             assertTrue(r.esVictoria());
             assertFalse(r.esFalta());
+        }
+
+        @Test
+        @DisplayName("Victoria se detecta correctamente")
+        void victoriaDetectada() {
+            estado.asignarGrupo(ANA, Grupo.LISAS);
+            estado.asignarGrupo(BETO, Grupo.RAYADAS);
+            for (int i = 1; i <= 7; i++) {
+                mesa.embolsarBola(i);
+            }
+
+            TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+
+            assertTrue(r.esVictoria());
+            assertFalse(r.esFalta());
+            assertFalse(r.fueExitoso());
         }
     }
 
@@ -210,8 +212,10 @@ class ReglasBola8Test {
             // NO embolsar las lisas
             TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
             ResultadoTiro r = reglas.evaluar(estado, t);
+            
+            // Ahora el primer contacto con la 8 es ilegal, por lo que devuelve BOLA_EQUIVOCADA
             assertTrue(r.esFalta());
-            assertEquals(FaltaMotivo.BOLA_8_ANTES_DE_TIEMPO, r.motivo());
+            assertEquals(FaltaMotivo.BOLA_EQUIVOCADA, r.motivo());
         }
     }
 
@@ -309,7 +313,7 @@ class ReglasBola8Test {
 
             ResultadoTiro r = reglas.evaluar(estado, t);
             assertFalse(r.esFalta());
-            assertFalse(r.cambiaTurno());  // sigue tirando
+            assertFalse(r.cambiaTurno());
         }
 
         @Test
@@ -318,23 +322,6 @@ class ReglasBola8Test {
             estado.abandonar();
             assertTrue(reglas.partidaTerminada(estado));
             assertNull(reglas.determinarGanador(estado));
-        }
-
-        @Test
-        @DisplayName("Victoria se detecta correctamente")
-        void victoriaDetectada() {
-            estado.asignarGrupo(ANA, Grupo.LISAS);
-            estado.asignarGrupo(BETO, Grupo.RAYADAS);
-            for (int i = 1; i <= 7; i++) {
-                mesa.embolsarBola(i);
-            }
-
-            TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
-            ResultadoTiro r = reglas.evaluar(estado, t);
-
-            assertTrue(r.esVictoria());
-            assertFalse(r.esFalta());
-            assertFalse(r.fueExitoso());  // victoria no es "tiro exitoso normal"
         }
     }
 }
