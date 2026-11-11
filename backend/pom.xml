@@ -90,6 +90,8 @@
                 <version>${failsafe.version}</version>
                 <configuration>
                     <argLine>-Dnet.bytebuddy.experimental=true</argLine>
+                    <!-- CRÍTICO: usar clases compiladas, no el fat JAR repackaged -->
+                    <classesDirectory>${project.build.outputDirectory}</classesDirectory>
                     <includes>
                         <include>**/*IT.java</include>
                     </includes>
