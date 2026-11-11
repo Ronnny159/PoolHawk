@@ -31,12 +31,29 @@ class MatchControllerIT {
     private ObjectMapper objectMapper;
 
     @Test
-    @DisplayName("POST /matches crea una partida de 3 jugadores individuales")
-    void crearPartidaDinamica() throws Exception {
+    @DisplayName("POST /matches rechaza Bola 8 con 3 jugadores (400)")
+    void crearPartidaDinamicaInvalida() throws Exception {
+        // El servicio rechaza Bola 8 con más de 2 jugadores
         CrearPartidaRequest request = new CrearPartidaRequest(
             TipoModalidad.BOLA_8,
             FormatoJuego.INDIVIDUAL,
             List.of("Ana", "Luis", "Pedro"), 
+            null, null
+        );
+
+        mockMvc.perform(post("/api/v1/matches")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest()); // Ahora espera 400, no 201
+    }
+
+    @Test
+    @DisplayName("POST /matches crea una partida válida de Bola 8 (1v1)")
+    void crearPartidaValida() throws Exception {
+        CrearPartidaRequest request = new CrearPartidaRequest(
+            TipoModalidad.BOLA_8,
+            FormatoJuego.INDIVIDUAL,
+            List.of("Ana", "Luis"), 
             null, null
         );
 
