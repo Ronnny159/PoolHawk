@@ -33,7 +33,6 @@ class MatchControllerIT {
     @Test
     @DisplayName("POST /matches rechaza Bola 8 con 3 jugadores (400)")
     void crearPartidaDinamicaInvalida() throws Exception {
-        // El servicio rechaza Bola 8 con más de 2 jugadores
         CrearPartidaRequest request = new CrearPartidaRequest(
             TipoModalidad.BOLA_8,
             FormatoJuego.INDIVIDUAL,
@@ -44,7 +43,7 @@ class MatchControllerIT {
         mockMvc.perform(post("/api/v1/matches")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-            .andExpect(status().isBadRequest()); // Ahora espera 400, no 201
+            .andExpect(status().isBadRequest());
     }
 
     @Test
