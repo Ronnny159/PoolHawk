@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.poolhawk.api.dto.CrearPartidaRequest;
 import com.poolhawk.domain.match.FormatoJuego;
 import com.poolhawk.domain.match.TipoModalidad;
+import com.poolhawk.api.BilliardApplication;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(classes = BilliardApplication.class)
 @AutoConfigureMockMvc
 @DisplayName("API REST - Integración Dinámica")
 class MatchControllerIT {
