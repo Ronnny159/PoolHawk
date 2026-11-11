@@ -13,6 +13,7 @@ import java.util.Objects;
 
 /**
  * Entidad de dominio que representa una partida de billar.
+ * Recibe los equipos explícitamente (nunca inferidos de una lista).
  */
 public class Partida {
 
@@ -24,83 +25,83 @@ public class Partida {
     private final MatchState estado;
     private final FormatoJuego formato;
 
-    public Partida(String id, TipoModalidad modalidad, Equipo equipoA, Equipo equipoB, Mesa mesa, Instant fechaCreacion) {
+    public Partida(String id, TipoModalidad modalidad, 
+                   Equipo equipoA, Equipo equipoB, 
+                   FormatoJuego formato, Mesa mesa, Instant fechaCreacion) {
         Objects.requireNonNull(id, "El id de la partida no puede ser nulo");
         Objects.requireNonNull(modalidad, "La modalidad no puede ser nula");
         Objects.requireNonNull(equipoA, "El equipo A no puede ser nulo");
         Objects.requireNonNull(equipoB, "El equipo B no puede ser nulo");
         Objects.requireNonNull(mesa, "La mesa no puede ser nula");
         Objects.requireNonNull(fechaCreacion, "La fecha de creación no puede ser nula");
+        Objects.requireNonNull(formato, "El formato no puede ser nulo");
 
         if (id.isBlank()) {
             throw new IllegalArgumentException("El id de la partida no puede estar en blanco");
         }
 
-        validarEquipos(modalidad, equipoA, equipoB);
+        validarEquiposYFormato(modalidad, formato, equipoA, equipoB);
 
         this.id = id;
         this.modalidad = modalidad;
         this.equipoA = equipoA;
         this.equipoB = equipoB;
         this.fechaCreacion = fechaCreacion;
-        this.formato = (equipoA.cantidadJugadores() == 2) ? FormatoJuego.PAREJAS : FormatoJuego.INDIVIDUAL;
-
-        List<Jugador> jugadores = new ArrayList<>(equipoA.getJugadores());
-        jugadores.addAll(equipoB.getJugadores());
-
-        Turnos<Jugador> turnos = new Turnos<>(jugadores);
-        this.estado = new MatchState(id, modalidad, turnos, mesa, fechaCreacion);
-    }
-
-    /**
-     * Constructor dinámico con convención A1, A2, B1, B2.
-     */
-    public Partida(String id, TipoModalidad modalidad, List<Jugador> jugadores, MatchState estado, Instant fechaCreacion, FormatoJuego formato) {
-        this.id = id;
-        this.modalidad = modalidad;
-        this.estado = estado;
-        this.fechaCreacion = fechaCreacion;
         this.formato = formato;
 
-        if (jugadores.size() == 2) {
-            // 1 vs 1
-            this.equipoA = Equipo.individual("eA-" + id, jugadores.get(0).nombre(), jugadores.get(0));
-            this.equipoB = Equipo.individual("eB-" + id, jugadores.get(1).nombre(), jugadores.get(1));
-        } else if (jugadores.size() == 4) {
-            // CONVENCIÓN UNIFICADA: A1(0), A2(1), B1(2), B2(3)
-            this.equipoA = Equipo.pareja("eA-" + id, jugadores.get(0).nombre() + " & " + jugadores.get(1).nombre(), jugadores.get(0), jugadores.get(1));
-            this.equipoB = Equipo.pareja("eB-" + id, jugadores.get(2).nombre() + " & " + jugadores.get(3).nombre(), jugadores.get(2), jugadores.get(3));
-        } else {
-            // Fallback
-            this.equipoA = Equipo.individual("eA-" + id, jugadores.get(0).nombre(), jugadores.get(0));
-            this.equipoB = Equipo.individual("eB-" + id, jugadores.get(1).nombre(), jugadores.get(1));
-        }
+        // Construir la rotación de turnos A1 -> B1 -> A2 -> B2
+        List<Jugador> rotacion = construirRotacion(equipoA, equipoB);
+        Turnos<Jugador> turnos = new Turnos<>(rotacion);
+        this.estado = new MatchState(id, modalidad, equipoA, equipoB, turnos, mesa, fechaCreacion);
     }
 
-    private static void validarEquipos(TipoModalidad modalidad, Equipo equipoA, Equipo equipoB) {
+    private static List<Jugador> construirRotacion(Equipo equipoA, Equipo equipoB) {
+        List<Jugador> jugadoresA = equipoA.getJugadores();
+        List<Jugador> jugadoresB = equipoB.getJugadores();
+        
+        List<Jugador> rotacion = new ArrayList<>();
+        int maxSize = Math.max(jugadoresA.size(), jugadoresB.size());
+        for (int i = 0; i < maxSize; i++) {
+            if (i < jugadoresA.size()) rotacion.add(jugadoresA.get(i));
+            if (i < jugadoresB.size()) rotacion.add(jugadoresB.get(i));
+        }
+        return rotacion;
+    }
+
+    private static void validarEquiposYFormato(TipoModalidad modalidad, FormatoJuego formato, 
+                                                Equipo equipoA, Equipo equipoB) {
         int cantidadA = equipoA.cantidadJugadores();
         int cantidadB = equipoB.cantidadJugadores();
 
         if (cantidadA != cantidadB) {
             throw new IllegalArgumentException("Los equipos deben tener la misma cantidad de jugadores.");
         }
-        if (modalidad.esIndividual() && cantidadA != 1) {
-            throw new IllegalArgumentException("La modalidad Bola 8 individual requiere equipos de 1 jugador.");
-        }
-        if (modalidad.esPorEquipos() && cantidadA != 2) {
-            throw new IllegalArgumentException("La modalidad Por Puntos requiere equipos de 2 jugadores.");
+        if (modalidad == TipoModalidad.BOLA_8) {
+            if (formato != FormatoJuego.INDIVIDUAL) {
+                throw new IllegalArgumentException("Bola 8 solo admite formato INDIVIDUAL.");
+            }
+            if (cantidadA != 1) {
+                throw new IllegalArgumentException("Bola 8 requiere 1 jugador por equipo.");
+            }
+        } else if (modalidad == TipoModalidad.POR_PUNTOS) {
+            if (formato == FormatoJuego.PAREJAS && cantidadA != 2) {
+                throw new IllegalArgumentException("Por Puntos en PAREJAS requiere 2 jugadores por equipo.");
+            }
+            if (formato == FormatoJuego.INDIVIDUAL && cantidadA != 1 && cantidadA != 2) {
+                throw new IllegalArgumentException("Por Puntos en INDIVIDUAL requiere 1 o 2 jugadores por equipo.");
+            }
         }
     }
 
+    // --- MÉTODOS ESTÁTICOS RESTAURADOS PARA TESTS ---
     public static Partida individual(String id, Jugador j1, Jugador j2, Mesa mesa) {
-        return new Partida(id, TipoModalidad.BOLA_8, 
-            Equipo.individual("eA-" + id, j1.nombre(), j1), 
-            Equipo.individual("eB-" + id, j2.nombre(), j2), 
-            mesa, Instant.now());
+        Equipo eqA = Equipo.individual("eA-" + id, j1.nombre(), j1);
+        Equipo eqB = Equipo.individual("eB-" + id, j2.nombre(), j2);
+        return new Partida(id, TipoModalidad.BOLA_8, eqA, eqB, FormatoJuego.INDIVIDUAL, mesa, Instant.now());
     }
 
     public static Partida parejas(String id, Equipo eqA, Equipo eqB, Mesa mesa) {
-        return new Partida(id, TipoModalidad.POR_PUNTOS, eqA, eqB, mesa, Instant.now());
+        return new Partida(id, TipoModalidad.POR_PUNTOS, eqA, eqB, FormatoJuego.PAREJAS, mesa, Instant.now());
     }
 
     // --- GETTERS ---

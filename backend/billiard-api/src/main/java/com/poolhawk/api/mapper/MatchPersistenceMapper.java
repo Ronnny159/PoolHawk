@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.poolhawk.api.entity.JugadorEntity;
 import com.poolhawk.api.entity.PartidaEntity;
 import com.poolhawk.domain.match.*;
+import com.poolhawk.domain.player.Equipo;
 import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.Bola;
 import com.poolhawk.domain.table.Mesa;
@@ -24,6 +25,7 @@ public class MatchPersistenceMapper {
     }
 
     public Partida toDomain(PartidaEntity entity) {
+        // 1. Reconstruir equipos explícitos desde las etiquetas "A" y "B"
         List<Jugador> jugadoresA = entity.getJugadores().stream()
             .filter(j -> "A".equals(j.getEquipo()))
             .map(j -> new Jugador(j.getId(), j.getNombre()))
@@ -33,11 +35,21 @@ public class MatchPersistenceMapper {
             .map(j -> new Jugador(j.getId(), j.getNombre()))
             .toList();
 
-        // CORREGIDO: Reconstruir como A1, A2, B1, B2 (convención unificada)
-        List<Jugador> listaPlana = new ArrayList<>();
-        listaPlana.addAll(jugadoresA);
-        listaPlana.addAll(jugadoresB);
+        FormatoJuego formatoGuardado = entity.getFormato() != null 
+            ? FormatoJuego.valueOf(entity.getFormato()) 
+            : FormatoJuego.INDIVIDUAL;
 
+        Equipo equipoA;
+        Equipo equipoB;
+        if (jugadoresA.size() == 2) {
+            equipoA = Equipo.pareja("eA-" + entity.getId(), "Equipo A", jugadoresA.get(0), jugadoresA.get(1));
+            equipoB = Equipo.pareja("eB-" + entity.getId(), "Equipo B", jugadoresB.get(0), jugadoresB.get(1));
+        } else {
+            equipoA = Equipo.individual("eA-" + entity.getId(), jugadoresA.get(0).nombre(), jugadoresA.get(0));
+            equipoB = Equipo.individual("eB-" + entity.getId(), jugadoresB.get(0).nombre(), jugadoresB.get(0));
+        }
+
+        // 2. Reconstruir la mesa
         Mesa mesa = new Mesa();
         if (entity.getEstadoMesaJson() != null && !entity.getEstadoMesaJson().isEmpty()) {
             try {
@@ -50,10 +62,21 @@ public class MatchPersistenceMapper {
             }
         }
 
-        MatchState estado = new MatchState(entity.getId(), TipoModalidad.valueOf(entity.getModalidad()), 
-            new Turnos<>(listaPlana), mesa, entity.getFechaCreacion());
+        // 3. Construir la rotación (A1 → B1 → A2 → B2)
+        List<Jugador> rotacion = new ArrayList<>();
+        List<Jugador> jugadoresA_ = equipoA.getJugadores();
+        List<Jugador> jugadoresB_ = equipoB.getJugadores();
+        int maxSize = Math.max(jugadoresA_.size(), jugadoresB_.size());
+        for (int i = 0; i < maxSize; i++) {
+            if (i < jugadoresA_.size()) rotacion.add(jugadoresA_.get(i));
+            if (i < jugadoresB_.size()) rotacion.add(jugadoresB_.get(i));
+        }
 
-        // Restauración completa del estado
+        Turnos<Jugador> turnos = new Turnos<>(rotacion);
+        MatchState estado = new MatchState(entity.getId(), TipoModalidad.valueOf(entity.getModalidad()), 
+            equipoA, equipoB, turnos, mesa, entity.getFechaCreacion());
+
+        // 4. Restaurar snapshot (puntajes, grupos, turno, fase, ganador)
         if (entity.getEstadoPartidaJson() != null && !entity.getEstadoPartidaJson().isEmpty()) {
             try {
                 Map<String, Object> snapshot = jsonMapper.readValue(entity.getEstadoPartidaJson(), Map.class);
@@ -61,7 +84,7 @@ public class MatchPersistenceMapper {
                 Map<Jugador, Integer> puntajesGuardados = new HashMap<>();
                 if (snapshot.containsKey("puntajes")) {
                     Map<String, Integer> puntajesMap = (Map<String, Integer>) snapshot.get("puntajes");
-                    for (Jugador j : listaPlana) {
+                    for (Jugador j : rotacion) {
                         if (puntajesMap.containsKey(j.id())) {
                             puntajesGuardados.put(j, puntajesMap.get(j.id()));
                         }
@@ -71,7 +94,7 @@ public class MatchPersistenceMapper {
                 Map<Jugador, Grupo> gruposGuardados = new HashMap<>();
                 if (snapshot.containsKey("grupos")) {
                     Map<String, String> gruposMap = (Map<String, String>) snapshot.get("grupos");
-                    for (Jugador j : listaPlana) {
+                    for (Jugador j : rotacion) {
                         if (gruposMap.containsKey(j.id()) && !gruposMap.get(j.id()).equals("SIN_ASIGNAR")) {
                             gruposGuardados.put(j, Grupo.valueOf(gruposMap.get(j.id())));
                         }
@@ -80,7 +103,7 @@ public class MatchPersistenceMapper {
 
                 if (snapshot.containsKey("turnoActualId")) {
                     String turnoId = (String) snapshot.get("turnoActualId");
-                    for (int i = 0; i < listaPlana.size(); i++) {
+                    for (int i = 0; i < rotacion.size(); i++) {
                         if (estado.jugadorActual().id().equals(turnoId)) break;
                         estado.avanzarTurno();
                     }
@@ -89,7 +112,7 @@ public class MatchPersistenceMapper {
                 FasePartida faseGuardada = FasePartida.valueOf(entity.getFase());
                 Jugador ganadorGuardado = null;
                 if (entity.getGanadorId() != null) {
-                    ganadorGuardado = listaPlana.stream()
+                    ganadorGuardado = rotacion.stream()
                         .filter(j -> j.id().equals(entity.getGanadorId()))
                         .findFirst().orElse(null);
                 }
@@ -101,14 +124,8 @@ public class MatchPersistenceMapper {
             }
         }
 
-        FormatoJuego formatoGuardado = entity.getFormato() != null 
-            ? FormatoJuego.valueOf(entity.getFormato()) 
-            : (listaPlana.size() == 4 ? FormatoJuego.PAREJAS : FormatoJuego.INDIVIDUAL);
-
-        Partida partida = new Partida(entity.getId(), TipoModalidad.valueOf(entity.getModalidad()), 
-            listaPlana, estado, entity.getFechaCreacion(), formatoGuardado);
-        
-        return partida;
+        return new Partida(entity.getId(), TipoModalidad.valueOf(entity.getModalidad()), 
+            equipoA, equipoB, formatoGuardado, mesa, entity.getFechaCreacion());
     }
 
     public PartidaEntity toEntity(Partida partida) {

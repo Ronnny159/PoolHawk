@@ -2,6 +2,7 @@ package com.poolhawk.api.service;
 
 import com.poolhawk.api.dto.CrearPartidaRequest;
 import com.poolhawk.domain.match.*;
+import com.poolhawk.domain.player.Equipo;
 import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.Bola;
 import com.poolhawk.domain.table.Coordenada;
@@ -14,19 +15,11 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Fábrica encargada de construir las instancias de Partida a partir de la petición.
- * Aísla la lógica de inicialización del dominio.
+ * Fábrica encargada de construir las instancias de Partida con equipos explícitos.
  */
 @Component
 public class MatchFactory {
 
-    /**
-     * Crea una partida a partir de la solicitud REST.
-     *
-     * @param id identificador único de la partida
-     * @param request datos de creación
-     * @return la partida construida e iniciada
-     */
     public Partida crearDesdeRequest(String id, CrearPartidaRequest request) {
         double ancho = request.anchoMesa() != null ? request.anchoMesa() : Mesa.ANCHO_DEFECTO;
         double alto = request.altoMesa() != null ? request.altoMesa() : Mesa.ALTO_DEFECTO;
@@ -37,16 +30,32 @@ public class MatchFactory {
             listaJugadores.add(new Jugador(UUID.randomUUID().toString(), nombre.trim()));
         }
 
-        Turnos<Jugador> turnos = new Turnos<>(listaJugadores);
-        MatchState estado = new MatchState(id, request.modalidad(), turnos, mesa, Instant.now());
-        estado.iniciar();
+        int cantidad = listaJugadores.size();
+        Equipo equipoA;
+        Equipo equipoB;
 
-        return new Partida(id, request.modalidad(), listaJugadores, estado, Instant.now(), request.formato());
+        if (cantidad == 2) {
+            // 1 vs 1
+            equipoA = Equipo.individual("eA-" + id, listaJugadores.get(0).nombre(), listaJugadores.get(0));
+            equipoB = Equipo.individual("eB-" + id, listaJugadores.get(1).nombre(), listaJugadores.get(1));
+        } else if (cantidad == 4) {
+            // 2 vs 2: [A1, B1, A2, B2] según el contrato del frontend
+            equipoA = Equipo.pareja("eA-" + id, 
+                listaJugadores.get(0).nombre() + " & " + listaJugadores.get(2).nombre(),
+                listaJugadores.get(0), listaJugadores.get(2));
+            equipoB = Equipo.pareja("eB-" + id,
+                listaJugadores.get(1).nombre() + " & " + listaJugadores.get(3).nombre(),
+                listaJugadores.get(1), listaJugadores.get(3));
+        } else {
+            throw new IllegalArgumentException("Cantidad de jugadores no soportada: " + cantidad);
+        }
+
+        Partida partida = new Partida(id, request.modalidad(), equipoA, equipoB, 
+            request.formato(), mesa, Instant.now());
+        partida.iniciar();
+        return partida;
     }
 
-    /**
-     * Construye la mesa inicial con las 16 bolas en formación de triángulo.
-     */
     private Mesa construirMesaInicial(double ancho, double alto) {
         Mesa mesa = new Mesa(ancho, alto);
         mesa.agregarBola(Bola.crear(0, new Coordenada(ancho * 0.25, alto * 0.5)));

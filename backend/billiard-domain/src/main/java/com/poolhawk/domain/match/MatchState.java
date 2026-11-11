@@ -2,6 +2,7 @@ package com.poolhawk.domain.match;
 
 import com.poolhawk.domain.event.ResultadoTiro;
 import com.poolhawk.domain.event.TiroEvent;
+import com.poolhawk.domain.player.Equipo;
 import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.Mesa;
 import com.poolhawk.domain.table.Bola;
@@ -16,12 +17,17 @@ import java.util.Objects;
 
 /**
  * Estado completo de una partida de billar en un momento dado.
+ * 
+ * <p>Recibe los equipos explícitamente para que {@link #getCompanero(Jugador)}
+ * consulte la pertenencia real, no el índice en la rotación de turnos.</p>
  */
 public class MatchState {
 
     private final String partidaId;
     private final TipoModalidad modalidad;
-    private final Turnos<Jugador> turnos; 
+    private final Equipo equipoA;
+    private final Equipo equipoB;
+    private final Turnos<Jugador> turnos;
     private final Mesa mesa;
     private final Instant fechaInicio;
 
@@ -31,9 +37,13 @@ public class MatchState {
     private final List<TiroEvent> historial;
     private Jugador ganador;
 
-    public MatchState(String partidaId, TipoModalidad modalidad, Turnos<Jugador> turnos, Mesa mesa, Instant fechaInicio) {
+    public MatchState(String partidaId, TipoModalidad modalidad, 
+                      Equipo equipoA, Equipo equipoB, 
+                      Turnos<Jugador> turnos, Mesa mesa, Instant fechaInicio) {
         Objects.requireNonNull(partidaId, "El id de la partida no puede ser nulo");
         Objects.requireNonNull(modalidad, "La modalidad no puede ser nula");
+        Objects.requireNonNull(equipoA, "El equipo A no puede ser nulo");
+        Objects.requireNonNull(equipoB, "El equipo B no puede ser nulo");
         Objects.requireNonNull(turnos, "El gestor de turnos no puede ser nulo");
         Objects.requireNonNull(mesa, "La mesa no puede ser nula");
         Objects.requireNonNull(fechaInicio, "La fecha de inicio no puede ser nula");
@@ -44,6 +54,8 @@ public class MatchState {
 
         this.partidaId = partidaId;
         this.modalidad = modalidad;
+        this.equipoA = equipoA;
+        this.equipoB = equipoB;
         this.turnos = turnos;
         this.mesa = mesa;
         this.fechaInicio = fechaInicio;
@@ -62,6 +74,8 @@ public class MatchState {
     // GETTERS Y CONSULTAS
     public String getPartidaId() { return partidaId; }
     public TipoModalidad getModalidad() { return modalidad; }
+    public Equipo getEquipoA() { return equipoA; }
+    public Equipo getEquipoB() { return equipoB; }
     public Turnos<Jugador> getTurnos() { return turnos; }
     public Mesa getMesa() { return mesa; }
     public Instant getFechaInicio() { return fechaInicio; }
@@ -82,22 +96,22 @@ public class MatchState {
 
     /**
      * Retorna el compañero de equipo de un jugador en formato Parejas.
-     * CONVENCIÓN: A1(0), A2(1), B1(2), B2(3).
+     * En formato Individual, retorna el mismo jugador.
+     * 
+     * <p>Consulta la pertenencia real al equipo, no el índice en la rotación.</p>
      */
     public Jugador getCompanero(Jugador jugador) {
-        List<Jugador> jugadores = turnos.jugadores();
-        int indice = jugadores.indexOf(jugador);
-        
-        if (indice == -1) return jugador;
-        
-        if (jugadores.size() == 4) {
-            if (indice == 0) return jugadores.get(1); // A1 -> A2
-            if (indice == 1) return jugadores.get(0); // A2 -> A1
-            if (indice == 2) return jugadores.get(3); // B1 -> B2
-            if (indice == 3) return jugadores.get(2); // B2 -> B1
+        if (equipoA.contiene(jugador)) {
+            List<Jugador> miembros = equipoA.getJugadores();
+            if (miembros.size() == 1) return jugador;
+            return miembros.stream().filter(j -> !j.equals(jugador)).findFirst().orElse(jugador);
         }
-        
-        return jugador; // Individual: es su propio compañero
+        if (equipoB.contiene(jugador)) {
+            List<Jugador> miembros = equipoB.getJugadores();
+            if (miembros.size() == 1) return jugador;
+            return miembros.stream().filter(j -> !j.equals(jugador)).findFirst().orElse(jugador);
+        }
+        return jugador;
     }
 
     public boolean quedanBolasDeGrupo(Grupo grupo) {
