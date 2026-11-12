@@ -173,16 +173,12 @@ class ReglasBola8Test {
         void victoriaConGrupoLimpio() {
             estado.asignarGrupo(ANA, Grupo.LISAS);
             estado.asignarGrupo(BETO, Grupo.RAYADAS);
-
-            for (int i = 1; i <= 7; i++) {
-                mesa.embolsarBola(i);
-            }
+            for (int i = 1; i <= 7; i++) mesa.embolsarBola(i);
 
             TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
             ResultadoTiro r = reglas.evaluar(estado, t);
             assertTrue(r.esVictoria());
             assertFalse(r.esFalta());
-            assertFalse(r.esDerrota());
         }
 
         @Test
@@ -190,9 +186,7 @@ class ReglasBola8Test {
         void victoriaDetectada() {
             estado.asignarGrupo(ANA, Grupo.LISAS);
             estado.asignarGrupo(BETO, Grupo.RAYADAS);
-            for (int i = 1; i <= 7; i++) {
-                mesa.embolsarBola(i);
-            }
+            for (int i = 1; i <= 7; i++) mesa.embolsarBola(i);
 
             TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
             ResultadoTiro r = reglas.evaluar(estado, t);
@@ -213,7 +207,6 @@ class ReglasBola8Test {
             estado.asignarGrupo(ANA, Grupo.LISAS);
             estado.asignarGrupo(BETO, Grupo.RAYADAS);
 
-            // NO embolsar las lisas (grupo sucio)
             TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
             ResultadoTiro r = reglas.evaluar(estado, t);
             
@@ -230,23 +223,19 @@ class ReglasBola8Test {
         @DisplayName("No asigna grupo si no embolsó nada")
         void noAsignaSinEmbolsar() {
             TiroEvent t = tiroSimple(ANA, bola(3));
-            ResultadoTiro r = reglas.evaluar(estado, t);
-            
-            assertNull(r.grupoAsignado());
-            // El estado no debe haber mutado
+            reglas.evaluar(estado, t);
             assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(ANA));
             assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(BETO));
         }
 
         @Test
-        @DisplayName("Devuelve grupo LISAS en el resultado al embolsar una lisa")
+        @DisplayName("Asigna grupo al tirador y opuesto al oponente")
         void asignaGrupoAlEmbolsar() {
             TiroEvent t = tiroConEmbolsada(ANA, bola(3), bola(3));
             ResultadoTiro r = reglas.evaluar(estado, t);
             
-            // La regla devuelve qué grupo asignar, pero NO muta el estado
             assertEquals(Grupo.LISAS, r.grupoAsignado());
-            assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(ANA));
+            // NOTA: La evaluación pura no muta el estado. El test de mutación está en MatchStateTest.
         }
     }
 

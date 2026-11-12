@@ -13,7 +13,6 @@ import java.util.Objects;
 
 /**
  * Entidad de dominio que representa una partida de billar.
- * Recibe los equipos explícitamente (nunca inferidos de una lista).
  */
 public class Partida {
 
@@ -25,6 +24,7 @@ public class Partida {
     private final MatchState estado;
     private final FormatoJuego formato;
 
+    // Constructor original para nuevas partidas
     public Partida(String id, TipoModalidad modalidad, 
                    Equipo equipoA, Equipo equipoB, 
                    FormatoJuego formato, Mesa mesa, Instant fechaCreacion) {
@@ -53,6 +53,34 @@ public class Partida {
         List<Jugador> rotacion = construirRotacion(equipoA, equipoB);
         Turnos<Jugador> turnos = new Turnos<>(rotacion);
         this.estado = new MatchState(id, modalidad, equipoA, equipoB, turnos, mesa, fechaCreacion);
+    }
+
+    // NUEVO CONSTRUCTOR: Para rehidratación desde la base de datos
+    public Partida(String id, TipoModalidad modalidad, 
+                   Equipo equipoA, Equipo equipoB, 
+                   FormatoJuego formato, Instant fechaCreacion, 
+                   MatchState estadoRestaurado) {
+        Objects.requireNonNull(id, "El id de la partida no puede ser nulo");
+        Objects.requireNonNull(modalidad, "La modalidad no puede ser nula");
+        Objects.requireNonNull(equipoA, "El equipo A no puede ser nulo");
+        Objects.requireNonNull(equipoB, "El equipo B no puede ser nulo");
+        Objects.requireNonNull(fechaCreacion, "La fecha de creación no puede ser nula");
+        Objects.requireNonNull(formato, "El formato no puede ser nulo");
+        Objects.requireNonNull(estadoRestaurado, "El estado restaurado no puede ser nulo");
+
+        if (id.isBlank()) {
+            throw new IllegalArgumentException("El id de la partida no puede estar en blanco");
+        }
+
+        validarEquiposYFormato(modalidad, formato, equipoA, equipoB);
+
+        this.id = id;
+        this.modalidad = modalidad;
+        this.equipoA = equipoA;
+        this.equipoB = equipoB;
+        this.fechaCreacion = fechaCreacion;
+        this.formato = formato;
+        this.estado = estadoRestaurado; // Usamos el estado que viene de BD
     }
 
     private static List<Jugador> construirRotacion(Equipo equipoA, Equipo equipoB) {
@@ -93,7 +121,7 @@ public class Partida {
         }
     }
 
-    // --- MÉTODOS ESTÁTICOS RESTAURADOS PARA TESTS ---
+    // --- MÉTODOS ESTÁTICOS ---
     public static Partida individual(String id, Jugador j1, Jugador j2, Mesa mesa) {
         Equipo eqA = Equipo.individual("eA-" + id, j1.nombre(), j1);
         Equipo eqB = Equipo.individual("eB-" + id, j2.nombre(), j2);

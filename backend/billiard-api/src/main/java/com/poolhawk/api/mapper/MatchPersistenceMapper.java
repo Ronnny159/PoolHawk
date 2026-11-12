@@ -25,7 +25,7 @@ public class MatchPersistenceMapper {
     }
 
     public Partida toDomain(PartidaEntity entity) {
-        // 1. Reconstruir equipos explícitos desde las etiquetas "A" y "B"
+        // 1. Reconstruir equipos explícitos
         List<Jugador> jugadoresA = entity.getJugadores().stream()
             .filter(j -> "A".equals(j.getEquipo()))
             .map(j -> new Jugador(j.getId(), j.getNombre()))
@@ -76,7 +76,7 @@ public class MatchPersistenceMapper {
         MatchState estado = new MatchState(entity.getId(), TipoModalidad.valueOf(entity.getModalidad()), 
             equipoA, equipoB, turnos, mesa, entity.getFechaCreacion());
 
-        // 4. Restaurar snapshot (puntajes, grupos, turno, fase, ganador)
+        // 4. Restaurar snapshot
         if (entity.getEstadoPartidaJson() != null && !entity.getEstadoPartidaJson().isEmpty()) {
             try {
                 Map<String, Object> snapshot = jsonMapper.readValue(entity.getEstadoPartidaJson(), Map.class);
@@ -124,8 +124,16 @@ public class MatchPersistenceMapper {
             }
         }
 
-        return new Partida(entity.getId(), TipoModalidad.valueOf(entity.getModalidad()), 
-            equipoA, equipoB, formatoGuardado, mesa, entity.getFechaCreacion());
+        // EL CAMBIO ESTÁ AQUÍ: Usamos el nuevo constructor que recibe el MatchState ya restaurado
+        return new Partida(
+            entity.getId(), 
+            TipoModalidad.valueOf(entity.getModalidad()), 
+            equipoA, 
+            equipoB, 
+            formatoGuardado, 
+            entity.getFechaCreacion(), 
+            estado // <-- ¡Le pasamos el estado que acabamos de restaurar!
+        );
     }
 
     public PartidaEntity toEntity(Partida partida) {
