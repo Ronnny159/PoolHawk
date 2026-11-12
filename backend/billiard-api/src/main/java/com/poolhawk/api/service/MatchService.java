@@ -73,11 +73,9 @@ public class MatchService {
         String id = UUID.randomUUID().toString();
         Partida partida = matchFactory.crearDesdeRequest(id, request);
         
-        // 1. Guardar primero en BD
         PartidaEntity entity = persistenceMapper.toEntity(partida);
         storage.guardar(entity);
         
-        // 2. Si todo sale bien, guardar en memoria
         partidasEnMemoria.put(id, partida);
         
         return partida;
@@ -124,16 +122,23 @@ public class MatchService {
             ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
             
             partida.aplicarTiro(evento, resultado);
+            
+            // Manejo de estados terminales
             if (resultado.esVictoria()) {
                 partida.finalizar(evento.jugador());
+            } else if (resultado.esDerrota()) {
+                // El ganador es el oponente del que cometió la falta
+                Jugador oponente = partida.getEquipoA().contiene(evento.jugador())
+                    ? partida.getEquipoB().getJugadores().get(0)
+                    : partida.getEquipoA().getJugadores().get(0);
+                partida.finalizar(oponente);
             }
             
-            // Obtenemos la entidad existente para copiar la versión
             PartidaEntity entityExistente = storage.buscar(partidaId).orElse(null);
             PartidaEntity entityNueva = persistenceMapper.toEntity(partida);
             
             if (entityExistente != null) {
-                entityNueva.setVersion(entityExistente.getVersion()); // COPIAMOS LA VERSIÓN
+                entityNueva.setVersion(entityExistente.getVersion());
             }
             
             storage.guardar(entityNueva);

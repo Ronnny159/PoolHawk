@@ -10,12 +10,8 @@ import com.poolhawk.domain.table.Bola;
 import com.poolhawk.rules.AbstractReglasBillar;
 import com.poolhawk.rules.ReglasConfig;
 
-import java.util.List;
 import java.util.Objects;
 
-/**
- * Reglas de la modalidad Bola 8.
- */
 public class ReglasBola8 extends AbstractReglasBillar {
 
     public ReglasBola8(ReglasConfig config) {
@@ -41,20 +37,31 @@ public class ReglasBola8 extends AbstractReglasBillar {
         if (tiro.embolsoLaBlanca()) {
             return ResultadoTiro.falta(FaltaMotivo.BLANCA_EMBOLSADA);
         }
-        if (!esPrimerContactoLegal(estado, tiro, jugador, grupoJugador)) {
-            return ResultadoTiro.falta(FaltaMotivo.BOLA_EQUIVOCADA);
-        }
+
+        // PRIORIDAD 1: Bola 8 prematura o victoria
         if (tiro.embolsoLaOcho()) {
             if (!grupoLimpio(estado, jugador)) {
-                return ResultadoTiro.falta(FaltaMotivo.BOLA_8_ANTES_DE_TIEMPO);
+                return ResultadoTiro.derrota(FaltaMotivo.BOLA_8_ANTES_DE_TIEMPO);
             }
             return ResultadoTiro.victoria(0);
         }
-        if (!grupoJugador.estaAsignado()) {
-            asignarGrupoSiCorresponde(estado, tiro);
+
+        // PRIORIDAD 2: Primer contacto legal
+        if (!esPrimerContactoLegal(estado, tiro, jugador, grupoJugador)) {
+            return ResultadoTiro.falta(FaltaMotivo.BOLA_EQUIVOCADA);
         }
+
+        // PRIORIDAD 3: Asignación de grupo (sin mutar el estado)
+        Grupo grupoDetectado = null;
+        if (!grupoJugador.estaAsignado() && tiro.embolsoAlgunaBola()) {
+            for (Bola bola : tiro.bolasEmbolsadas()) {
+                if (bola.esLisa()) { grupoDetectado = Grupo.LISAS; break; }
+                if (bola.esRayada()) { grupoDetectado = Grupo.RAYADAS; break; }
+            }
+        }
+
         if (tiro.embolsoAlgunaBola()) {
-            return construirResultadoLegalSigueTirando(tiro);
+            return ResultadoTiro.tiroLegalConPuntos(0, grupoDetectado);
         }
         return ResultadoTiro.tiroLegalSinPuntos(true);
     }
@@ -66,11 +73,9 @@ public class ReglasBola8 extends AbstractReglasBillar {
         if (!grupoJugador.estaAsignado()) {
             return !tocada.esOcho();
         }
-
         if (grupoLimpio(estado, jugador)) {
-            return tocada.esOcho(); // Si el grupo está limpio, SOLO la 8 es legal
+            return tocada.esOcho(); 
         }
-
         return tocada.tipo() == grupoJugador.getTipoBolaAsociado();
     }
 
@@ -80,48 +85,13 @@ public class ReglasBola8 extends AbstractReglasBillar {
         return !estado.quedanBolasDeGrupo(grupo);
     }
 
-    private void asignarGrupoSiCorresponde(MatchState estado, TiroEvent tiro) {
-        List<Bola> embolsadas = tiro.bolasEmbolsadas();
-        if (embolsadas.isEmpty()) return;
-
-        Grupo grupoDetectado = null;
-        for (Bola bola : embolsadas) {
-            if (bola.esLisa()) { grupoDetectado = Grupo.LISAS; break; }
-            if (bola.esRayada()) { grupoDetectado = Grupo.RAYADAS; break; }
-        }
-
-        if (grupoDetectado == null) return;
-
-        Jugador jugador = tiro.jugador();
-        Jugador companero = estado.getCompanero(jugador);
-
-        if (companero.equals(jugador)) {
-            // Bola 8 individual: el oponente es el siguiente en el turno
-            Jugador oponente = estado.getTurnos().turnoSiguiente();
-            estado.asignarGrupo(jugador, grupoDetectado);
-            estado.asignarGrupo(oponente, grupoDetectado.opuesto());
-        } else {
-            // Parejas: ambos reciben el mismo grupo
-            if (!estado.grupoDe(jugador).estaAsignado() && !estado.grupoDe(companero).estaAsignado()) {
-                estado.asignarGrupo(jugador, grupoDetectado);
-                estado.asignarGrupo(companero, grupoDetectado);
-            }
-        }
-    }
-
-    private ResultadoTiro construirResultadoLegalSigueTirando(TiroEvent tiro) {
-        return new ResultadoTiro(false, null, 0, false, false, "Tiro legal, embolsó " + tiro.cantidadBolasEmbolsadas() + " bola(s)");
-    }
-
     @Override
     public boolean partidaTerminada(MatchState estado) {
-        Objects.requireNonNull(estado, "El estado no puede ser nulo");
         return estado.estaTerminada();
     }
 
     @Override
     public Jugador determinarGanador(MatchState estado) {
-        Objects.requireNonNull(estado, "El estado no puede ser nulo");
         return estado.getGanador();
     }
 }

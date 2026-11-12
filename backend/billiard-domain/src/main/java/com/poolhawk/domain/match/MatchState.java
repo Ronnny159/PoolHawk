@@ -4,16 +4,11 @@ import com.poolhawk.domain.event.ResultadoTiro;
 import com.poolhawk.domain.event.TiroEvent;
 import com.poolhawk.domain.player.Equipo;
 import com.poolhawk.domain.player.Jugador;
-import com.poolhawk.domain.table.Mesa;
 import com.poolhawk.domain.table.Bola;
+import com.poolhawk.domain.table.Mesa;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 /**
  * Estado completo de una partida de billar en un momento dado.
@@ -48,6 +43,7 @@ public class MatchState {
         Objects.requireNonNull(mesa, "La mesa no puede ser nula");
         Objects.requireNonNull(fechaInicio, "La fecha de inicio no puede ser nula");
 
+        // VALIDACIÓN RESTAURADA
         if (partidaId.isBlank()) {
             throw new IllegalArgumentException("El id de la partida no puede estar en blanco");
         }
@@ -94,22 +90,14 @@ public class MatchState {
     public boolean estaTerminada() { return fase.esTerminal(); }
     public boolean estaActiva() { return fase.estaActiva(); }
 
-    /**
-     * Retorna el compañero de equipo de un jugador en formato Parejas.
-     * En formato Individual, retorna el mismo jugador.
-     * 
-     * <p>Consulta la pertenencia real al equipo, no el índice en la rotación.</p>
-     */
     public Jugador getCompanero(Jugador jugador) {
         if (equipoA.contiene(jugador)) {
             List<Jugador> miembros = equipoA.getJugadores();
-            if (miembros.size() == 1) return jugador;
-            return miembros.stream().filter(j -> !j.equals(jugador)).findFirst().orElse(jugador);
+            return miembros.size() == 1 ? jugador : miembros.stream().filter(j -> !j.equals(jugador)).findFirst().orElse(jugador);
         }
         if (equipoB.contiene(jugador)) {
             List<Jugador> miembros = equipoB.getJugadores();
-            if (miembros.size() == 1) return jugador;
-            return miembros.stream().filter(j -> !j.equals(jugador)).findFirst().orElse(jugador);
+            return miembros.size() == 1 ? jugador : miembros.stream().filter(j -> !j.equals(jugador)).findFirst().orElse(jugador);
         }
         return jugador;
     }
@@ -209,7 +197,23 @@ public class MatchState {
 
         registrarTiro(evento);
 
-        if (!resultado.esFalta()) {
+        // 1. Aplicar grupo si el tiro lo asignó
+        if (resultado.grupoAsignado() != null) {
+            Jugador tirador = evento.jugador();
+            Jugador oponente = equipoA.contiene(tirador) 
+                ? equipoB.getJugadores().get(0) 
+                : equipoA.getJugadores().get(0);
+
+            if (!grupoDe(tirador).estaAsignado()) {
+                gruposAsignados.put(tirador, resultado.grupoAsignado());
+            }
+            if (!grupoDe(oponente).estaAsignado()) {
+                gruposAsignados.put(oponente, resultado.grupoAsignado().opuesto());
+            }
+        }
+
+        // 2. Aplicar bolas embolsadas (solo si no es falta ni derrota)
+        if (!resultado.esFalta() && !resultado.esDerrota()) {
             for (Bola bola : evento.bolasEmbolsadas()) {
                 if (bola.enMesa()) {
                     mesa.embolsarBola(bola.numero());
@@ -217,10 +221,12 @@ public class MatchState {
             }
         }
 
+        // 3. Sumar puntos
         if (resultado.puntos() > 0) {
             sumarPuntos(evento.jugador(), resultado.puntos());
         }
 
+        // 4. Cambiar turno
         if (resultado.cambiaTurno()) {
             avanzarTurno();
         }
@@ -238,6 +244,7 @@ public class MatchState {
         }
     }
 
+    // EQUALS Y HASHCODE RESTAURADOS
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

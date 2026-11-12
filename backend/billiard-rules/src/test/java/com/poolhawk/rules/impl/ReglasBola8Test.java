@@ -86,6 +86,259 @@ class ReglasBola8Test {
             List.of(TroneraNombre.TOP_LEFT));
     }
 
-    // ... (El resto de las pruebas @Nested se mantienen EXACTAMENTE igual) ...
-    // Puedes copiar el resto del archivo tal cual lo tenías.
+    @Nested
+    @DisplayName("Nombre de modalidad")
+    class NombreModalidad {
+        @Test
+        @DisplayName("Retorna 'Bola 8'")
+        void nombre() {
+            assertEquals("Bola 8", reglas.getNombreModalidad());
+        }
+    }
+
+    @Nested
+    @DisplayName("Faltas básicas")
+    class FaltasBasicas {
+
+        @Test
+        @DisplayName("Falta si no toca ninguna bola")
+        void noTocoNinguna() {
+            ResultadoTiro r = reglas.evaluar(estado, tiroSimple(ANA, null));
+            assertTrue(r.esFalta());
+            assertEquals(FaltaMotivo.NO_TOCAR_BOLA, r.motivo());
+        }
+
+        @Test
+        @DisplayName("Falta si embolsa la blanca")
+        void embolsoBlanca() {
+            TiroEvent t = tiroConEmbolsada(ANA, bola(1), bola(0));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            assertTrue(r.esFalta());
+            assertEquals(FaltaMotivo.BLANCA_EMBOLSADA, r.motivo());
+        }
+
+        @Test
+        @DisplayName("Falta si toca primero la bola 8 sin grupo asignado")
+        void tocaOchoSinGrupo() {
+            TiroEvent t = tiroSimple(ANA, bola(8));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            assertTrue(r.esFalta());
+            assertEquals(FaltaMotivo.BOLA_EQUIVOCADA, r.motivo());
+        }
+    }
+
+    @Nested
+    @DisplayName("Primer contacto con grupo asignado")
+    class PrimerContactoConGrupo {
+
+        @BeforeEach
+        void asignarGrupos() {
+            estado.asignarGrupo(ANA, Grupo.LISAS);
+            estado.asignarGrupo(BETO, Grupo.RAYADAS);
+        }
+
+        @Test
+        @DisplayName("Legal si toca primero una bola de su grupo")
+        void tocaSuGrupo() {
+            TiroEvent t = tiroSimple(ANA, bola(3));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            assertFalse(r.esFalta());
+        }
+
+        @Test
+        @DisplayName("Falta si toca primero una bola del grupo opuesto")
+        void tocaGrupoOpuesto() {
+            TiroEvent t = tiroSimple(ANA, bola(11));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            assertTrue(r.esFalta());
+            assertEquals(FaltaMotivo.BOLA_EQUIVOCADA, r.motivo());
+        }
+
+        @Test
+        @DisplayName("Falta si toca primero la bola 8 (grupo sucio)")
+        void tocaOcho() {
+            TiroEvent t = tiroSimple(ANA, bola(8));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            assertTrue(r.esFalta());
+            assertEquals(FaltaMotivo.BOLA_EQUIVOCADA, r.motivo());
+        }
+    }
+
+    @Nested
+    @DisplayName("Victoria")
+    class Victoria {
+
+        @Test
+        @DisplayName("Victoria al embolsar la 8 con grupo limpio")
+        void victoriaConGrupoLimpio() {
+            estado.asignarGrupo(ANA, Grupo.LISAS);
+            estado.asignarGrupo(BETO, Grupo.RAYADAS);
+
+            for (int i = 1; i <= 7; i++) {
+                mesa.embolsarBola(i);
+            }
+
+            TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            assertTrue(r.esVictoria());
+            assertFalse(r.esFalta());
+            assertFalse(r.esDerrota());
+        }
+
+        @Test
+        @DisplayName("Victoria se detecta correctamente")
+        void victoriaDetectada() {
+            estado.asignarGrupo(ANA, Grupo.LISAS);
+            estado.asignarGrupo(BETO, Grupo.RAYADAS);
+            for (int i = 1; i <= 7; i++) {
+                mesa.embolsarBola(i);
+            }
+
+            TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+
+            assertTrue(r.esVictoria());
+            assertFalse(r.esFalta());
+            assertFalse(r.fueExitoso());
+        }
+    }
+
+    @Nested
+    @DisplayName("Derrota por bola 8 antes de tiempo")
+    class Derrota {
+
+        @Test
+        @DisplayName("Derrota si embolsa la 8 con grupo sucio")
+        void faltaOchoConGrupoSucio() {
+            estado.asignarGrupo(ANA, Grupo.LISAS);
+            estado.asignarGrupo(BETO, Grupo.RAYADAS);
+
+            // NO embolsar las lisas (grupo sucio)
+            TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            
+            assertTrue(r.esDerrota());
+            assertEquals(FaltaMotivo.BOLA_8_ANTES_DE_TIEMPO, r.motivo());
+        }
+    }
+
+    @Nested
+    @DisplayName("Asignación de grupos")
+    class AsignacionGrupos {
+
+        @Test
+        @DisplayName("No asigna grupo si no embolsó nada")
+        void noAsignaSinEmbolsar() {
+            TiroEvent t = tiroSimple(ANA, bola(3));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            
+            assertNull(r.grupoAsignado());
+            // El estado no debe haber mutado
+            assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(ANA));
+            assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(BETO));
+        }
+
+        @Test
+        @DisplayName("Devuelve grupo LISAS en el resultado al embolsar una lisa")
+        void asignaGrupoAlEmbolsar() {
+            TiroEvent t = tiroConEmbolsada(ANA, bola(3), bola(3));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            
+            // La regla devuelve qué grupo asignar, pero NO muta el estado
+            assertEquals(Grupo.LISAS, r.grupoAsignado());
+            assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(ANA));
+        }
+    }
+
+    @Nested
+    @DisplayName("Turnos")
+    class TurnosTest {
+
+        @BeforeEach
+        void asignarGrupos() {
+            estado.asignarGrupo(ANA, Grupo.LISAS);
+            estado.asignarGrupo(BETO, Grupo.RAYADAS);
+        }
+
+        @Test
+        @DisplayName("Tiro legal sin embolsar cambia turno")
+        void tiroLegalCambiaTurno() {
+            TiroEvent t = tiroSimple(ANA, bola(3));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            assertTrue(r.cambiaTurno());
+        }
+
+        @Test
+        @DisplayName("Falta cambia turno")
+        void faltaCambiaTurno() {
+            TiroEvent t = tiroSimple(ANA, null);
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            assertTrue(r.cambiaTurno());
+        }
+    }
+
+    @Nested
+    @DisplayName("Partida terminada y ganador")
+    class PartidaTerminada {
+
+        @Test
+        @DisplayName("Partida no terminada al inicio")
+        void noTerminada() {
+            assertFalse(reglas.partidaTerminada(estado));
+            assertNull(reglas.determinarGanador(estado));
+        }
+
+        @Test
+        @DisplayName("Partida terminada tras finalizar")
+        void terminadaTrasFinalizar() {
+            estado.finalizar(ANA);
+            assertTrue(reglas.partidaTerminada(estado));
+            assertEquals(ANA, reglas.determinarGanador(estado));
+        }
+    }
+
+    @Nested
+    @DisplayName("Casos borde adicionales")
+    class CasosBorde {
+
+        @Test
+        @DisplayName("Falta por tiro fuera de shot clock")
+        void faltaPorShotClock() {
+            ReglasConfig config = new ReglasConfig(
+                false, Duration.ofSeconds(10), false, 50);
+            ReglasBola8 reglasConClock = new ReglasBola8(config);
+
+            TiroEvent tiroLargo = new TiroEvent(
+                "evt-largo", PARTIDA_ID, ANA, bola(1),
+                List.of(), List.of(), Instant.now(), Duration.ofSeconds(20));
+
+            ResultadoTiro r = reglasConClock.evaluar(estado, tiroLargo);
+            assertTrue(r.esFalta());
+            assertEquals(FaltaMotivo.TIEMPO_EXCEDIDO, r.motivo());
+        }
+
+        @Test
+        @DisplayName("Tiro legal con múltiples bolas embolsadas")
+        void tiroConMultiplesEmbolsadas() {
+            estado.asignarGrupo(ANA, Grupo.LISAS);
+            estado.asignarGrupo(BETO, Grupo.RAYADAS);
+
+            TiroEvent t = tiro(ANA, bola(1),
+                List.of(bola(1), bola(2), bola(3)),
+                List.of(TroneraNombre.TOP_LEFT, TroneraNombre.TOP_RIGHT,
+                    TroneraNombre.MIDDLE_LEFT));
+
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            assertFalse(r.esFalta());
+            assertFalse(r.cambiaTurno());
+        }
+
+        @Test
+        @DisplayName("Partida terminada sin ganador (abandonada)")
+        void partidaAbandonada() {
+            estado.abandonar();
+            assertTrue(reglas.partidaTerminada(estado));
+            assertNull(reglas.determinarGanador(estado));
+        }
+    }
 }

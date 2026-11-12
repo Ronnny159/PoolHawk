@@ -12,9 +12,6 @@ import com.poolhawk.rules.ReglasConfig;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * Reglas de la modalidad Por Puntos.
- */
 public class ReglasPorPuntos extends AbstractReglasBillar {
 
     public ReglasPorPuntos(ReglasConfig config) {
@@ -57,20 +54,11 @@ public class ReglasPorPuntos extends AbstractReglasBillar {
         return ResultadoTiro.tiroLegalSinPuntos(true);
     }
 
-    /**
-     * Calcula el puntaje del equipo.
-     * En individual (compañero == jugador), retorna solo el puntaje del jugador.
-     * En parejas, suma el puntaje del jugador y su compañero.
-     */
     private int calcularPuntajeEquipo(MatchState estado, Jugador jugador) {
         Jugador companero = estado.getCompanero(jugador);
-        
         if (companero.equals(jugador)) {
-            // Individual: no duplicar
             return estado.puntajeDe(jugador);
         }
-        
-        // Parejas: sumar ambos
         return estado.puntajeDe(jugador) + estado.puntajeDe(companero);
     }
 
@@ -96,7 +84,6 @@ public class ReglasPorPuntos extends AbstractReglasBillar {
     @Override
     public boolean partidaTerminada(MatchState estado) {
         Objects.requireNonNull(estado, "El estado no puede ser nulo");
-        // Verificar si algún equipo alcanzó el objetivo
         return estado.getPuntajes().keySet().stream()
             .anyMatch(j -> calcularPuntajeEquipo(estado, j) >= config.puntajeObjetivo());
     }
