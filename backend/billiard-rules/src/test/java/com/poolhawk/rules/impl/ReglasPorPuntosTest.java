@@ -218,27 +218,30 @@ class ReglasPorPuntosTest {
         }
 
         @Test
-        @DisplayName("Partida terminada cuando un jugador alcanza el objetivo")
+        @DisplayName("Partida terminada cuando el equipo A alcanza el objetivo")
         void terminadaConGanador() {
+            // Sumamos 25 puntos a ANA y 25 a CARLA (ambos del Equipo A) para llegar a 50
             for (int i = 0; i < 25; i++) {
                 estado.sumarPuntos(ANA, 1);
-                estado.sumarPuntos(BETO, 1);
+                estado.sumarPuntos(CARLA, 1);
             }
             assertTrue(reglas.partidaTerminada(estado));
+            // El ganador puede ser ANA o CARLA
             Jugador ganador = reglas.determinarGanador(estado);
-            assertTrue(ganador.equals(ANA) || ganador.equals(BETO));
+            assertTrue(ganador.equals(ANA) || ganador.equals(CARLA));
         }
 
         @Test
         @DisplayName("Partida terminada cuando el equipo B alcanza el objetivo")
         void terminadaConGanadorEquipoB() {
+            // Sumamos 25 a BETO y 25 a DIEGO (ambos del Equipo B) para llegar a 50
             for (int i = 0; i < 25; i++) {
-                estado.sumarPuntos(CARLA, 1);
+                estado.sumarPuntos(BETO, 1);
                 estado.sumarPuntos(DIEGO, 1);
             }
             assertTrue(reglas.partidaTerminada(estado));
             Jugador ganador = reglas.determinarGanador(estado);
-            assertTrue(ganador.equals(CARLA) || ganador.equals(DIEGO));
+            assertTrue(ganador.equals(BETO) || ganador.equals(DIEGO));
         }
     }
 
@@ -277,7 +280,7 @@ class ReglasPorPuntosTest {
             for (int i = 0; i < 49; i++) {
                 estado.sumarPuntos(ANA, 1);
             }
-            estado.sumarPuntos(BETO, 1);
+            estado.sumarPuntos(CARLA, 1);
 
             TiroEvent t = tiro(ANA, bola(1), List.of(bola(1)));
             ResultadoTiro r = reglas.evaluar(estado, t);
