@@ -204,6 +204,12 @@ public class MatchService {
      * Considera identidad si coinciden jugador, primera bola, bolas embolsadas,
      * troneras y duración.
      *
+     * <p>Regla estricta de idempotencia (H-03): <b>no se normalizan</b> valores nulos.
+     * Un reintento que incluya {@code null} en {@code troneras} se considera un payload
+     * distinto al original (que fue validado y no puede contener {@code null}), y por
+     * tanto se rechaza con 400. Aceptar silenciosamente un payload inválido como
+     * "idéntico" abriría la puerta a reintentos con datos divergentes.</p>
+     *
      * @param request  payload recibido en el reintento
      * @param original evento almacenado en el historial
      * @return {@code true} si representan el mismo tiro
@@ -230,15 +236,25 @@ public class MatchService {
             return false;
         }
 
+        // H-03: comparación estricta de troneras, sin filtrado de nulos.
         List<String> tronerasOriginal = original.troneras() == null
             ? List.of()
             : original.troneras().stream().map(Enum::name).toList();
-        List<String> tronerasRequest = request.troneras() == null
-            ? List.of()
-            : request.troneras().stream()
-                .filter(Objects::nonNull)
-                .map(String::toUpperCase)
-                .toList();
+
+        List<String> tronerasRequest;
+        if (request.troneras() == null) {
+            tronerasRequest = List.of();
+        } else {
+            tronerasRequest = new ArrayList<>(request.troneras().size());
+            for (String t : request.troneras()) {
+                if (t == null) {
+                    // Un null en el reintento nunca puede ser equivalente al original,
+                    // que fue validado y no admite nulos.
+                    return false;
+                }
+                tronerasRequest.add(t.toUpperCase());
+            }
+        }
         if (!tronerasOriginal.equals(tronerasRequest)) {
             return false;
         }

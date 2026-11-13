@@ -1,5 +1,6 @@
 package com.poolhawk.api.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.poolhawk.api.dto.CrearPartidaRequest;
 import com.poolhawk.api.dto.TiroEventRequest;
@@ -17,6 +18,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -68,7 +71,7 @@ class MatchControllerIT {
     }
 
     @Test
-    @DisplayName("POST /events reintento idéntico devuelve 200 con resultado original (idempotencia transparente)")
+    @DisplayName("POST /events reintento idéntico devuelve 200 con el MISMO resultado (H-05)")
     void registrarTiroReintentoIdenticoDevuelve200() throws Exception {
         CrearPartidaRequest crearRequest = new CrearPartidaRequest(
             TipoModalidad.BOLA_8, FormatoJuego.INDIVIDUAL, List.of("Ana", "Beto"), null, null
@@ -87,17 +90,25 @@ class MatchControllerIT {
             eventId, jugadorId, 1, List.of(), List.of(), 5
         );
 
-        // Primer intento -> 200 OK
-        mockMvc.perform(post("/api/v1/matches/" + partidaId + "/events")
+        // Primer intento -> 200 OK. Capturamos el cuerpo.
+        String bodyPrimero = mockMvc.perform(post("/api/v1/matches/" + partidaId + "/events")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(tiroRequest)))
-            .andExpect(status().isOk());
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
 
-        // Segundo intento con el MISMO eventId y MISMO payload -> 200 OK (no 409)
-        mockMvc.perform(post("/api/v1/matches/" + partidaId + "/events")
+        // Segundo intento con MISMO eventId y MISMO payload -> 200 OK (no 409). Capturamos cuerpo.
+        String bodySegundo = mockMvc.perform(post("/api/v1/matches/" + partidaId + "/events")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(tiroRequest)))
-            .andExpect(status().isOk());
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        // H-05: el cuerpo del reintento debe ser EXACTAMENTE el mismo ResultadoTiro.
+        JsonNode primero = objectMapper.readTree(bodyPrimero);
+        JsonNode segundo = objectMapper.readTree(bodySegundo);
+        assertEquals(primero, segundo,
+            "El reintento idempotente debe devolver el mismo ResultadoTiro que el primer envío");
 
         // El estado no debe haberse duplicado: cantidadTiros == 1
         mockMvc.perform(get("/api/v1/matches/" + partidaId))
@@ -188,7 +199,7 @@ class MatchControllerIT {
     }
 
     @Test
-    @DisplayName("POST /events falta ordinaria con blanca embolsada mantiene la blanca en mesa")
+    @DisplayName("POST /events falta ordinaria con blanca embolsada mantiene la blanca en mesa Y cambia turno (H-04)")
     void registrarTiroFaltaBlanca() throws Exception {
         CrearPartidaRequest crear = new CrearPartidaRequest(TipoModalidad.BOLA_8, FormatoJuego.INDIVIDUAL, List.of("Ana", "Beto"), null, null);
         String res = mockMvc.perform(post("/api/v1/matches").contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(crear)))
@@ -196,16 +207,31 @@ class MatchControllerIT {
         String pId = objectMapper.readTree(res).get("id").asText();
         String jId = objectMapper.readTree(res).get("equipoA").get(0).get("id").asText();
 
+        // Estado ANTES del tiro: turno de Ana
+        String jugadorAntes = mockMvc.perform(get("/api/v1/matches/" + pId))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        String nombreJugadorAntes = objectMapper.readTree(jugadorAntes).get("jugadorActual").asText();
+        assertEquals("Ana", nombreJugadorAntes, "El primer turno debe ser de Ana");
+
         // Enviamos falta metiendo la blanca (id 0)
         TiroEventRequest tiro = new TiroEventRequest("event-blanca", jId, 1, List.of(0), List.of("TOP_LEFT"), 5);
         mockMvc.perform(post("/api/v1/matches/" + pId + "/events").contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(tiro)))
             .andExpect(status().isOk());
 
-        // Verificamos: partida EN_CURSO, sin ganador y con la blanca (0) TODAVÍA en mesa
-        mockMvc.perform(get("/api/v1/matches/" + pId))
+        // Estado DESPUÉS del tiro
+        String bodyDespues = mockMvc.perform(get("/api/v1/matches/" + pId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.fase").value("EN_CURSO"))
             .andExpect(jsonPath("$.ganador").isEmpty())
-            .andExpect(jsonPath("$.bolasEnMesa", Matchers.hasItem(0)));
+            // H-04: la blanca (0) sigue sobre la mesa
+            .andExpect(jsonPath("$.bolasEnMesa", Matchers.hasItem(0)))
+            // H-04: el turno cambió al oponente
+            .andExpect(jsonPath("$.jugadorActual").value("Beto"))
+            .andReturn().getResponse().getContentAsString();
+
+        String nombreJugadorDespues = objectMapper.readTree(bodyDespues).get("jugadorActual").asText();
+        assertNotEquals(nombreJugadorAntes, nombreJugadorDespues,
+            "Tras una falta, el turno debe cambiar al oponente");
     }
 }
