@@ -8,6 +8,7 @@ import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.Bola;
 import com.poolhawk.domain.table.Coordenada;
 import com.poolhawk.domain.table.Mesa;
+import com.poolhawk.domain.table.TroneraNombre;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -448,6 +449,54 @@ class MatchStateTest {
 
             assertEquals(5, state.puntajeDe(ANA));
             assertEquals(1, state.cantidadTiros());
+        }
+
+        @Test
+        @DisplayName("Criterio 3: Mesa coherente tras derrota por bola 8 prematura")
+        void mesaCoherenteTrasDerrotaOchoPrematura() {
+            Bola bola8 = state.getMesa().buscarBola(8).orElseThrow();
+            // CORREGIDO: Añadimos TroneraNombre para que coincida con la bola embolsada
+            TiroEvent evento = new TiroEvent(
+                "e1", 
+                PARTIDA_ID, 
+                ANA, 
+                bola8, 
+                List.of(bola8), 
+                List.of(TroneraNombre.TOP_LEFT), 
+                Instant.now(), 
+                Duration.ofSeconds(5)
+            );
+            ResultadoTiro resultado = ResultadoTiro.derrota(FaltaMotivo.BOLA_8_ANTES_DE_TIEMPO);
+            
+            state.aplicarTiro(evento, resultado);
+            
+            assertFalse(state.getMesa().buscarBola(8).get().enMesa(), "La bola 8 debe estar fuera de la mesa");
+            assertEquals(ANA, state.jugadorActual(), "El turno no debe avanzar en derrota");
+        }
+
+        @Test
+        @DisplayName("Criterio 4: Mesa coherente al embolsar blanca y 8 simultáneamente")
+        void mesaCoherenteBlancaYOcho() {
+            Bola blanca = state.getMesa().buscarBola(0).orElseThrow();
+            Bola bola8 = state.getMesa().buscarBola(8).orElseThrow();
+            // CORREGIDO: Añadimos 2 TroneraNombre para que coincida con las 2 bolas embolsadas
+            TiroEvent evento = new TiroEvent(
+                "e1", 
+                PARTIDA_ID, 
+                ANA, 
+                bola8, 
+                List.of(blanca, bola8), 
+                List.of(TroneraNombre.TOP_LEFT, TroneraNombre.TOP_LEFT), 
+                Instant.now(), 
+                Duration.ofSeconds(5)
+            );
+            ResultadoTiro resultado = ResultadoTiro.derrota(FaltaMotivo.BLANCA_Y_OCHO_EMBOLSADAS);
+            
+            state.aplicarTiro(evento, resultado);
+            
+            assertFalse(state.getMesa().buscarBola(0).get().enMesa(), "La bola blanca debe estar fuera");
+            assertFalse(state.getMesa().buscarBola(8).get().enMesa(), "La bola 8 debe estar fuera");
+            assertEquals(ANA, state.jugadorActual(), "El turno no debe avanzar en derrota");
         }
 
         @Test

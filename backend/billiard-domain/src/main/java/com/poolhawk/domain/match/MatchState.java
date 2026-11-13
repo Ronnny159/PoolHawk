@@ -43,7 +43,6 @@ public class MatchState {
         Objects.requireNonNull(mesa, "La mesa no puede ser nula");
         Objects.requireNonNull(fechaInicio, "La fecha de inicio no puede ser nula");
 
-        // VALIDACIÓN RESTAURADA
         if (partidaId.isBlank()) {
             throw new IllegalArgumentException("El id de la partida no puede estar en blanco");
         }
@@ -187,6 +186,12 @@ public class MatchState {
         historial.add(evento);
     }
 
+    /**
+     * Aplica un resultado de tiro al estado.
+     * 
+     * <p>CORRECCIÓN: Las bolas embolsadas se aplican SIEMPRE, incluso si el resultado es falta o derrota.
+     * El turno no avanza si el resultado es victoria o derrota terminal.</p>
+     */
     public void aplicarTiro(TiroEvent evento, ResultadoTiro resultado) {
         Objects.requireNonNull(evento, "El evento no puede ser nulo");
         Objects.requireNonNull(resultado, "El resultado no puede ser nulo");
@@ -212,12 +217,10 @@ public class MatchState {
             }
         }
 
-        // 2. Aplicar bolas embolsadas (solo si no es falta ni derrota)
-        if (!resultado.esFalta() && !resultado.esDerrota()) {
-            for (Bola bola : evento.bolasEmbolsadas()) {
-                if (bola.enMesa()) {
-                    mesa.embolsarBola(bola.numero());
-                }
+        // 2. Aplicar bolas embolsadas (SIEMPRE, incluso en derrota o falta)
+        for (Bola bola : evento.bolasEmbolsadas()) {
+            if (bola.enMesa()) {
+                mesa.embolsarBola(bola.numero());
             }
         }
 
@@ -226,8 +229,8 @@ public class MatchState {
             sumarPuntos(evento.jugador(), resultado.puntos());
         }
 
-        // 4. Cambiar turno
-        if (resultado.cambiaTurno()) {
+        // 4. Cambiar turno SOLO si no es victoria ni derrota
+        if (resultado.cambiaTurno() && !resultado.esVictoria() && !resultado.esDerrota()) {
             avanzarTurno();
         }
     }
@@ -244,7 +247,6 @@ public class MatchState {
         }
     }
 
-    // EQUALS Y HASHCODE RESTAURADOS
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
