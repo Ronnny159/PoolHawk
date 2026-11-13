@@ -19,8 +19,10 @@ import com.poolhawk.rules.ReglasBillar;
 import com.poolhawk.rules.ReglasConfig;
 import com.poolhawk.rules.ReglasFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -83,10 +85,7 @@ public class MatchService {
 
     public Partida buscar(String id) {
         if (partidasEnMemoria.containsKey(id)) return partidasEnMemoria.get(id);
-
-        PartidaEntity entity = storage.buscar(id)
-            .orElseThrow(() -> new PartidaNoEncontradaException(id));
-
+        PartidaEntity entity = storage.buscar(id).orElseThrow(() -> new PartidaNoEncontradaException(id));
         return persistenceMapper.toDomain(entity);
     }
 
@@ -112,37 +111,46 @@ public class MatchService {
         synchronized (lock) {
             Partida partida = buscar(partidaId);
             
-            Jugador jugadorActual = partida.jugadorActual();
-            if (!jugadorActual.id().equals(request.jugadorId())) {
-                throw new IllegalArgumentException("No es el turno de este jugador. Turno actual: " + jugadorActual.nombre());
+            // 1. IDEMPOTENCIA
+            if (request.eventId() != null && !request.eventId().isBlank()) {
+                boolean yaProcesado = partida.getEstado().getHistorial().stream()
+                    .anyMatch(e -> e.id().equals(request.eventId()));
+                if (yaProcesado) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "El tiro ya fue registrado.");
+                }
             }
 
-            TiroEvent evento = construirEvento(partida, request, jugadorActual);
+            // 2. VALIDACIÓN DE TURNO
+            Jugador jugadorActual = partida.jugadorActual();
+            if (!jugadorActual.id().equals(request.jugadorId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No es el turno de este jugador.");
+            }
+
+            // 3. CONSTRUCCIÓN Y VALIDACIÓN ESTRICTA
+            TiroEvent evento = construirEventoValidado(partida, request, jugadorActual);
+            
+            // 4. EVALUAR Y APLICAR
             ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
             ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
             
             partida.aplicarTiro(evento, resultado);
             
-            // Manejo de estados terminales
             if (resultado.esVictoria()) {
                 partida.finalizar(evento.jugador());
             } else if (resultado.esDerrota()) {
-                // El ganador es el oponente del que cometió la falta
                 Jugador oponente = partida.getEquipoA().contiene(evento.jugador())
                     ? partida.getEquipoB().getJugadores().get(0)
                     : partida.getEquipoA().getJugadores().get(0);
                 partida.finalizar(oponente);
             }
             
+            // 5. PERSISTIR
             PartidaEntity entityExistente = storage.buscar(partidaId).orElse(null);
             PartidaEntity entityNueva = persistenceMapper.toEntity(partida);
-            
-            if (entityExistente != null) {
-                entityNueva.setVersion(entityExistente.getVersion());
-            }
-            
+            if (entityExistente != null) entityNueva.setVersion(entityExistente.getVersion());
             storage.guardar(entityNueva);
 
+            // 6. WEBSOCKET
             try {
                 String json = jsonMapper.writeValueAsString(responseMapper.toResponse(partida));
                 liveHandler.broadcast(json);
@@ -154,24 +162,58 @@ public class MatchService {
         }
     }
 
-    private TiroEvent construirEvento(Partida partida, TiroEventRequest request, Jugador jugadorActual) {
-        Bola primeraTocada = request.primeraBolaTocada() != null ? 
-            partida.getMesa().buscarBola(request.primeraBolaTocada()).orElse(null) : null;
+    private TiroEvent construirEventoValidado(Partida partida, TiroEventRequest request, Jugador jugadorActual) {
+        String eventId = (request.eventId() != null && !request.eventId().isBlank()) 
+            ? request.eventId() : UUID.randomUUID().toString();
 
-        List<Bola> embolsadas = new ArrayList<>();
-        if (request.bolasEmbolsadas() != null) {
-            for (Integer numero : request.bolasEmbolsadas()) {
-                partida.getMesa().buscarBola(numero).ifPresent(embolsadas::add);
+        // Validar primera bola tocada
+        Bola primeraTocada = null;
+        if (request.primeraBolaTocada() != null) {
+            primeraTocada = partida.getMesa().buscarBola(request.primeraBolaTocada())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola no existe."));
+            if (!primeraTocada.enMesa()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola ya no está en la mesa.");
             }
         }
 
-        List<TroneraNombre> troneras = request.troneras() != null ? 
-            request.troneras().stream().map(TroneraNombre::valueOf).toList() : new ArrayList<>();
+        // Validar bolas embolsadas
+        List<Bola> embolsadas = new ArrayList<>();
+        if (request.bolasEmbolsadas() != null && !request.bolasEmbolsadas().isEmpty()) {
+            Set<Integer> bolasUnicas = new HashSet<>();
+            for (Integer numero : request.bolasEmbolsadas()) {
+                if (!bolasUnicas.add(numero)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bola duplicada en el tiro.");
+                }
+                Bola bola = partida.getMesa().buscarBola(numero)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola no existe."));
+                if (!bola.enMesa()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola ya fue embolsada.");
+                }
+                embolsadas.add(bola);
+            }
+        }
+
+        // Validar troneras
+        List<TroneraNombre> troneras = new ArrayList<>();
+        if (request.troneras() != null) {
+            if (request.troneras().size() != embolsadas.size()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Troneras no coinciden con bolas embolsadas.");
+            }
+            for (String nombre : request.troneras()) {
+                try {
+                    troneras.add(TroneraNombre.valueOf(nombre.toUpperCase()));
+                } catch (IllegalArgumentException e) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tronera inválida.");
+                }
+            }
+        } else if (!embolsadas.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Faltan las troneras.");
+        }
 
         Duration duracion = request.duracionSegundos() != null ? 
             Duration.ofSeconds(request.duracionSegundos()) : Duration.ofSeconds(5);
 
-        return new TiroEvent(UUID.randomUUID().toString(), partida.getId(), jugadorActual,
+        return new TiroEvent(eventId, partida.getId(), jugadorActual,
             primeraTocada, embolsadas, troneras, Instant.now(), duracion);
     }
 }

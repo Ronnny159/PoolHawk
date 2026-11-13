@@ -53,7 +53,7 @@ class ResultadoTiroTest {
         @DisplayName("Rechaza derrota con puntos mayores a cero")
         void rechazaDerrotaConPuntos() {
             assertThrows(IllegalArgumentException.class, () -> new ResultadoTiro(
-                false, FaltaMotivo.BOLA_8_ANTES_DE_TIEMPO, 5, true, false, true, null, "Derrota"));
+                false, FaltaMotivo.BOLA_8_ANTES_DE_TIEMPO, 5, false, false, true, null, "Derrota"));
         }
 
         @Test
@@ -67,7 +67,7 @@ class ResultadoTiroTest {
         @DisplayName("Acepta derrota con motivo")
         void aceptaDerrotaConMotivo() {
             assertDoesNotThrow(() -> new ResultadoTiro(
-                false, FaltaMotivo.BOLA_8_ANTES_DE_TIEMPO, 0, true, false, true, null, "Derrota"));
+                false, FaltaMotivo.BOLA_8_ANTES_DE_TIEMPO, 0, false, false, true, null, "Derrota"));
         }
     }
 
@@ -153,7 +153,8 @@ class ResultadoTiroTest {
             assertFalse(r.esFalta());
             assertNull(r.motivo());
             assertEquals(10, r.puntos());
-            assertTrue(r.cambiaTurno());
+            // CORREGIDO: En victoria el turno NO cambia
+            assertFalse(r.cambiaTurno());
             assertTrue(r.esVictoria());
             assertFalse(r.esDerrota());
             assertNull(r.grupoAsignado());
@@ -165,6 +166,7 @@ class ResultadoTiroTest {
             ResultadoTiro r = ResultadoTiro.victoria(0);
             assertEquals(0, r.puntos());
             assertTrue(r.esVictoria());
+            assertFalse(r.cambiaTurno());
         }
 
         @Test
@@ -185,7 +187,8 @@ class ResultadoTiroTest {
             assertFalse(r.esFalta());
             assertEquals(FaltaMotivo.BOLA_8_ANTES_DE_TIEMPO, r.motivo());
             assertEquals(0, r.puntos());
-            assertTrue(r.cambiaTurno());
+            // CORREGIDO: En derrota el turno NO cambia
+            assertFalse(r.cambiaTurno());
             assertFalse(r.esVictoria());
             assertTrue(r.esDerrota());
             assertNull(r.grupoAsignado());

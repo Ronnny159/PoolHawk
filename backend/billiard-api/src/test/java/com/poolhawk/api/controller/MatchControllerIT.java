@@ -2,6 +2,7 @@ package com.poolhawk.api.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.poolhawk.api.dto.CrearPartidaRequest;
+import com.poolhawk.api.dto.TiroEventRequest;
 import com.poolhawk.domain.match.FormatoJuego;
 import com.poolhawk.domain.match.TipoModalidad;
 import com.poolhawk.api.BilliardApplication;
@@ -70,5 +71,41 @@ class MatchControllerIT {
     void obtenerPartidaInexistente() throws Exception {
         mockMvc.perform(get("/api/v1/matches/no-existe-123"))
             .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("POST /matches/{id}/events rechaza un tiro duplicado (409)")
+    void registrarTiroDuplicadoRechazado() throws Exception {
+        // 1. Crear partida
+        CrearPartidaRequest crearRequest = new CrearPartidaRequest(
+            TipoModalidad.BOLA_8, FormatoJuego.INDIVIDUAL, List.of("Ana", "Beto"), null, null
+        );
+        String response = mockMvc.perform(post("/api/v1/matches")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(crearRequest)))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+        
+        String partidaId = objectMapper.readTree(response).get("id").asText();
+        String jugadorId = objectMapper.readTree(response).get("equipoA").get(0).get("id").asText();
+
+        // 2. Crear tiro con un eventId fijo
+        String eventId = "evento-test-123";
+        TiroEventRequest tiroRequest = new TiroEventRequest(
+            eventId, jugadorId, 1, List.of(), List.of(), 5
+        );
+
+        // 3. Enviar el tiro (debe ser 200 OK)
+        mockMvc.perform(post("/api/v1/matches/" + partidaId + "/events")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(tiroRequest)))
+            .andExpect(status().isOk());
+
+        // 4. Enviar el mismo tiro otra vez (debe ser 409 Conflict)
+        mockMvc.perform(post("/api/v1/matches/" + partidaId + "/events")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(tiroRequest)))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message").value("El tiro ya fue registrado."));
     }
 }

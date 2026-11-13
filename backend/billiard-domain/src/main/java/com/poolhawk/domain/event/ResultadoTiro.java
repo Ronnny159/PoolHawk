@@ -13,7 +13,6 @@ public record ResultadoTiro(
     Grupo grupoAsignado,
     String descripcion
 ) {
-
     public ResultadoTiro {
         if (descripcion == null || descripcion.isBlank()) {
             throw new IllegalArgumentException("La descripción no puede ser nula ni vacía");
@@ -50,12 +49,12 @@ public record ResultadoTiro(
     }
 
     public static ResultadoTiro victoria(int puntos) {
-        return new ResultadoTiro(false, null, puntos, true, true, false, null, "¡Victoria! Se ganó la partida");
+        return new ResultadoTiro(false, null, puntos, false, true, false, null, "¡Victoria! Se ganó la partida");
     }
 
     public static ResultadoTiro derrota(FaltaMotivo motivo) {
         Objects.requireNonNull(motivo, "El motivo de la derrota no puede ser nulo");
-        return new ResultadoTiro(false, motivo, 0, true, false, true, null, "Derrota: " + motivo.getDescripcion());
+        return new ResultadoTiro(false, motivo, 0, false, false, true, null, "Derrota: " + motivo.getDescripcion());
     }
 
     public boolean fueExitoso() {

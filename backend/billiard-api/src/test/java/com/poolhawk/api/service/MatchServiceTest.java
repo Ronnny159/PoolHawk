@@ -74,8 +74,14 @@ class MatchServiceTest {
         partida.getEstado().asignarGrupo(beto, Grupo.RAYADAS);
         
         // 3. Simular tiro de derrota (embolsa la 8 prematuramente)
+        // CORREGIDO: Agregamos el eventId como primer parámetro
         TiroEventRequest tiroRequest = new TiroEventRequest(
-            ana.id(), 8, List.of(8), List.of("TOP_LEFT"), 5
+            "evento-derrota-123", 
+            ana.id(), 
+            8, 
+            List.of(8), 
+            List.of("TOP_LEFT"), 
+            5
         );
         
         // 4. Registrar tiro

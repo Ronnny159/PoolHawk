@@ -1,5 +1,6 @@
 package com.poolhawk.domain.match;
 
+import com.poolhawk.domain.event.FaltaMotivo;
 import com.poolhawk.domain.event.ResultadoTiro;
 import com.poolhawk.domain.event.TiroEvent;
 import com.poolhawk.domain.player.Equipo;
@@ -10,12 +11,6 @@ import com.poolhawk.domain.table.Mesa;
 import java.time.Instant;
 import java.util.*;
 
-/**
- * Estado completo de una partida de billar en un momento dado.
- * 
- * <p>Recibe los equipos explícitamente para que {@link #getCompanero(Jugador)}
- * consulte la pertenencia real, no el índice en la rotación de turnos.</p>
- */
 public class MatchState {
 
     private final String partidaId;
@@ -78,7 +73,6 @@ public class MatchState {
     public Jugador getGanador() { return ganador; }
 
     public Jugador jugadorActual() { return turnos.jugadorActual(); }
-
     public int puntajeDe(Jugador jugador) { return puntajes.getOrDefault(jugador, 0); }
     public Grupo grupoDe(Jugador jugador) { return gruposAsignados.getOrDefault(jugador, Grupo.SIN_ASIGNAR); }
     public Map<Jugador, Integer> getPuntajes() { return Collections.unmodifiableMap(puntajes); }
@@ -116,66 +110,45 @@ public class MatchState {
 
     // MODIFICACIÓN DE ESTADO
     public void iniciar() {
-        if (fase != FasePartida.CREADA) {
-            throw new IllegalStateException("Solo se puede iniciar una partida en fase CREADA. Fase actual: " + fase);
-        }
+        if (fase != FasePartida.CREADA) throw new IllegalStateException("Solo se puede iniciar en CREADA.");
         fase = FasePartida.EN_CURSO;
     }
 
     public void pausar() {
-        if (fase != FasePartida.EN_CURSO) {
-            throw new IllegalStateException("Solo se puede pausar una partida EN_CURSO. Fase actual: " + fase);
-        }
+        if (fase != FasePartida.EN_CURSO) throw new IllegalStateException("Solo se puede pausar en EN_CURSO.");
         fase = FasePartida.PAUSADA;
     }
 
     public void reanudar() {
-        if (fase != FasePartida.PAUSADA) {
-            throw new IllegalStateException("Solo se puede reanudar una partida PAUSADA. Fase actual: " + fase);
-        }
+        if (fase != FasePartida.PAUSADA) throw new IllegalStateException("Solo se puede reanudar en PAUSADA.");
         fase = FasePartida.EN_CURSO;
     }
 
     public void finalizar(Jugador ganador) {
         Objects.requireNonNull(ganador, "El ganador no puede ser nulo");
-        if (estaTerminada()) {
-            throw new IllegalStateException("La partida ya está terminada en fase: " + fase);
-        }
-        if (turnos.posicionDe(ganador) < 0) {
-            throw new IllegalArgumentException("El ganador " + ganador.nombre() + " no participa en esta partida");
-        }
+        if (estaTerminada()) throw new IllegalStateException("La partida ya está terminada.");
+        if (turnos.posicionDe(ganador) < 0) throw new IllegalArgumentException("El ganador no participa.");
         this.ganador = ganador;
         this.fase = FasePartida.FINALIZADA;
     }
 
     public void abandonar() {
-        if (estaTerminada()) {
-            throw new IllegalStateException("La partida ya está terminada en fase: " + fase);
-        }
+        if (estaTerminada()) throw new IllegalStateException("La partida ya está terminada.");
         this.fase = FasePartida.ABANDONADA;
     }
 
     public void sumarPuntos(Jugador jugador, int puntos) {
         Objects.requireNonNull(jugador, "El jugador no puede ser nulo");
-        if (puntos < 0) {
-            throw new IllegalArgumentException("Los puntos a sumar no pueden ser negativos. Valor recibido: " + puntos);
-        }
-        if (turnos.posicionDe(jugador) < 0) {
-            throw new IllegalArgumentException("El jugador " + jugador.nombre() + " no participa en esta partida");
-        }
+        if (puntos < 0) throw new IllegalArgumentException("Puntos negativos");
+        if (turnos.posicionDe(jugador) < 0) throw new IllegalArgumentException("El jugador no participa");
         puntajes.merge(jugador, puntos, Integer::sum);
     }
 
     public void asignarGrupo(Jugador jugador, Grupo grupo) {
         Objects.requireNonNull(jugador, "El jugador no puede ser nulo");
         Objects.requireNonNull(grupo, "El grupo no puede ser nulo");
-
-        if (!grupo.estaAsignado()) {
-            throw new IllegalArgumentException("No se puede asignar el grupo SIN_ASIGNAR");
-        }
-        if (grupoDe(jugador).estaAsignado()) {
-            throw new IllegalArgumentException("El jugador " + jugador.nombre() + " ya tiene asignado el grupo " + grupoDe(jugador));
-        }
+        if (!grupo.estaAsignado()) throw new IllegalArgumentException("No se puede asignar SIN_ASIGNAR");
+        if (grupoDe(jugador).estaAsignado()) throw new IllegalArgumentException("El jugador ya tiene grupo");
         gruposAsignados.put(jugador, grupo);
     }
 
@@ -186,18 +159,12 @@ public class MatchState {
         historial.add(evento);
     }
 
-    /**
-     * Aplica un resultado de tiro al estado.
-     * 
-     * <p>CORRECCIÓN: Las bolas embolsadas se aplican SIEMPRE, incluso si el resultado es falta o derrota.
-     * El turno no avanza si el resultado es victoria o derrota terminal.</p>
-     */
     public void aplicarTiro(TiroEvent evento, ResultadoTiro resultado) {
         Objects.requireNonNull(evento, "El evento no puede ser nulo");
         Objects.requireNonNull(resultado, "El resultado no puede ser nulo");
 
         if (fase != FasePartida.EN_CURSO) {
-            throw new IllegalStateException("Solo se pueden aplicar tiros a una partida EN_CURSO. Fase actual: " + fase);
+            throw new IllegalStateException("Solo se aplican tiros en EN_CURSO.");
         }
 
         registrarTiro(evento);
@@ -209,27 +176,25 @@ public class MatchState {
                 ? equipoB.getJugadores().get(0) 
                 : equipoA.getJugadores().get(0);
 
-            if (!grupoDe(tirador).estaAsignado()) {
-                gruposAsignados.put(tirador, resultado.grupoAsignado());
-            }
-            if (!grupoDe(oponente).estaAsignado()) {
-                gruposAsignados.put(oponente, resultado.grupoAsignado().opuesto());
-            }
+            if (!grupoDe(tirador).estaAsignado()) gruposAsignados.put(tirador, resultado.grupoAsignado());
+            if (!grupoDe(oponente).estaAsignado()) gruposAsignados.put(oponente, resultado.grupoAsignado().opuesto());
         }
 
-        // 2. Aplicar bolas embolsadas (SIEMPRE, incluso en derrota o falta)
+        // 2. Aplicar bolas embolsadas (CON EXCEPCIÓN DE LA BLANCA EN FALTA)
         for (Bola bola : evento.bolasEmbolsadas()) {
+            // Si es falta por meter la blanca, la blanca NO sale de la mesa (vuelve a estar disponible)
+            if (resultado.esFalta() && resultado.motivo() == FaltaMotivo.BLANCA_EMBOLSADA && bola.esBlanca()) {
+                continue;
+            }
             if (bola.enMesa()) {
                 mesa.embolsarBola(bola.numero());
             }
         }
 
         // 3. Sumar puntos
-        if (resultado.puntos() > 0) {
-            sumarPuntos(evento.jugador(), resultado.puntos());
-        }
+        if (resultado.puntos() > 0) sumarPuntos(evento.jugador(), resultado.puntos());
 
-        // 4. Cambiar turno SOLO si no es victoria ni derrota
+        // 4. Cambiar turno SOLO si no es terminal
         if (resultado.cambiaTurno() && !resultado.esVictoria() && !resultado.esDerrota()) {
             avanzarTurno();
         }
@@ -238,13 +203,8 @@ public class MatchState {
     public void restaurarEstado(FasePartida faseGuardada, Jugador ganadorGuardado, Map<Jugador, Integer> puntajesGuardados, Map<Jugador, Grupo> gruposGuardados) {
         this.fase = faseGuardada;
         this.ganador = ganadorGuardado;
-        
-        if (puntajesGuardados != null) {
-            this.puntajes.putAll(puntajesGuardados);
-        }
-        if (gruposGuardados != null) {
-            this.gruposAsignados.putAll(gruposGuardados);
-        }
+        if (puntajesGuardados != null) this.puntajes.putAll(puntajesGuardados);
+        if (gruposGuardados != null) this.gruposAsignados.putAll(gruposGuardados);
     }
 
     @Override
@@ -259,6 +219,6 @@ public class MatchState {
 
     @Override
     public String toString() {
-        return "MatchState{" + "partidaId='" + partidaId + '\'' + ", modalidad=" + modalidad + ", fase=" + fase + ", jugadorActual=" + (turnos != null ? turnos.jugadorActual().nombre() : "N/A") + ", puntajes=" + puntajes + '}';
+        return "MatchState{" + "partidaId='" + partidaId + '\'' + ", fase=" + fase + '}';
     }
 }
