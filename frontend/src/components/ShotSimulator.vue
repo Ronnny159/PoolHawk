@@ -20,9 +20,9 @@ const avisarResultado = (resultado) => {
 }
 
 const simularTiro = async (tipo) => {
-  try {
-    cargando.value = true
+  cargando.value = true
 
+  try {
     const todosLosJugadores = [...props.partida.equipoA, ...props.partida.equipoB]
     const jugadorActual = todosLosJugadores.find(j => j.nombre === props.partida.jugadorActual)
     
@@ -32,11 +32,11 @@ const simularTiro = async (tipo) => {
     const bolaObjetivo = esEquipoA ? 1 : 10
     const bolaAEmbolsar = esEquipoA ? 2 : 11
 
-    // 1. Generamos el ID único de evento para idempotencia
+    // Generamos el ID único UNA SOLA VEZ por tiro
     const eventId = crypto.randomUUID()
 
     let payload = { 
-      eventId: eventId, // <-- ID generado en el cliente
+      eventId: eventId, 
       jugadorId: jugadorActual.id, 
       duracionSegundos: 5 
     }
@@ -53,13 +53,38 @@ const simularTiro = async (tipo) => {
       payload.troneras = ['TOP_LEFT']
     }
 
-    console.log(`Simulando tiro para ${jugadorActual.nombre} (Equipo ${esEquipoA ? 'A' : 'B'})`, payload)
-    
-    // 2. Enviamos el tiro. Si se reintenta, se debería reutilizar el mismo eventId.
-    const resultado = await registrarTiro(props.partida.id, payload)
-    
-    emit('tiroRegistrado')
-    avisarResultado(resultado)
+    console.log(`Simulando tiro para ${jugadorActual.nombre}`, payload)
+
+    // BUCLE DE REINTENTO
+    let exito = false
+    let intentos = 0
+    const maxIntentos = 3
+
+    while (!exito && intentos < maxIntentos) {
+      try {
+        const resultado = await registrarTiro(props.partida.id, payload)
+        emit('tiroRegistrado')
+        avisarResultado(resultado)
+        exito = true
+      } catch (error) {
+        // Si es un error de red (sin respuesta) o un error de servidor (5xx)
+        const esErrorRed = !error.response || error.response.status >= 500
+        
+        if (esErrorRed && intentos < maxIntentos - 1) {
+          intentos++
+          toast.warning(`Error de red. Reintentando tiro (Intento ${intentos}/${maxIntentos - 1})...`)
+          // Esperamos 2 segundos antes de reintentar
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        } else {
+          // Errores 4xx (como 400 o 409) o si se agotaron los intentos, lanzamos el error
+          throw error
+        }
+      }
+    }
+
+    if (!exito) {
+      throw new Error('No se pudo registrar el tiro tras múltiples intentos.')
+    }
 
   } catch (error) {
     console.error('Error al registrar tiro:', error)
