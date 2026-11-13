@@ -25,10 +25,18 @@ public class MatchState {
     private final Map<Jugador, Integer> puntajes;
     private final Map<Jugador, Grupo> gruposAsignados;
     private final List<TiroEvent> historial;
+
+    /**
+     * Resultados indexados por {@code eventId}. Permite la idempotencia
+     * transparente en {@code MatchService}: si llega un evento repetido,
+     * se devuelve el veredicto original sin re-evaluar ni mutar estado.
+     */
+    private final Map<String, ResultadoTiro> resultadosPorEvento;
+
     private Jugador ganador;
 
-    public MatchState(String partidaId, TipoModalidad modalidad, 
-                      Equipo equipoA, Equipo equipoB, 
+    public MatchState(String partidaId, TipoModalidad modalidad,
+                      Equipo equipoA, Equipo equipoB,
                       Turnos<Jugador> turnos, Mesa mesa, Instant fechaInicio) {
         Objects.requireNonNull(partidaId, "El id de la partida no puede ser nulo");
         Objects.requireNonNull(modalidad, "La modalidad no puede ser nula");
@@ -53,6 +61,7 @@ public class MatchState {
         this.puntajes = new HashMap<>();
         this.gruposAsignados = new HashMap<>();
         this.historial = new ArrayList<>();
+        this.resultadosPorEvento = new HashMap<>();
         this.ganador = null;
 
         for (Jugador j : turnos.jugadores()) {
@@ -79,6 +88,39 @@ public class MatchState {
     public Map<Jugador, Grupo> getGruposAsignados() { return Collections.unmodifiableMap(gruposAsignados); }
     public List<TiroEvent> getHistorial() { return Collections.unmodifiableList(historial); }
     public int cantidadTiros() { return historial.size(); }
+
+    /**
+     * Devuelve el veredicto original asociado a un {@code eventId}, si ya fue procesado.
+     *
+     * @param eventId identificador idempotente del tiro
+     * @return el {@link ResultadoTiro} original, o {@link Optional#empty()} si es nuevo
+     */
+    public Optional<ResultadoTiro> buscarResultadoPorEvento(String eventId) {
+        if (eventId == null || eventId.isBlank()) return Optional.empty();
+        return Optional.ofNullable(resultadosPorEvento.get(eventId));
+    }
+
+    /**
+     * @return mapa inmutable {@code eventId -> ResultadoTiro} de todos los tiros procesados
+     */
+    public Map<String, ResultadoTiro> getResultadosPorEvento() {
+        return Collections.unmodifiableMap(resultadosPorEvento);
+    }
+
+    /**
+     * Devuelve los números de las bolas que siguen sobre la mesa (incluida la blanca, id 0).
+     * Útil para que la capa API verifique situaciones como "falta con blanca que vuelve".
+     *
+     * @return lista ordenada de números de bola presentes en la mesa
+     */
+    public List<Integer> bolasEnMesa() {
+        List<Integer> resultado = new ArrayList<>();
+        for (int numero = 0; numero <= 15; numero++) {
+            int n = numero;
+            mesa.buscarBola(n).filter(Bola::enMesa).ifPresent(b -> resultado.add(n));
+        }
+        return resultado;
+    }
 
     public boolean estaTerminada() { return fase.esTerminal(); }
     public boolean estaActiva() { return fase.estaActiva(); }
@@ -159,6 +201,13 @@ public class MatchState {
         historial.add(evento);
     }
 
+    /**
+     * Aplica un tiro ya evaluado. Almacena también el {@link ResultadoTiro} indexado por
+     * {@code eventId} para garantizar idempotencia transparente en reintentos posteriores.
+     *
+     * @param evento   evento validado del tiro
+     * @param resultado veredicto devuelto por el motor de reglas
+     */
     public void aplicarTiro(TiroEvent evento, ResultadoTiro resultado) {
         Objects.requireNonNull(evento, "El evento no puede ser nulo");
         Objects.requireNonNull(resultado, "El resultado no puede ser nulo");
@@ -172,8 +221,8 @@ public class MatchState {
         // 1. Aplicar grupo si el tiro lo asignó
         if (resultado.grupoAsignado() != null) {
             Jugador tirador = evento.jugador();
-            Jugador oponente = equipoA.contiene(tirador) 
-                ? equipoB.getJugadores().get(0) 
+            Jugador oponente = equipoA.contiene(tirador)
+                ? equipoB.getJugadores().get(0)
                 : equipoA.getJugadores().get(0);
 
             if (!grupoDe(tirador).estaAsignado()) gruposAsignados.put(tirador, resultado.grupoAsignado());
@@ -182,7 +231,6 @@ public class MatchState {
 
         // 2. Aplicar bolas embolsadas (CON EXCEPCIÓN DE LA BLANCA EN FALTA)
         for (Bola bola : evento.bolasEmbolsadas()) {
-            // Si es falta por meter la blanca, la blanca NO sale de la mesa (vuelve a estar disponible)
             if (resultado.esFalta() && resultado.motivo() == FaltaMotivo.BLANCA_EMBOLSADA && bola.esBlanca()) {
                 continue;
             }
@@ -198,6 +246,9 @@ public class MatchState {
         if (resultado.cambiaTurno() && !resultado.esVictoria() && !resultado.esDerrota()) {
             avanzarTurno();
         }
+
+        // 5. Registrar el resultado para idempotencia (al final, cuando ya no puede fallar)
+        resultadosPorEvento.put(evento.id(), resultado);
     }
 
     public void restaurarEstado(FasePartida faseGuardada, Jugador ganadorGuardado, Map<Jugador, Integer> puntajesGuardados, Map<Jugador, Grupo> gruposGuardados) {

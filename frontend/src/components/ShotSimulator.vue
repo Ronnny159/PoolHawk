@@ -10,12 +10,13 @@ const props = defineProps({
 const emit = defineEmits(['tiroRegistrado'])
 const cargando = ref(false)
 
-const avisarResultado = (resultado) => {
+const avisarResultado = (resultado, fueReintento) => {
   const mensaje = resultado?.descripcion ?? 'Tiro registrado'
+  const sufijo = fueReintento ? ' (idempotente)' : ''
   if (mensaje.startsWith('Falta')) {
-    toast.warning(mensaje)
+    toast.warning(mensaje + sufijo)
   } else {
-    toast.success(mensaje)
+    toast.success(mensaje + sufijo)
   }
 }
 
@@ -25,20 +26,21 @@ const simularTiro = async (tipo) => {
   try {
     const todosLosJugadores = [...props.partida.equipoA, ...props.partida.equipoB]
     const jugadorActual = todosLosJugadores.find(j => j.nombre === props.partida.jugadorActual)
-    
+
     if (!jugadorActual) throw new Error('Jugador actual no encontrado')
 
     const esEquipoA = props.partida.equipoA.some(j => j.id === jugadorActual.id)
     const bolaObjetivo = esEquipoA ? 1 : 10
     const bolaAEmbolsar = esEquipoA ? 2 : 11
 
-    // Generamos el ID único UNA SOLA VEZ por tiro
+    // IMPORTANTE: eventId generado UNA SOLA VEZ por tiro. Todos los reintentos
+    // del bucle comparten el mismo eventId (idempotencia transparente).
     const eventId = crypto.randomUUID()
 
-    let payload = { 
-      eventId: eventId, 
-      jugadorId: jugadorActual.id, 
-      duracionSegundos: 5 
+    let payload = {
+      eventId,
+      jugadorId: jugadorActual.id,
+      duracionSegundos: 5
     }
 
     if (tipo === 'FALLO') {
@@ -55,28 +57,30 @@ const simularTiro = async (tipo) => {
 
     console.log(`Simulando tiro para ${jugadorActual.nombre}`, payload)
 
-    // BUCLE DE REINTENTO
     let exito = false
     let intentos = 0
     const maxIntentos = 3
 
     while (!exito && intentos < maxIntentos) {
+      const fueReintento = intentos > 0
       try {
+        // El backend devuelve 200 OK tanto en el primer envío como en
+        // reintentos idénticos con el mismo eventId (idempotencia transparente).
         const resultado = await registrarTiro(props.partida.id, payload)
         emit('tiroRegistrado')
-        avisarResultado(resultado)
+        avisarResultado(resultado, fueReintento)
         exito = true
       } catch (error) {
-        // Si es un error de red (sin respuesta) o un error de servidor (5xx)
-        const esErrorRed = !error.response || error.response.status >= 500
-        
+        const status = error.response?.status
+        // Reintentamos solo si fue un fallo de red o un 5xx.
+        // 4xx (400) significa payload inválido o eventId con payload distinto: NO reintentar.
+        const esErrorRed = !error.response || status >= 500
+
         if (esErrorRed && intentos < maxIntentos - 1) {
           intentos++
           toast.warning(`Error de red. Reintentando tiro (Intento ${intentos}/${maxIntentos - 1})...`)
-          // Esperamos 2 segundos antes de reintentar
           await new Promise(resolve => setTimeout(resolve, 2000))
         } else {
-          // Errores 4xx (como 400 o 409) o si se agotaron los intentos, lanzamos el error
           throw error
         }
       }
@@ -85,7 +89,6 @@ const simularTiro = async (tipo) => {
     if (!exito) {
       throw new Error('No se pudo registrar el tiro tras múltiples intentos.')
     }
-
   } catch (error) {
     console.error('Error al registrar tiro:', error)
     const mensaje = error.response?.data?.message || error.message
@@ -100,7 +103,7 @@ const simularTiro = async (tipo) => {
   <div class="simulador">
     <h3>Panel de Control (Simulador)</h3>
     <p>Usa estos botones para simular lo que la cámara enviaría.</p>
-    
+
     <div class="botones">
       <button @click="simularTiro('FALLO')" :disabled="cargando" class="btn-rojo">Fallar (No tocar bola)</button>
       <button @click="simularTiro('LEGAL')" :disabled="cargando" class="btn-gris">Tiro Legal (Toca bola)</button>

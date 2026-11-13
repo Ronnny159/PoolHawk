@@ -42,8 +42,8 @@ public class MatchService {
     private final Map<String, Partida> partidasEnMemoria = new ConcurrentHashMap<>();
     private final Map<String, Object> locksPorPartida = new ConcurrentHashMap<>();
 
-    public MatchService(MatchStorage storage, MatchLiveHandler liveHandler, 
-                        PartidaMapper responseMapper, MatchPersistenceMapper persistenceMapper, 
+    public MatchService(MatchStorage storage, MatchLiveHandler liveHandler,
+                        PartidaMapper responseMapper, MatchPersistenceMapper persistenceMapper,
                         MatchFactory matchFactory, ObjectMapper jsonMapper) {
         this.storage = storage;
         this.liveHandler = liveHandler;
@@ -74,12 +74,12 @@ public class MatchService {
 
         String id = UUID.randomUUID().toString();
         Partida partida = matchFactory.crearDesdeRequest(id, request);
-        
+
         PartidaEntity entity = persistenceMapper.toEntity(partida);
         storage.guardar(entity);
-        
+
         partidasEnMemoria.put(id, partida);
-        
+
         return partida;
     }
 
@@ -107,22 +107,50 @@ public class MatchService {
             .collect(Collectors.toList());
     }
 
+    /**
+     * Registra un tiro aplicando idempotencia <b>transparente</b>:
+     * <ul>
+     *   <li>Si el {@code eventId} ya fue procesado con el mismo payload, se devuelve el
+     *       {@link ResultadoTiro} original con HTTP 200 y <b>sin mutar el estado</b>.</li>
+     *   <li>Si el {@code eventId} ya fue procesado con un payload diferente, se responde
+     *       HTTP 400 (Bad Request).</li>
+     *   <li>Si es un {@code eventId} nuevo, se evalúa, aplica, persiste y emite por WebSocket.</li>
+     * </ul>
+     *
+     * @param partidaId identificador de la partida
+     * @param request   payload del tiro
+     * @return veredicto del motor de reglas (original o recién calculado)
+     */
     @Transactional
     public ResultadoTiro registrarTiro(String partidaId, TiroEventRequest request) {
         Object lock = locksPorPartida.computeIfAbsent(partidaId, k -> new Object());
-        
+
         synchronized (lock) {
             Partida partida = buscar(partidaId);
-            
-            // 1. IDEMPOTENCIA
-            if (request.eventId() != null && !request.eventId().isBlank()) {
-                boolean yaProcesado = partida.getEstado().getHistorial().stream()
-                    .anyMatch(e -> e.id().equals(request.eventId()));
-                if (yaProcesado) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT, "El tiro ya fue registrado.");
+
+            // 1. IDEMPOTENCIA TRANSPARENTE
+            if (request.eventId() == null || request.eventId().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El eventId es obligatorio para garantizar idempotencia.");
+            }
+
+            Optional<ResultadoTiro> resultadoOriginal =
+                partida.getEstado().buscarResultadoPorEvento(request.eventId());
+
+            if (resultadoOriginal.isPresent()) {
+                TiroEvent tiroOriginal = partida.getEstado().getHistorial().stream()
+                    .filter(e -> e.id().equals(request.eventId()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException(
+                        "Inconsistencia de idempotencia: resultado registrado sin evento."));
+
+                if (!mismoPayload(request, tiroOriginal)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "El eventId ya fue utilizado con un payload diferente.");
                 }
-            } else {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El eventId es obligatorio para garantizar idempotencia.");
+
+                // Reintento idéntico: 200 OK con el veredicto original, sin tocar estado.
+                return resultadoOriginal.get();
             }
 
             // 2. VALIDACIÓN DE TURNO
@@ -133,13 +161,13 @@ public class MatchService {
 
             // 3. CONSTRUCCIÓN Y VALIDACIÓN ESTRICTA
             TiroEvent evento = construirEventoValidado(partida, request, jugadorActual);
-            
+
             // 4. EVALUAR Y APLICAR
             ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
             ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
-            
+
             partida.aplicarTiro(evento, resultado);
-            
+
             if (resultado.esVictoria()) {
                 partida.finalizar(evento.jugador());
             } else if (resultado.esDerrota()) {
@@ -148,15 +176,15 @@ public class MatchService {
                     : partida.getEquipoA().getJugadores().get(0);
                 partida.finalizar(oponente);
             }
-            
+
             // 5. PERSISTIR
             PartidaEntity entityExistente = storage.buscar(partidaId).orElse(null);
             PartidaEntity entityNueva = persistenceMapper.toEntity(partida);
-            
+
             if (entityExistente != null) {
                 entityNueva.setVersion(entityExistente.getVersion());
             }
-            
+
             storage.guardar(entityNueva);
 
             // 6. WEBSOCKET
@@ -169,6 +197,55 @@ public class MatchService {
 
             return resultado;
         }
+    }
+
+    /**
+     * Compara el payload del request con el {@link TiroEvent} originalmente procesado.
+     * Considera identidad si coinciden jugador, primera bola, bolas embolsadas,
+     * troneras y duración.
+     *
+     * @param request  payload recibido en el reintento
+     * @param original evento almacenado en el historial
+     * @return {@code true} si representan el mismo tiro
+     */
+    private boolean mismoPayload(TiroEventRequest request, TiroEvent original) {
+        if (!Objects.equals(request.jugadorId(), original.jugador().id())) {
+            return false;
+        }
+
+        Integer primeraOriginal = original.primeraBolaTocada() != null
+            ? original.primeraBolaTocada().numero()
+            : null;
+        if (!Objects.equals(request.primeraBolaTocada(), primeraOriginal)) {
+            return false;
+        }
+
+        List<Integer> bolasOriginal = original.bolasEmbolsadas() == null
+            ? List.of()
+            : original.bolasEmbolsadas().stream().map(Bola::numero).toList();
+        List<Integer> bolasRequest = request.bolasEmbolsadas() == null
+            ? List.of()
+            : request.bolasEmbolsadas();
+        if (!bolasOriginal.equals(bolasRequest)) {
+            return false;
+        }
+
+        List<String> tronerasOriginal = original.troneras() == null
+            ? List.of()
+            : original.troneras().stream().map(Enum::name).toList();
+        List<String> tronerasRequest = request.troneras() == null
+            ? List.of()
+            : request.troneras().stream()
+                .filter(Objects::nonNull)
+                .map(String::toUpperCase)
+                .toList();
+        if (!tronerasOriginal.equals(tronerasRequest)) {
+            return false;
+        }
+
+        long duracionOriginal = original.duracion() != null ? original.duracion().getSeconds() : 5L;
+        long duracionRequest = request.duracionSegundos() != null ? request.duracionSegundos() : 5L;
+        return duracionOriginal == duracionRequest;
     }
 
     private TiroEvent construirEventoValidado(Partida partida, TiroEventRequest request, Jugador jugadorActual) {
@@ -224,7 +301,7 @@ public class MatchService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Faltan las troneras.");
         }
 
-        Duration duracion = request.duracionSegundos() != null ? 
+        Duration duracion = request.duracionSegundos() != null ?
             Duration.ofSeconds(request.duracionSegundos()) : Duration.ofSeconds(5);
 
         return new TiroEvent(eventId, partida.getId(), jugadorActual,
