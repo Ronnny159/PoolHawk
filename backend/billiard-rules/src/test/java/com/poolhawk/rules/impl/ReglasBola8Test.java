@@ -330,4 +330,50 @@ class ReglasBola8Test {
             assertNull(reglas.determinarGanador(estado));
         }
     }
+    @Test
+    @DisplayName("Derrota si embolsa la 8 con primer contacto ilegal")
+    void derrotaOchoConContactoIlegal() {
+        estado.asignarGrupo(ANA, Grupo.LISAS);
+        estado.asignarGrupo(BETO, Grupo.RAYADAS);
+        for (int i = 1; i <= 7; i++) mesa.embolsarBola(i);
+
+        // Toca una rayada (ilegal) y embolsa la 8
+        TiroEvent t = tiroConEmbolsada(ANA, bola(11), bola(8));
+        ResultadoTiro r = reglas.evaluar(estado, t);
+        
+        assertTrue(r.esDerrota());
+        assertEquals(FaltaMotivo.BOLA_8_CON_CONTACTO_ILEGAL, r.motivo());
+    }
+
+    @Test
+    @DisplayName("Derrota si embolsa la blanca y la 8 simultáneamente")
+    void derrotaBlancaYOcho() {
+        estado.asignarGrupo(ANA, Grupo.LISAS);
+        estado.asignarGrupo(BETO, Grupo.RAYADAS);
+        for (int i = 1; i <= 7; i++) mesa.embolsarBola(i);
+
+        TiroEvent t = tiro(ANA, bola(8), List.of(bola(0), bola(8)), 
+            List.of(TroneraNombre.TOP_LEFT, TroneraNombre.TOP_LEFT));
+        ResultadoTiro r = reglas.evaluar(estado, t);
+        
+        assertTrue(r.esDerrota());
+        assertEquals(FaltaMotivo.BLANCA_Y_OCHO_EMBOLSADAS, r.motivo());
+    }
+
+    // Añade esto en cualquier bloque @Nested (ej. AsignacionGrupos o CasosBorde)
+    @Test
+    @DisplayName("Evaluar un tiro no modifica el estado (evaluación pura)")
+    void evaluarNoMutaElEstado() {
+        // No asignamos grupos inicialmente
+        assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(ANA));
+        
+        // Simulamos un tiro que embolsa una lisa (debería sugerir asignar LISAS)
+        TiroEvent t = tiroConEmbolsada(ANA, bola(1), bola(1));
+        ResultadoTiro r = reglas.evaluar(estado, t);
+        
+        // Verificamos que el resultado propone el grupo, pero el estado NO cambió
+        assertEquals(Grupo.LISAS, r.grupoAsignado());
+        assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(ANA));
+        assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(BETO));
+    }
 }

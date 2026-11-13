@@ -12,6 +12,9 @@ import com.poolhawk.rules.ReglasConfig;
 
 import java.util.Objects;
 
+/**
+ * Reglas de la modalidad Bola 8.
+ */
 public class ReglasBola8 extends AbstractReglasBillar {
 
     public ReglasBola8(ReglasConfig config) {
@@ -31,27 +34,39 @@ public class ReglasBola8 extends AbstractReglasBillar {
         Jugador jugador = tiro.jugador();
         Grupo grupoJugador = estado.grupoDe(jugador);
 
+        // 1. ¿Tocó alguna bola?
         if (!tiro.tocoAlgunaBola()) {
             return ResultadoTiro.falta(FaltaMotivo.NO_TOCAR_BOLA);
         }
+
+        // 2. ¿Embolsó la blanca y la 8 simultáneamente? -> DERROTA DIRECTA
+        if (tiro.embolsoLaBlanca() && tiro.embolsoLaOcho()) {
+            return ResultadoTiro.derrota(FaltaMotivo.BLANCA_Y_OCHO_EMBOLSADAS);
+        }
+
+        // 3. ¿Embolsó solo la blanca? -> Falta ordinaria
         if (tiro.embolsoLaBlanca()) {
             return ResultadoTiro.falta(FaltaMotivo.BLANCA_EMBOLSADA);
         }
 
-        // PRIORIDAD 1: Bola 8 prematura o victoria
+        // 4. ¿Embolsó la 8?
         if (tiro.embolsoLaOcho()) {
             if (!grupoLimpio(estado, jugador)) {
                 return ResultadoTiro.derrota(FaltaMotivo.BOLA_8_ANTES_DE_TIEMPO);
             }
+            // Si el grupo está limpio, debe ser un tiro legal.
+            if (!esPrimerContactoLegal(estado, tiro, jugador, grupoJugador)) {
+                return ResultadoTiro.derrota(FaltaMotivo.BOLA_8_CON_CONTACTO_ILEGAL);
+            }
             return ResultadoTiro.victoria(0);
         }
 
-        // PRIORIDAD 2: Primer contacto legal
+        // 5. ¿Tocó primero una bola legal? (validación de primer contacto)
         if (!esPrimerContactoLegal(estado, tiro, jugador, grupoJugador)) {
             return ResultadoTiro.falta(FaltaMotivo.BOLA_EQUIVOCADA);
         }
 
-        // PRIORIDAD 3: Asignación de grupo (sin mutar el estado)
+        // 6. Asignación de grupo
         Grupo grupoDetectado = null;
         if (!grupoJugador.estaAsignado() && tiro.embolsoAlgunaBola()) {
             for (Bola bola : tiro.bolasEmbolsadas()) {
