@@ -240,7 +240,9 @@ def main():
             time.sleep(args.pausa)
 
         final = consultar_partida(base_url, match_id, espera, intentos)
-        print(f"Simulacion terminada. Puntajes: {final['puntajes']}")
+        nombres = {v: k for k, v in ids_por_nombre(final).items()}
+        legibles = {nombres.get(i, i): p for i, p in final["puntajes"].items()}
+        print(f"Simulacion terminada. Puntajes: {legibles}")
         if final.get("ganador"):
             print(f"Ganador: {final['ganador']}")
         return 0
