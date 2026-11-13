@@ -24,7 +24,7 @@ public class PartidaMapper {
 
         Map<String, Integer> puntajes = new LinkedHashMap<>();
         partida.getEstado().getPuntajes().forEach(
-            (j, p) -> puntajes.put(j.nombre(), p));
+            (j, p) -> puntajes.put(j.id(), p));
 
         return new PartidaResponse(
             partida.getId(),

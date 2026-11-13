@@ -13,7 +13,7 @@ import java.util.Map;
  * @param fase fase actual
  * @param equipoA jugadores del equipo A
  * @param equipoB jugadores del equipo B
- * @param puntajes puntajes
+ * @param puntajes puntaje de cada jugador, con el id del jugador como clave
  * @param jugadorActual nombre del jugador con el turno
  * @param ganador nombre del ganador
  * @param cantidadTiros cantidad de tiros registrados
