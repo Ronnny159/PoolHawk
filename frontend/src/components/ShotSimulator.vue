@@ -10,7 +10,6 @@ const props = defineProps({
 const emit = defineEmits(['tiroRegistrado'])
 const cargando = ref(false)
 
-// Muestra el veredicto del motor de reglas como notificacion
 const avisarResultado = (resultado) => {
   const mensaje = resultado?.descripcion ?? 'Tiro registrado'
   if (mensaje.startsWith('Falta')) {
@@ -24,20 +23,23 @@ const simularTiro = async (tipo) => {
   try {
     cargando.value = true
 
-    // 1. Buscamos quién es el jugador actual (comparando nombre)
     const todosLosJugadores = [...props.partida.equipoA, ...props.partida.equipoB]
     const jugadorActual = todosLosJugadores.find(j => j.nombre === props.partida.jugadorActual)
     
     if (!jugadorActual) throw new Error('Jugador actual no encontrado')
 
-    // 2. Determinamos a qué equipo pertenece
     const esEquipoA = props.partida.equipoA.some(j => j.id === jugadorActual.id)
-    
-    // 3. Asignamos bolas válidas para su equipo (1 para lisas, 10 para rayadas)
     const bolaObjetivo = esEquipoA ? 1 : 10
     const bolaAEmbolsar = esEquipoA ? 2 : 11
 
-    let payload = { jugadorId: jugadorActual.id, duracionSegundos: 5 }
+    // 1. Generamos el ID único de evento para idempotencia
+    const eventId = crypto.randomUUID()
+
+    let payload = { 
+      eventId: eventId, // <-- ID generado en el cliente
+      jugadorId: jugadorActual.id, 
+      duracionSegundos: 5 
+    }
 
     if (tipo === 'FALLO') {
       payload.primeraBolaTocada = null
@@ -53,18 +55,14 @@ const simularTiro = async (tipo) => {
 
     console.log(`Simulando tiro para ${jugadorActual.nombre} (Equipo ${esEquipoA ? 'A' : 'B'})`, payload)
     
-    // Ejecutamos el tiro y capturamos el resultado
+    // 2. Enviamos el tiro. Si se reintenta, se debería reutilizar el mismo eventId.
     const resultado = await registrarTiro(props.partida.id, payload)
     
-    // Mantenemos el emit (aunque el App.vue ya no lo escuche, no está de más)
     emit('tiroRegistrado')
-    
-    // Mostramos el mensaje de éxito o falta
     avisarResultado(resultado)
 
   } catch (error) {
     console.error('Error al registrar tiro:', error)
-    // Extraemos el mensaje exacto del backend (Fusión de ambas ramas)
     const mensaje = error.response?.data?.message || error.message
     toast.error('Error: ' + mensaje)
   } finally {
