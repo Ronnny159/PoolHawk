@@ -163,53 +163,63 @@ public class MatchService {
     }
 
     private TiroEvent construirEventoValidado(Partida partida, TiroEventRequest request, Jugador jugadorActual) {
-        String eventId = (request.eventId() != null && !request.eventId().isBlank()) 
-            ? request.eventId() : UUID.randomUUID().toString();
+        // 1. El eventId es OBLIGATORIO
+        if (request.eventId() == null || request.eventId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El eventId es obligatorio para garantizar idempotencia.");
+        }
+        String eventId = request.eventId();
 
         // Validar primera bola tocada
         Bola primeraTocada = null;
         if (request.primeraBolaTocada() != null) {
             primeraTocada = partida.getMesa().buscarBola(request.primeraBolaTocada())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola no existe."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola " + request.primeraBolaTocada() + " no existe."));
             if (!primeraTocada.enMesa()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola ya no está en la mesa.");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola " + request.primeraBolaTocada() + " ya no está en la mesa.");
             }
         }
 
-        // Validar bolas embolsadas
+        // Validar bolas embolsadas (sin duplicados, sin nulos, que existan en la mesa)
         List<Bola> embolsadas = new ArrayList<>();
         if (request.bolasEmbolsadas() != null && !request.bolasEmbolsadas().isEmpty()) {
             Set<Integer> bolasUnicas = new HashSet<>();
             for (Integer numero : request.bolasEmbolsadas()) {
+                if (numero == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Número de bola nulo no permitido.");
+                }
                 if (!bolasUnicas.add(numero)) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bola duplicada en el tiro.");
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bola duplicada en el tiro: " + numero);
                 }
                 Bola bola = partida.getMesa().buscarBola(numero)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola no existe."));
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola " + numero + " no existe."));
                 if (!bola.enMesa()) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola ya fue embolsada.");
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola " + numero + " ya fue embolsada.");
                 }
                 embolsadas.add(bola);
             }
         }
 
-        // Validar troneras
+        // Validar troneras (sin nulos, coherentes con las bolas)
         List<TroneraNombre> troneras = new ArrayList<>();
         if (request.troneras() != null) {
             if (request.troneras().size() != embolsadas.size()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Troneras no coinciden con bolas embolsadas.");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La cantidad de troneras (" + request.troneras().size() + ") no coincide con las bolas embolsadas (" + embolsadas.size() + ").");
             }
             for (String nombre : request.troneras()) {
+                if (nombre == null || nombre.isBlank()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nombre de tronera nulo o vacío.");
+                }
                 try {
                     troneras.add(TroneraNombre.valueOf(nombre.toUpperCase()));
                 } catch (IllegalArgumentException e) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tronera inválida.");
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tronera inválida: " + nombre);
                 }
             }
         } else if (!embolsadas.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Faltan las troneras.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debe especificar la tronera para cada bola embolsada.");
         }
 
+        // Duración
         Duration duracion = request.duracionSegundos() != null ? 
             Duration.ofSeconds(request.duracionSegundos()) : Duration.ofSeconds(5);
 
