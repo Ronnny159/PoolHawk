@@ -1,8 +1,9 @@
 """
 PoolHawk - Agente de simulacion de tracking.
 
-Simula las lecturas de la camara: crea una partida de Bola 8 (o usa una
-existente) y envia 10 tiros a la API, con una pausa entre cada uno.
+Simula las lecturas de la camara: crea una partida (o usa una existente)
+y envia hasta 10 tiros a la API, con una pausa entre cada uno. Se detiene
+antes si la partida ya tiene ganador.
 
 Si la API se cae (conexion rechazada, tiempo agotado o error 5xx), el
 script espera unos segundos y reintenta en lugar de terminar con error.
@@ -12,6 +13,8 @@ Uso:
     python simulador.py --base-url http://localhost:8080
     python simulador.py --match-id <id de una partida existente>
     python simulador.py --blanca      # envia primeraBolaTocada = 0
+    python simulador.py --modalidad POR_PUNTOS --formato PAREJAS \\
+        --jugadores Ana Luis Pedro Sara
 """
 import argparse
 import random
@@ -24,6 +27,9 @@ NUM_TIROS = 10
 PAUSA_SEGUNDOS = 2
 ESPERA_REINTENTO = 5
 MAX_REINTENTOS = 12
+MODALIDADES = ["BOLA_8", "POR_PUNTOS"]
+FORMATOS = ["INDIVIDUAL", "PAREJAS"]
+JUGADORES_POR_DEFECTO = ["Ana", "Luis"]
 TRONERAS = [
     "TOP_LEFT", "TOP_RIGHT",
     "MIDDLE_LEFT", "MIDDLE_RIGHT",
@@ -33,6 +39,10 @@ TRONERAS = [
 
 class ApiNoDisponible(Exception):
     """La API no respondio despues de todos los reintentos."""
+
+
+class PeticionRechazada(Exception):
+    """La API respondio con un error 4xx (la peticion es invalida)."""
 
 
 def pedir(metodo, url, espera, max_reintentos, **kwargs):
@@ -64,16 +74,44 @@ def pedir(metodo, url, espera, max_reintentos, **kwargs):
             time.sleep(espera)
 
 
-def crear_partida(base_url, espera, max_reintentos):
-    """POST /api/v1/matches -> devuelve la partida creada."""
+def validar_jugadores(formato, jugadores):
+    """Valida los nombres antes de llamar a la API.
+
+    Reglas (las mismas del backend): de 2 a 4 jugadores, nombres no
+    vacios y distintos, y en PAREJAS la cantidad debe ser par.
+    Devuelve un mensaje de error, o None si todo esta bien.
+    """
+    if not 2 <= len(jugadores) <= 4:
+        return "La cantidad de jugadores debe ser entre 2 y 4."
+    nombres = [j.strip() for j in jugadores]
+    if any(not n for n in nombres):
+        return "Los nombres de los jugadores no pueden estar vacios."
+    if len({n.lower() for n in nombres}) != len(nombres):
+        return "Los nombres de los jugadores deben ser distintos."
+    if formato == "PAREJAS" and len(nombres) % 2 != 0:
+        return "En PAREJAS la cantidad de jugadores debe ser par (2 o 4)."
+    return None
+
+
+def crear_partida(base_url, modalidad, formato, jugadores, espera,
+                  max_reintentos):
+    """POST /api/v1/matches -> devuelve la partida creada.
+
+    Si la API rechaza la creacion (4xx) lanza PeticionRechazada con el
+    cuerpo de la respuesta para ver el motivo real.
+    """
     payload = {
-        "modalidad": "BOLA_8",
-        "equipoA": ["Ana"],
-        "equipoB": ["Luis"],
+        "modalidad": modalidad,
+        "formato": formato,
+        "jugadores": [j.strip() for j in jugadores],
     }
     r = pedir("POST", f"{base_url}/api/v1/matches", espera, max_reintentos,
               json=payload)
-    r.raise_for_status()
+    if r.status_code >= 400:
+        raise PeticionRechazada(
+            f"La API rechazo la creacion de la partida "
+            f"(HTTP {r.status_code}): {r.text}"
+        )
     return r.json()
 
 
@@ -81,7 +119,11 @@ def consultar_partida(base_url, match_id, espera, max_reintentos):
     """GET /api/v1/matches/{id} -> estado actual de la partida."""
     r = pedir("GET", f"{base_url}/api/v1/matches/{match_id}", espera,
               max_reintentos)
-    r.raise_for_status()
+    if r.status_code >= 400:
+        raise PeticionRechazada(
+            f"No se pudo consultar la partida {match_id} "
+            f"(HTTP {r.status_code}): {r.text}"
+        )
     return r.json()
 
 
@@ -121,6 +163,13 @@ def generar_tiro(jugador_id, bolas_disponibles, blanca):
 def main():
     parser = argparse.ArgumentParser(description="Simulador de camara PoolHawk")
     parser.add_argument("--base-url", default="http://localhost:8080")
+    parser.add_argument("--modalidad", choices=MODALIDADES, default="BOLA_8",
+                        help="modalidad de la partida nueva")
+    parser.add_argument("--formato", choices=FORMATOS, default="INDIVIDUAL",
+                        help="formato de la partida nueva")
+    parser.add_argument("--jugadores", nargs="+", default=JUGADORES_POR_DEFECTO,
+                        metavar="NOMBRE",
+                        help="de 2 a 4 nombres distintos (por defecto: Ana Luis)")
     parser.add_argument("--pausa", type=float, default=PAUSA_SEGUNDOS,
                         help="segundos entre tiros")
     parser.add_argument("--espera", type=float, default=ESPERA_REINTENTO,
@@ -137,13 +186,21 @@ def main():
     base_url = args.base_url.rstrip("/")
     espera, intentos = args.espera, args.reintentos
 
+    if not args.match_id:
+        error = validar_jugadores(args.formato, args.jugadores)
+        if error:
+            print(f"Error: {error}", file=sys.stderr)
+            return 2
+
     try:
         if args.match_id:
             partida = consultar_partida(base_url, args.match_id, espera, intentos)
             print(f"Usando partida existente: {args.match_id}")
         else:
-            partida = crear_partida(base_url, espera, intentos)
-            print(f"Partida creada: {partida['id']}")
+            partida = crear_partida(base_url, args.modalidad, args.formato,
+                                    args.jugadores, espera, intentos)
+            print(f"Partida creada: {partida['id']} "
+                  f"({partida.get('modalidad')}, {partida.get('formato')})")
         match_id = partida["id"]
         ids = ids_por_nombre(partida)
         print(f"Jugadores: {', '.join(ids)}")
@@ -156,8 +213,15 @@ def main():
             if partida.get("fase") != "EN_CURSO":
                 print(f"La partida termino (fase: {partida.get('fase')}).")
                 break
+            if partida.get("ganador"):
+                print(f"Hay ganador: {partida['ganador']}.")
+                break
 
             nombre = partida["jugadorActual"]
+            if nombre not in ids:
+                print(f"Aviso: el jugador del turno '{nombre}' no aparece en "
+                      f"equipoA/equipoB. Se detiene la simulacion.")
+                break
             tiro = generar_tiro(ids[nombre], bolas_disponibles, args.blanca)
 
             r = pedir("POST", f"{base_url}/api/v1/matches/{match_id}/events",
@@ -177,8 +241,13 @@ def main():
 
         final = consultar_partida(base_url, match_id, espera, intentos)
         print(f"Simulacion terminada. Puntajes: {final['puntajes']}")
+        if final.get("ganador"):
+            print(f"Ganador: {final['ganador']}")
         return 0
     except ApiNoDisponible as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    except PeticionRechazada as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     except requests.RequestException as e:
