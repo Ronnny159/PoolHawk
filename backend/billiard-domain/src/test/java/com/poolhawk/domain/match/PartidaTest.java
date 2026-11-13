@@ -19,12 +19,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Pruebas unitarias de {@link Partida}.
- *
- * @author PoolHawk Team
- * @since 0.1.0
- */
 @DisplayName("Partida - agregado raíz del dominio")
 class PartidaTest {
 
@@ -95,25 +89,23 @@ class PartidaTest {
         }
 
         @Test
-        @DisplayName("Constructor rechaza modalidad Bola 8 con equipos de 2")
+        @DisplayName("Constructor rechaza modalidad Bola 8 con formato PAREJAS")
         void modalidadIncoherenteBola8() {
             Equipo eqA = Equipo.pareja("eA", "A", ANA, CARLA);
             Equipo eqB = Equipo.pareja("eB", "B", BETO, DIEGO);
 
             assertThrows(IllegalArgumentException.class,
-                () -> new Partida(ID, TipoModalidad.BOLA_8, eqA, eqB,
-                    mesa, Instant.now()));
+                () -> new Partida(ID, TipoModalidad.BOLA_8, eqA, eqB, FormatoJuego.PAREJAS, mesa, Instant.now()));
         }
 
         @Test
-        @DisplayName("Constructor rechaza modalidad Por Puntos con equipos de 1")
+        @DisplayName("Constructor rechaza modalidad Por Puntos con formato PAREJAS y equipos de 1")
         void modalidadIncoherentePorPuntos() {
             Equipo eqA = Equipo.individual("eA", "A", ANA);
             Equipo eqB = Equipo.individual("eB", "B", BETO);
 
             assertThrows(IllegalArgumentException.class,
-                () -> new Partida(ID, TipoModalidad.POR_PUNTOS, eqA, eqB,
-                    mesa, Instant.now()));
+                () -> new Partida(ID, TipoModalidad.POR_PUNTOS, eqA, eqB, FormatoJuego.PAREJAS, mesa, Instant.now()));
         }
 
         @Test
@@ -123,8 +115,7 @@ class PartidaTest {
             Equipo eqB = Equipo.pareja("eB", "B", BETO, DIEGO);
 
             assertThrows(IllegalArgumentException.class,
-                () -> new Partida(ID, TipoModalidad.POR_PUNTOS, eqA, eqB,
-                    mesa, Instant.now()));
+                () -> new Partida(ID, TipoModalidad.POR_PUNTOS, eqA, eqB, FormatoJuego.PAREJAS, mesa, Instant.now()));
         }
 
         @Test
@@ -133,8 +124,7 @@ class PartidaTest {
             Equipo eqA = Equipo.individual("eA", "A", ANA);
             Equipo eqB = Equipo.individual("eB", "B", BETO);
             assertThrows(NullPointerException.class,
-                () -> new Partida(null, TipoModalidad.BOLA_8, eqA, eqB,
-                    mesa, Instant.now()));
+                () -> new Partida(null, TipoModalidad.BOLA_8, eqA, eqB, FormatoJuego.INDIVIDUAL, mesa, Instant.now()));
         }
 
         @Test
@@ -143,8 +133,7 @@ class PartidaTest {
             Equipo eqA = Equipo.individual("eA", "A", ANA);
             Equipo eqB = Equipo.individual("eB", "B", BETO);
             assertThrows(IllegalArgumentException.class,
-                () -> new Partida("", TipoModalidad.BOLA_8, eqA, eqB,
-                    mesa, Instant.now()));
+                () -> new Partida("", TipoModalidad.BOLA_8, eqA, eqB, FormatoJuego.INDIVIDUAL, mesa, Instant.now()));
         }
 
         @Test
@@ -152,11 +141,9 @@ class PartidaTest {
         void rechazaEquiposNulos() {
             Equipo eqA = Equipo.individual("eA", "A", ANA);
             assertThrows(NullPointerException.class,
-                () -> new Partida(ID, TipoModalidad.BOLA_8, null, eqA,
-                    mesa, Instant.now()));
+                () -> new Partida(ID, TipoModalidad.BOLA_8, null, eqA, FormatoJuego.INDIVIDUAL, mesa, Instant.now()));
             assertThrows(NullPointerException.class,
-                () -> new Partida(ID, TipoModalidad.BOLA_8, eqA, null,
-                    mesa, Instant.now()));
+                () -> new Partida(ID, TipoModalidad.BOLA_8, eqA, null, FormatoJuego.INDIVIDUAL, mesa, Instant.now()));
         }
 
         @Test
@@ -165,8 +152,7 @@ class PartidaTest {
             Equipo eqA = Equipo.individual("eA", "A", ANA);
             Equipo eqB = Equipo.individual("eB", "B", BETO);
             assertThrows(NullPointerException.class,
-                () -> new Partida(ID, TipoModalidad.BOLA_8, eqA, eqB,
-                    null, Instant.now()));
+                () -> new Partida(ID, TipoModalidad.BOLA_8, eqA, eqB, FormatoJuego.INDIVIDUAL, null, Instant.now()));
         }
     }
 
@@ -278,7 +264,7 @@ class PartidaTest {
             partidaIndividual.aplicarTiro(evento, resultado);
 
             assertEquals(3, partidaIndividual.getEstado().puntajeDe(ANA));
-            assertEquals(ANA, partidaIndividual.jugadorActual()); // no cambió
+            assertEquals(ANA, partidaIndividual.jugadorActual());
         }
 
         @Test

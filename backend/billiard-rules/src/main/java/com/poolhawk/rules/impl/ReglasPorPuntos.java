@@ -12,13 +12,6 @@ import com.poolhawk.rules.ReglasConfig;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * Reglas de la modalidad Por Puntos.
- * 
- * <p>En esta modalidad se acumulan puntos por cada bola embolsada (1 punto). 
- * La partida termina cuando un jugador (o su equipo en formato Parejas) 
- * alcanza el puntaje objetivo.</p>
- */
 public class ReglasPorPuntos extends AbstractReglasBillar {
 
     public ReglasPorPuntos(ReglasConfig config) {
@@ -40,24 +33,17 @@ public class ReglasPorPuntos extends AbstractReglasBillar {
         if (!tiro.tocoAlgunaBola()) {
             return ResultadoTiro.falta(FaltaMotivo.NO_TOCAR_BOLA);
         }
-
         if (tiro.embolsoLaBlanca()) {
             return ResultadoTiro.falta(FaltaMotivo.BLANCA_EMBOLSADA);
         }
-
         if (esContactoIlegalConOcho(estado, tiro)) {
             return ResultadoTiro.falta(FaltaMotivo.BOLA_EQUIVOCADA);
         }
 
         int puntosDelTiro = calcularPuntos(tiro);
+        int puntajeEquipo = calcularPuntajeEquipo(estado, jugador);
+        int puntajeNuevo = puntajeEquipo + puntosDelTiro;
 
-        // LOGICA CORREGIDA: Validar victoria sumando el equipo si es necesario
-        int puntajeActualJugador = estado.puntajeDe(jugador);
-        int puntajeNuevo = puntajeActualJugador + puntosDelTiro;
-        
-        // Si es Por Puntos en parejas, se debe validar la suma del equipo.
-        // (Como el MatchState no sabe quién es el compañero, esto es un parche 
-        //  para el MVP, asumiendo que es individual o que el puntaje ya se acumuló correctamente).
         if (puntajeNuevo >= config.puntajeObjetivo()) {
             return ResultadoTiro.victoria(puntosDelTiro);
         }
@@ -66,6 +52,14 @@ public class ReglasPorPuntos extends AbstractReglasBillar {
             return ResultadoTiro.tiroLegalConPuntos(puntosDelTiro);
         }
         return ResultadoTiro.tiroLegalSinPuntos(true);
+    }
+
+    private int calcularPuntajeEquipo(MatchState estado, Jugador jugador) {
+        Jugador companero = estado.getCompanero(jugador);
+        if (companero.equals(jugador)) {
+            return estado.puntajeDe(jugador);
+        }
+        return estado.puntajeDe(jugador) + estado.puntajeDe(companero);
     }
 
     private boolean esContactoIlegalConOcho(MatchState estado, TiroEvent tiro) {
@@ -90,16 +84,15 @@ public class ReglasPorPuntos extends AbstractReglasBillar {
     @Override
     public boolean partidaTerminada(MatchState estado) {
         Objects.requireNonNull(estado, "El estado no puede ser nulo");
-        return estado.getPuntajes().values().stream()
-            .anyMatch(p -> p >= config.puntajeObjetivo());
+        return estado.getPuntajes().keySet().stream()
+            .anyMatch(j -> calcularPuntajeEquipo(estado, j) >= config.puntajeObjetivo());
     }
 
     @Override
     public Jugador determinarGanador(MatchState estado) {
         Objects.requireNonNull(estado, "El estado no puede ser nulo");
-        return estado.getPuntajes().entrySet().stream()
-            .filter(e -> e.getValue() >= config.puntajeObjetivo())
-            .map(java.util.Map.Entry::getKey)
+        return estado.getPuntajes().keySet().stream()
+            .filter(j -> calcularPuntajeEquipo(estado, j) >= config.puntajeObjetivo())
             .findFirst()
             .orElse(null);
     }

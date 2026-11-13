@@ -6,6 +6,7 @@ import com.poolhawk.domain.event.TiroEvent;
 import com.poolhawk.domain.match.MatchState;
 import com.poolhawk.domain.match.TipoModalidad;
 import com.poolhawk.domain.match.Turnos;
+import com.poolhawk.domain.player.Equipo;
 import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.Bola;
 import com.poolhawk.domain.table.Coordenada;
@@ -21,15 +22,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Pruebas unitarias de {@link AbstractReglasBillar}.
- *
- * <p>Valida el template method: precondiciones, validación de shot clock
- * y delegación al método abstracto {@code evaluarTiroLegal}.</p>
- *
- * @author PoolHawk Team
- * @since 0.1.0
- */
 @DisplayName("AbstractReglasBillar - template method")
 class AbstractReglasBillarTest {
 
@@ -39,7 +31,7 @@ class AbstractReglasBillarTest {
     private static final Instant FECHA = Instant.parse("2026-01-01T10:00:00Z");
 
     private Mesa mesa;
-    private Turnos turnos;
+    private Turnos<Jugador> turnos;
     private MatchState estado;
 
     @BeforeEach
@@ -47,15 +39,15 @@ class AbstractReglasBillarTest {
         mesa = new Mesa();
         mesa.agregarBola(Bola.crear(0, new Coordenada(50, 50)));
         mesa.agregarBola(Bola.crear(1, new Coordenada(100, 100)));
-        turnos = new Turnos(List.of(ANA, BETO));
-        estado = new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, turnos, mesa, FECHA);
+
+        Equipo eqA = Equipo.individual("eA", ANA.nombre(), ANA);
+        Equipo eqB = Equipo.individual("eB", BETO.nombre(), BETO);
+        turnos = new Turnos<>(List.of(ANA, BETO));
+        
+        estado = new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, eqA, eqB, turnos, mesa, FECHA);
         estado.iniciar();
     }
 
-    /**
-     * Implementación concreta para tests que siempre devuelve un
-     * resultado fijo, permitiendo testear el esqueleto del template.
-     */
     private static class ReglasStub extends AbstractReglasBillar {
         private int vecesLlamadoEvaluarTiroLegal = 0;
 

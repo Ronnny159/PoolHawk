@@ -7,7 +7,7 @@ package com.poolhawk.domain.event;
  * Cada modalidad valida un subconjunto específico de motivos.</p>
  *
  * @author PoolHawk Team
- * @since 0.1.0
+ * @since 0.1.1
  */
 public enum FaltaMotivo {
 
@@ -20,8 +20,14 @@ public enum FaltaMotivo {
     /** La bola blanca fue embolsada. */
     BLANCA_EMBOLSADA("La bola blanca fue embolsada"),
 
+    /** En Bola 8, se embolsaron la bola blanca y la bola 8 simultáneamente. */
+    BLANCA_Y_OCHO_EMBOLSADAS("La bola blanca y la bola 8 fueron embolsadas simultáneamente"),
+
     /** En Bola 8, la bola 8 fue embolsada antes de limpiar el grupo. */
     BOLA_8_ANTES_DE_TIEMPO("La bola 8 fue embolsada antes de tiempo"),
+
+    /** En Bola 8, la bola 8 fue embolsada tras un primer contacto ilegal. */
+    BOLA_8_CON_CONTACTO_ILEGAL("La bola 8 fue embolsada tras un primer contacto ilegal"),
 
     /** En Bola 8, la bola 8 fue embolsada en la tronera equivocada. */
     BOLA_8_TRONERA_INCORRECTA("La bola 8 fue embolsada en la tronera incorrecta"),
@@ -75,7 +81,9 @@ public enum FaltaMotivo {
     public boolean esExclusivaDeBola8() {
         return this == BOLA_8_ANTES_DE_TIEMPO
             || this == BOLA_8_TRONERA_INCORRECTA
-            || this == APERTURA_INVALIDA;
+            || this == APERTURA_INVALIDA
+            || this == BLANCA_Y_OCHO_EMBOLSADAS
+            || this == BOLA_8_CON_CONTACTO_ILEGAL;
     }
 
     /**
