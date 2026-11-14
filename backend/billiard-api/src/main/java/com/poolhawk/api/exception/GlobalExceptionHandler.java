@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 
@@ -70,6 +71,24 @@ public class GlobalExceptionHandler {
             ex.getMessage(),
             request.getRequestURI());
         return ResponseEntity.badRequest().body(error);
+    }
+
+    /**
+     * Captura {@link ResponseStatusException} y devuelve el código HTTP
+     * y el mensaje que trae la excepción. Esto es fundamental para que
+     * los tests de idempotencia (409 Conflict) y validaciones (400 Bad Request)
+     * devuelvan el código correcto al cliente.
+     */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatus(
+            ResponseStatusException ex, HttpServletRequest request) {
+        ErrorResponse error = new ErrorResponse(
+            Instant.now(),
+            ex.getStatusCode().value(),
+            ex.getStatusCode().toString(),
+            ex.getReason(),
+            request.getRequestURI());
+        return ResponseEntity.status(ex.getStatusCode()).body(error);
     }
 
     /**

@@ -15,10 +15,18 @@ public class PartidaEntity {
     private String ganadorId;
     private String formato;
 
+    @Column(name = "estado_partida_json", columnDefinition = "TEXT", length = 10000)
+    private String estadoPartidaJson;
+
     @Column(name = "estado_mesa_json", columnDefinition = "TEXT", length = 10000)
     private String estadoMesaJson;
 
+    @Version
+    private Long version;
+
+    // AGREGADO: @OrderColumn para garantizar el orden A1, B1, A2, B2
     @OneToMany(mappedBy = "partida", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @OrderColumn(name = "orden")
     private List<JugadorEntity> jugadores;
 
     // Getters y Setters
@@ -34,8 +42,12 @@ public class PartidaEntity {
     public void setGanadorId(String ganadorId) { this.ganadorId = ganadorId; }
     public String getFormato() { return formato; }
     public void setFormato(String formato) { this.formato = formato; }
-    public List<JugadorEntity> getJugadores() { return jugadores; }
-    public void setJugadores(List<JugadorEntity> jugadores) { this.jugadores = jugadores; }
+    public String getEstadoPartidaJson() { return estadoPartidaJson; }
+    public void setEstadoPartidaJson(String estadoPartidaJson) { this.estadoPartidaJson = estadoPartidaJson; }
     public String getEstadoMesaJson() { return estadoMesaJson; }
     public void setEstadoMesaJson(String estadoMesaJson) { this.estadoMesaJson = estadoMesaJson; }
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
+    public List<JugadorEntity> getJugadores() { return jugadores; }
+    public void setJugadores(List<JugadorEntity> jugadores) { this.jugadores = jugadores; }
 }

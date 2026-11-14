@@ -10,34 +10,38 @@ const props = defineProps({
 const emit = defineEmits(['tiroRegistrado'])
 const cargando = ref(false)
 
-// Muestra el veredicto del motor de reglas como notificacion
-const avisarResultado = (resultado) => {
+const avisarResultado = (resultado, fueReintento) => {
   const mensaje = resultado?.descripcion ?? 'Tiro registrado'
+  const sufijo = fueReintento ? ' (idempotente)' : ''
   if (mensaje.startsWith('Falta')) {
-    toast.warning(mensaje)
+    toast.warning(mensaje + sufijo)
   } else {
-    toast.success(mensaje)
+    toast.success(mensaje + sufijo)
   }
 }
 
 const simularTiro = async (tipo) => {
-  try {
-    cargando.value = true
+  cargando.value = true
 
-    // 1. Buscamos quién es el jugador actual (comparando nombre)
+  try {
     const todosLosJugadores = [...props.partida.equipoA, ...props.partida.equipoB]
     const jugadorActual = todosLosJugadores.find(j => j.nombre === props.partida.jugadorActual)
-    
+
     if (!jugadorActual) throw new Error('Jugador actual no encontrado')
 
-    // 2. Determinamos a qué equipo pertenece
     const esEquipoA = props.partida.equipoA.some(j => j.id === jugadorActual.id)
-    
-    // 3. Asignamos bolas válidas para su equipo (1 para lisas, 10 para rayadas)
     const bolaObjetivo = esEquipoA ? 1 : 10
     const bolaAEmbolsar = esEquipoA ? 2 : 11
 
-    let payload = { jugadorId: jugadorActual.id, duracionSegundos: 5 }
+    // IMPORTANTE: eventId generado UNA SOLA VEZ por tiro. Todos los reintentos
+    // del bucle comparten el mismo eventId (idempotencia transparente).
+    const eventId = crypto.randomUUID()
+
+    let payload = {
+      eventId,
+      jugadorId: jugadorActual.id,
+      duracionSegundos: 5
+    }
 
     if (tipo === 'FALLO') {
       payload.primeraBolaTocada = null
@@ -51,20 +55,42 @@ const simularTiro = async (tipo) => {
       payload.troneras = ['TOP_LEFT']
     }
 
-    console.log(`Simulando tiro para ${jugadorActual.nombre} (Equipo ${esEquipoA ? 'A' : 'B'})`, payload)
-    
-    // Ejecutamos el tiro y capturamos el resultado
-    const resultado = await registrarTiro(props.partida.id, payload)
-    
-    // Mantenemos el emit (aunque el App.vue ya no lo escuche, no está de más)
-    emit('tiroRegistrado')
-    
-    // Mostramos el mensaje de éxito o falta
-    avisarResultado(resultado)
+    console.log(`Simulando tiro para ${jugadorActual.nombre}`, payload)
 
+    let exito = false
+    let intentos = 0
+    const maxIntentos = 3
+
+    while (!exito && intentos < maxIntentos) {
+      const fueReintento = intentos > 0
+      try {
+        // El backend devuelve 200 OK tanto en el primer envío como en
+        // reintentos idénticos con el mismo eventId (idempotencia transparente).
+        const resultado = await registrarTiro(props.partida.id, payload)
+        emit('tiroRegistrado')
+        avisarResultado(resultado, fueReintento)
+        exito = true
+      } catch (error) {
+        const status = error.response?.status
+        // Reintentamos solo si fue un fallo de red o un 5xx.
+        // 4xx (400) significa payload inválido o eventId con payload distinto: NO reintentar.
+        const esErrorRed = !error.response || status >= 500
+
+        if (esErrorRed && intentos < maxIntentos - 1) {
+          intentos++
+          toast.warning(`Error de red. Reintentando tiro (Intento ${intentos}/${maxIntentos - 1})...`)
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        } else {
+          throw error
+        }
+      }
+    }
+
+    if (!exito) {
+      throw new Error('No se pudo registrar el tiro tras múltiples intentos.')
+    }
   } catch (error) {
     console.error('Error al registrar tiro:', error)
-    // Extraemos el mensaje exacto del backend (Fusión de ambas ramas)
     const mensaje = error.response?.data?.message || error.message
     toast.error('Error: ' + mensaje)
   } finally {
@@ -77,7 +103,7 @@ const simularTiro = async (tipo) => {
   <div class="simulador">
     <h3>Panel de Control (Simulador)</h3>
     <p>Usa estos botones para simular lo que la cámara enviaría.</p>
-    
+
     <div class="botones">
       <button @click="simularTiro('FALLO')" :disabled="cargando" class="btn-rojo">Fallar (No tocar bola)</button>
       <button @click="simularTiro('LEGAL')" :disabled="cargando" class="btn-gris">Tiro Legal (Toca bola)</button>

@@ -11,36 +11,48 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Mapper entre el dominio Partida y los DTOs de la API.
+ * Mapea el agregado {@link Partida} a su DTO {@link PartidaResponse},
+ * incluyendo el estado actual de la mesa ({@code bolasEnMesa}).
  */
 @Component
 public class PartidaMapper {
 
+    /**
+     * Convierte una {@link Partida} de dominio a su representación HTTP.
+     *
+     * @param partida partida de dominio
+     * @return DTO con todos los campos expuestos al frontend
+     */
     public PartidaResponse toResponse(Partida partida) {
-        List<JugadorResponse> equipoA = partida.getEquipoA().getJugadores()
-            .stream().map(this::toJugadorResponse).toList();
-        List<JugadorResponse> equipoB = partida.getEquipoB().getJugadores()
-            .stream().map(this::toJugadorResponse).toList();
-
-        Map<String, Integer> puntajes = new LinkedHashMap<>();
-        partida.getEstado().getPuntajes().forEach(
-            (j, p) -> puntajes.put(j.id(), p));
-
         return new PartidaResponse(
             partida.getId(),
             partida.getModalidad().name(),
-            partida.getFormato().name(), // <-- AGREGADO AQUI
-            partida.getFase().name(),
-            equipoA,
-            equipoB,
-            puntajes,
+            partida.getFormato().name(),
+            partida.getEstado().getFase().name(),
+            mapearEquipo(partida.getEquipoA().getJugadores()),
+            mapearEquipo(partida.getEquipoB().getJugadores()),
+            mapearPuntajes(partida),
             partida.jugadorActual().nombre(),
-            partida.getGanador() != null ? partida.getGanador().nombre() : null,
+            partida.getEstado().getGanador() != null
+                ? partida.getEstado().getGanador().nombre()
+                : null,
             partida.getEstado().cantidadTiros(),
-            partida.getFechaCreacion());
+            partida.getEstado().getFechaInicio(),
+            partida.getEstado().bolasEnMesa());
     }
 
-    private JugadorResponse toJugadorResponse(Jugador j) {
-        return new JugadorResponse(j.id(), j.nombre());
+    private List<JugadorResponse> mapearEquipo(List<Jugador> jugadores) {
+        return jugadores.stream().map(this::mapearJugador).toList();
+    }
+
+    private JugadorResponse mapearJugador(Jugador jugador) {
+        return new JugadorResponse(jugador.id(), jugador.nombre());
+    }
+
+    private Map<String, Integer> mapearPuntajes(Partida partida) {
+        Map<String, Integer> mapa = new LinkedHashMap<>();
+        partida.getEstado().getPuntajes()
+            .forEach((jugador, puntos) -> mapa.put(jugador.id(), puntos));
+        return mapa;
     }
 }
