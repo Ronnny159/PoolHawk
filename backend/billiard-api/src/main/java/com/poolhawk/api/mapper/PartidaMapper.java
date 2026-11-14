@@ -52,7 +52,7 @@ public class PartidaMapper {
     private Map<String, Integer> mapearPuntajes(Partida partida) {
         Map<String, Integer> mapa = new LinkedHashMap<>();
         partida.getEstado().getPuntajes()
-            .forEach((jugador, puntos) -> mapa.put(jugador.nombre(), puntos));
+            .forEach((jugador, puntos) -> mapa.put(jugador.id(), puntos));
         return mapa;
     }
 }

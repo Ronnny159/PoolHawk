@@ -32,7 +32,7 @@ const coloresBolas = [
     >
       <span class="nombre">{{ jugador.nombre }}</span>
       <div class="bola-marcador" :style="{ background: coloresBolas[index % coloresBolas.length] }">
-        <span class="puntos">{{ props.partida.puntajes?.[jugador.nombre] || 0 }}</span>
+        <span class="puntos">{{ props.partida.puntajes?.[jugador.id] || 0 }}</span>
       </div>
     </div>
   </div>

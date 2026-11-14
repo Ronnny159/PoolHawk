@@ -20,8 +20,8 @@ const turnoEsDeB = computed(() => {
   return props.partida.equipoB.some(j => j.nombre === nombreJugadorActual.value)
 })
 
-const puntosEquipoA = computed(() => props.partida.equipoA?.reduce((total, jugador) => total + (props.partida.puntajes?.[jugador.nombre] || 0), 0) || 0)
-const puntosEquipoB = computed(() => props.partida.equipoB?.reduce((total, jugador) => total + (props.partida.puntajes?.[jugador.nombre] || 0), 0) || 0)
+const puntosEquipoA = computed(() => props.partida.equipoA?.reduce((total, jugador) => total + (props.partida.puntajes?.[jugador.id] || 0), 0) || 0)
+const puntosEquipoB = computed(() => props.partida.equipoB?.reduce((total, jugador) => total + (props.partida.puntajes?.[jugador.id] || 0), 0) || 0)
 
 const nombreEquipoA = computed(() => props.partida.equipoA ? props.partida.equipoA.map(j => j.nombre).join(' & ') : '')
 const nombreEquipoB = computed(() => props.partida.equipoB ? props.partida.equipoB.map(j => j.nombre).join(' & ') : '')
