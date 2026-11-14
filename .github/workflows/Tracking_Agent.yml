@@ -30,4 +30,4 @@ jobs:
           pip install opencv-python-headless numpy requests pytest
 
       - name: Ejecutar pruebas
-        run: python -m pytest tests -q
+        run: python -m pytest test -q
