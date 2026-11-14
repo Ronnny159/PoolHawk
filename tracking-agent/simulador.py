@@ -18,6 +18,7 @@ Uso:
 """
 import argparse
 import random
+import uuid
 import sys
 import time
 
@@ -152,6 +153,7 @@ def generar_tiro(jugador_id, bolas_disponibles, blanca):
         troneras = [random.choice(TRONERAS)]
     primera = 0 if blanca else random.choice(bolas_disponibles or [1])
     return {
+        "eventId": str(uuid.uuid4()),
         "jugadorId": jugador_id,
         "primeraBolaTocada": primera,
         "bolasEmbolsadas": bolas,
