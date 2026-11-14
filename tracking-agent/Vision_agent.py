@@ -22,9 +22,12 @@ from ball_classifier import Observacion, clasificar_bola, recortar_roi
 from ball_detector import BallDetector, ConfigDetector, Deteccion
 from ball_tracker import BallTracker, Track
 from camera_source import abrir_fuente, leer_frames
-from api_client import ErrorApi, ErrorConflicto, ErrorRed, PoolHawkApiClient
+from api_client import (ErrorApi, ErrorConflicto, ErrorRed, PoolHawkApiClient,
+                        ReintentadorPendientes)
 from cola_eventos import ColaEventos
 from shot_analyzer import ShotAnalyzer, TiroObservado
+import traza
+from traza import TrazaTiros
 
 
 def procesar_frame(
@@ -75,24 +78,42 @@ def _cargar_troneras(ruta: Optional[str]) -> dict:
 
 
 def manejar_tiro(tiro: TiroObservado, cliente: Optional[PoolHawkApiClient],
-                 match_id: Optional[str]) -> None:
-    """Envía el tiro al backend si es confiable; si no, lo reporta para revisión."""
+                 match_id: Optional[str], registro: Optional[TrazaTiros] = None) -> str:
+    """Envía el tiro al backend si es confiable; si no, lo reporta para revisión.
+
+    Cada decisión queda anotada en la traza (H-12).
+
+    Returns:
+        El estado final del tiro (constantes de :mod:`traza`).
+    """
+    registro = registro or TrazaTiros(None)
     if tiro.requiere_revision:
-        print(f"🔎 Tiro NO enviado (requiere revisión): {'; '.join(tiro.motivos)}")
-        return
+        motivos = "; ".join(tiro.motivos)
+        print(f"🔎 Tiro NO enviado (requiere revisión): {motivos}")
+        registro.registrar(tiro, traza.REVISION, match_id)
+        return traza.REVISION
     if cliente is None or not match_id:
         print(f"ℹ️  Tiro observado (sin API configurada): {tiro}")
-        return
+        registro.registrar(tiro, traza.SIN_API, match_id)
+        return traza.SIN_API
     try:
         cliente.registrar_tiro(match_id, tiro)
-        print(f"✅ Tiro enviado: primera={tiro.primera_bola_tocada} embolsadas={tiro.bolas_embolsadas}")
     except ErrorConflicto as e:
         print(f"⚠️  Tiro descartado: el estado de la partida cambió ({e}). Revisar manualmente.",
               file=sys.stderr)
+        registro.registrar(tiro, traza.CONFLICTO, match_id, str(e))
+        return traza.CONFLICTO
     except ErrorRed as e:
         print(f"⏳ API no disponible; el tiro queda pendiente y se reenviará ({e})", file=sys.stderr)
+        registro.registrar(tiro, traza.PENDIENTE, match_id, str(e))
+        return traza.PENDIENTE
     except ErrorApi as e:
         print(f"❌ No se pudo enviar el tiro: {e}", file=sys.stderr)
+        registro.registrar(tiro, traza.RECHAZADO, match_id, str(e))
+        return traza.RECHAZADO
+    print(f"✅ Tiro enviado: primera={tiro.primera_bola_tocada} embolsadas={tiro.bolas_embolsadas}")
+    registro.registrar(tiro, traza.ENVIADO, match_id)
+    return traza.ENVIADO
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -102,6 +123,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--token", default=None, help="JWT opcional para la API")
     parser.add_argument("--cola", default=".poolhawk_cola.json",
                         help="Archivo donde se guardan los tiros pendientes de envío (sobrevive a reinicios)")
+    parser.add_argument("--traza", default=".poolhawk_traza.jsonl",
+                        help="Registro JSON Lines de cada tiro (enviado, pendiente, en revisión...)")
     parser.add_argument("--troneras", default=None,
                         help="JSON con la posición en px de cada tronera (necesario para inferir embolsados)")
     parser.add_argument("--source", default="0", help="Índice de cámara, ruta de vídeo o URL (por defecto 0)")
@@ -121,7 +144,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     detector, tracker = BallDetector(config), BallTracker()
     fps = cap.get(cv2.CAP_PROP_FPS) or 15.0
     analizador = ShotAnalyzer(troneras=_cargar_troneras(args.troneras), fps=fps)
-    cliente = None
+    cliente, reintentador = None, None
+    registro = TrazaTiros(args.traza)
     if args.match_id:
         try:
             cliente = PoolHawkApiClient(args.api_url, token=args.token, cola=ColaEventos(args.cola))
@@ -131,6 +155,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         resumen = cliente.reenviar_pendientes()
         if resumen["enviados"] or resumen["rechazados"] or resumen["pendientes"]:
             print(f"♻️  Reenvío de pendientes: {resumen}")
+        reintentador = ReintentadorPendientes(cliente)
+        reintentador.iniciar()  # sigue reenviando en segundo plano mientras corre la cámara
 
     print("📷 Fuente abierta." + ("" if args.no_gui else " Presiona 'q' para salir."))
     procesados = 0
@@ -140,7 +166,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             procesados += 1
             tiro = analizador.actualizar(tracker)
             if tiro is not None:
-                manejar_tiro(tiro, cliente, args.match_id)
+                manejar_tiro(tiro, cliente, args.match_id, registro)
             for t in tracker.ultimas_perdidas:
                 print(f"⚠️  Bola id{t.id} (#{t.numero}) perdida en ({t.x:.0f},{t.y:.0f})")
             if not args.no_gui:
@@ -149,6 +175,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
     finally:
+        if reintentador is not None:
+            reintentador.detener()
         cap.release()
         if not args.no_gui:
             cv2.destroyAllWindows()

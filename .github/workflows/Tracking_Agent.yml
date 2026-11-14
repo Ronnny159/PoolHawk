@@ -3,10 +3,15 @@ name: Tracking Agent CI
 on:
   push:
     branches: [ main, develop, 'feature/**', 'fix/**' ]
-    paths: [ 'tracking-agent/**', '.github/workflows/tracking-agent.yml' ]
+    paths:
+      - 'tracking-agent/**'
+      - '.github/workflows/Tracking_Agent.yml'
   pull_request:
     branches: [ main, develop ]
-    paths: [ 'tracking-agent/**' ]
+    paths:
+      - 'tracking-agent/**'
+      - '.github/workflows/Tracking_Agent.yml'
+  workflow_dispatch:
 
 jobs:
   test:
@@ -26,8 +31,21 @@ jobs:
           cache-dependency-path: tracking-agent/requirements*.txt
 
       - name: Instalar dependencias (OpenCV headless para CI)
+        run: pip install opencv-python-headless numpy requests pytest
+
+      - name: Verificar que los modulos estan en minuscula (Linux distingue mayusculas)
         run: |
-          pip install opencv-python-headless numpy requests pytest
+          if ls *.py | grep -q '[A-Z]'; then
+            echo "::error::Hay modulos con mayusculas en el nombre:"; ls *.py | grep '[A-Z]'; exit 1
+          fi
+
+      - name: Compilar y verificar imports
+        run: |
+          python -m compileall -q .
+          python -c "import api_client, cola_eventos, ball_classifier, ball_detector, ball_tracker, camera_source, shot_analyzer, traza, calibracion, vision_agent"
+
+      - name: Verificar que se descubren pruebas
+        run: python -m pytest --collect-only test -q
 
       - name: Ejecutar pruebas
         run: python -m pytest test -q
