@@ -28,7 +28,8 @@ import numpy as np
 UMBRAL_BLANCA = 0.60          # fracción de blanco para decir "bola blanca"
 UMBRAL_NEGRA = 0.55           # fracción de píxeles oscuros para "bola negra"
 MAX_COLOR_EN_NEGRA = 0.15     # si hay más color que esto, no es una 8 limpia
-UMBRAL_RAYADA = 0.30          # fracción de blanco para considerar rayada
+UMBRAL_RAYADA = 0.10          # fracción de blanco EN EL ANILLO EXTERIOR para considerar rayada
+ANILLO_INTERIOR = 0.60        # el anillo va de 60 % del radio hasta el borde del círculo
 MIN_COLOR_TOTAL = 0.25        # fracción mínima de píxeles de color para clasificar
 UMBRAL_CONFIANZA = 0.50       # por debajo de esto la bola es DESCONOCIDA
 
@@ -47,9 +48,9 @@ _RANGOS_H = {
     "AZUL": [(100, 125)],
     "MORADO": [(128, 155)],
     "ROJO": [(0, 8), (172, 179)],
-    "GRANATE": [(0, 8), (172, 179)],
+    "VINO": [(0, 8), (172, 179)],
 }
-_V_ROJO_MIN = 130  # ROJO: V >= 130; GRANATE: COLOR_V_MIN <= V < 130
+_V_ROJO_MIN = 130  # ROJO: V >= 130; VINO: COLOR_V_MIN <= V < 130
 
 # Número de la bola lisa por color (la rayada suma 8).
 COLOR_A_NUMERO = {
@@ -59,7 +60,7 @@ COLOR_A_NUMERO = {
     "MORADO": 4,
     "NARANJA": 5,
     "VERDE": 6,
-    "GRANATE": 7,
+    "VINO": 7,
 }
 
 BLANCA = "BLANCA"
@@ -126,6 +127,18 @@ def _mascara_circular(alto: int, ancho: int) -> np.ndarray:
     return mascara
 
 
+def _mascara_anillo(alto: int, ancho: int) -> np.ndarray:
+    """Máscara booleana del anillo exterior del círculo inscrito.
+
+    Distingue lisa de rayada: en una lisa el blanco (círculo del número) queda en el
+    centro; en una rayada las "tapas" blancas caen en el borde de la bola.
+    """
+    yy, xx = np.ogrid[:alto, :ancho]
+    radio = min(alto, ancho) / 2.0
+    distancia = np.hypot(xx - ancho // 2, yy - alto // 2)
+    return (distancia >= ANILLO_INTERIOR * radio) & (distancia <= radio)
+
+
 def _rango_h(h: np.ndarray, rangos: list) -> np.ndarray:
     """Máscara booleana de los píxeles cuyo matiz cae en alguno de los rangos."""
     resultado = np.zeros(h.shape, dtype=bool)
@@ -182,7 +195,7 @@ def clasificar_bola(roi: Optional[np.ndarray]) -> Observacion:
         pix = coloreado & _rango_h(h, rangos)
         if nombre == "ROJO":
             pix &= v >= _V_ROJO_MIN
-        elif nombre == "GRANATE":
+        elif nombre == "VINO":
             pix &= v < _V_ROJO_MIN
         puntajes[nombre] = int(pix.sum())
 
@@ -192,6 +205,9 @@ def clasificar_bola(roi: Optional[np.ndarray]) -> Observacion:
     if confianza < UMBRAL_CONFIANZA:
         return Observacion(None, mejor, DESCONOCIDA, round(confianza, 3))
 
-    es_rayada = ratio_blanco >= UMBRAL_RAYADA
+    anillo = _mascara_anillo(alto, ancho) & dentro
+    total_anillo = int(anillo.sum())
+    ratio_blanco_anillo = int((blanco & anillo).sum()) / total_anillo if total_anillo else 0.0
+    es_rayada = ratio_blanco_anillo >= UMBRAL_RAYADA
     numero = COLOR_A_NUMERO[mejor] + (8 if es_rayada else 0)
     return Observacion(numero, mejor, RAYADA if es_rayada else LISA, round(confianza, 3))
