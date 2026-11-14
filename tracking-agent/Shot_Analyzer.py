@@ -15,6 +15,7 @@ fallar, por eso nunca se marca como confirmada.
 """
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -25,8 +26,11 @@ Punto = Tuple[float, float]
 
 @dataclass(frozen=True)
 class TiroObservado:
-    """Tiro inferido visualmente. Campos alineados con ``TiroEventRequest`` del backend
-    (el cliente REST añadirá ``jugadorId`` y ``eventId``)."""
+    """Tiro inferido visualmente. Campos alineados con ``TiroEventRequest`` del backend.
+
+    ``event_id`` nace aquí, cuando el analizador confirma el tiro, y acompaña a ese tiro
+    durante todo su ciclo de vida (reintentos y reinicios del agente incluidos). El cliente
+    REST solo añade ``jugadorId`` y ``versionEsperada``."""
 
     primera_bola_tocada: Optional[int]
     bolas_embolsadas: List[int]
@@ -34,6 +38,7 @@ class TiroObservado:
     duracion_segundos: int
     requiere_revision: bool
     motivos: List[str] = field(default_factory=list)
+    event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
 
 class ShotAnalyzer:

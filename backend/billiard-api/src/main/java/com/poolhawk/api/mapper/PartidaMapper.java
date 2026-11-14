@@ -32,6 +32,7 @@ public class PartidaMapper {
             mapearEquipo(partida.getEquipoA().getJugadores()),
             mapearEquipo(partida.getEquipoB().getJugadores()),
             mapearPuntajes(partida),
+            partida.jugadorActual().id(),
             partida.jugadorActual().nombre(),
             partida.getEstado().getGanador() != null
                 ? partida.getEstado().getGanador().nombre()

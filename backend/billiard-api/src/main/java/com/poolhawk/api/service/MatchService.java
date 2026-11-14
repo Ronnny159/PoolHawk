@@ -114,6 +114,8 @@ public class MatchService {
      *       {@link ResultadoTiro} original con HTTP 200 y <b>sin mutar el estado</b>.</li>
      *   <li>Si el {@code eventId} ya fue procesado con un payload diferente, se responde
      *       HTTP 400 (Bad Request).</li>
+     *   <li>Si es un {@code eventId} nuevo y {@code versionEsperada} no coincide con la cantidad
+     *       de tiros actual, se responde HTTP 409 (Conflict) sin modificar el estado.</li>
      *   <li>Si es un {@code eventId} nuevo, se evalúa, aplica, persiste y emite por WebSocket.</li>
      * </ul>
      *
@@ -153,16 +155,26 @@ public class MatchService {
                 return resultadoOriginal.get();
             }
 
-            // 2. VALIDACIÓN DE TURNO
+            // 2. CONTROL DE VERSIÓN (opcional). Va DESPUÉS de la idempotencia: un reintento
+            //    legítimo de un tiro ya aplicado no debe fallar porque la versión avanzó.
+            if (request.versionEsperada() != null
+                    && request.versionEsperada().intValue() != partida.getEstado().cantidadTiros()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "El estado de la partida cambió: se esperaba la versión "
+                        + request.versionEsperada() + " y la actual es "
+                        + partida.getEstado().cantidadTiros() + ".");
+            }
+
+            // 3. VALIDACIÓN DE TURNO
             Jugador jugadorActual = partida.jugadorActual();
             if (!jugadorActual.id().equals(request.jugadorId())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No es el turno de este jugador.");
             }
 
-            // 3. CONSTRUCCIÓN Y VALIDACIÓN ESTRICTA
+            // 4. CONSTRUCCIÓN Y VALIDACIÓN ESTRICTA
             TiroEvent evento = construirEventoValidado(partida, request, jugadorActual);
 
-            // 4. EVALUAR Y APLICAR
+            // 5. EVALUAR Y APLICAR
             ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
             ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
 
@@ -177,7 +189,7 @@ public class MatchService {
                 partida.finalizar(oponente);
             }
 
-            // 5. PERSISTIR
+            // 6. PERSISTIR
             PartidaEntity entityExistente = storage.buscar(partidaId).orElse(null);
             PartidaEntity entityNueva = persistenceMapper.toEntity(partida);
 
@@ -187,7 +199,7 @@ public class MatchService {
 
             storage.guardar(entityNueva);
 
-            // 6. WEBSOCKET
+            // 7. WEBSOCKET
             try {
                 String json = jsonMapper.writeValueAsString(responseMapper.toResponse(partida));
                 liveHandler.broadcast(json);

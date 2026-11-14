@@ -14,6 +14,7 @@ import java.util.Map;
  * @param equipoA         jugadores del equipo A
  * @param equipoB         jugadores del equipo B
  * @param puntajes        puntajes
+ * @param jugadorActualId id estable del jugador con el turno (usar este, no el nombre, para identificarlo)
  * @param jugadorActual   nombre del jugador con el turno
  * @param ganador         nombre del ganador
  * @param cantidadTiros   cantidad de tiros registrados
@@ -28,6 +29,7 @@ public record PartidaResponse(
         List<JugadorResponse> equipoA,
         List<JugadorResponse> equipoB,
         Map<String, Integer> puntajes,
+        String jugadorActualId,
         String jugadorActual,
         String ganador,
         int cantidadTiros,

@@ -22,7 +22,8 @@ from ball_classifier import Observacion, clasificar_bola, recortar_roi
 from ball_detector import BallDetector, ConfigDetector, Deteccion
 from ball_tracker import BallTracker, Track
 from camera_source import abrir_fuente, leer_frames
-from api_client import ErrorApi, PoolHawkApiClient
+from api_client import ErrorApi, ErrorConflicto, ErrorRed, PoolHawkApiClient
+from cola_eventos import ColaEventos
 from shot_analyzer import ShotAnalyzer, TiroObservado
 
 
@@ -85,6 +86,11 @@ def manejar_tiro(tiro: TiroObservado, cliente: Optional[PoolHawkApiClient],
     try:
         cliente.registrar_tiro(match_id, tiro)
         print(f"✅ Tiro enviado: primera={tiro.primera_bola_tocada} embolsadas={tiro.bolas_embolsadas}")
+    except ErrorConflicto as e:
+        print(f"⚠️  Tiro descartado: el estado de la partida cambió ({e}). Revisar manualmente.",
+              file=sys.stderr)
+    except ErrorRed as e:
+        print(f"⏳ API no disponible; el tiro queda pendiente y se reenviará ({e})", file=sys.stderr)
     except ErrorApi as e:
         print(f"❌ No se pudo enviar el tiro: {e}", file=sys.stderr)
 
@@ -94,6 +100,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--match-id", help="ID de la partida; si se indica, los tiros confiables se envían a la API")
     parser.add_argument("--api-url", default="http://localhost:8080", help="URL base del backend")
     parser.add_argument("--token", default=None, help="JWT opcional para la API")
+    parser.add_argument("--cola", default=".poolhawk_cola.json",
+                        help="Archivo donde se guardan los tiros pendientes de envío (sobrevive a reinicios)")
     parser.add_argument("--troneras", default=None,
                         help="JSON con la posición en px de cada tronera (necesario para inferir embolsados)")
     parser.add_argument("--source", default="0", help="Índice de cámara, ruta de vídeo o URL (por defecto 0)")
@@ -113,7 +121,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     detector, tracker = BallDetector(config), BallTracker()
     fps = cap.get(cv2.CAP_PROP_FPS) or 15.0
     analizador = ShotAnalyzer(troneras=_cargar_troneras(args.troneras), fps=fps)
-    cliente = PoolHawkApiClient(args.api_url, token=args.token) if args.match_id else None
+    cliente = None
+    if args.match_id:
+        try:
+            cliente = PoolHawkApiClient(args.api_url, token=args.token, cola=ColaEventos(args.cola))
+        except ValueError as e:
+            print(f"❌ Configuración inválida: {e}", file=sys.stderr)
+            return 2
+        resumen = cliente.reenviar_pendientes()
+        if resumen["enviados"] or resumen["rechazados"] or resumen["pendientes"]:
+            print(f"♻️  Reenvío de pendientes: {resumen}")
 
     print("📷 Fuente abierta." + ("" if args.no_gui else " Presiona 'q' para salir."))
     procesados = 0
