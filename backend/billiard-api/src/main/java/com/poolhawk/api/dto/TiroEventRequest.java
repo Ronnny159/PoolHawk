@@ -21,14 +21,13 @@ import java.util.List;
  * @since 0.1.0
  */
 public record TiroEventRequest(
+        String eventId, // NUEVO: ID único generado por el cliente
+
         @NotNull(message = "El jugador es obligatorio")
         String jugadorId,
 
         Integer primeraBolaTocada,
-
         List<Integer> bolasEmbolsadas,
-
         List<String> troneras,
-
         Integer duracionSegundos) {
 }

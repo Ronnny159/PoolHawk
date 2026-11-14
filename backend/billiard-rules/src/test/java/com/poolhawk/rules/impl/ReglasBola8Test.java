@@ -7,6 +7,7 @@ import com.poolhawk.domain.match.Grupo;
 import com.poolhawk.domain.match.MatchState;
 import com.poolhawk.domain.match.TipoModalidad;
 import com.poolhawk.domain.match.Turnos;
+import com.poolhawk.domain.player.Equipo;
 import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.Bola;
 import com.poolhawk.domain.table.Coordenada;
@@ -24,15 +25,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Pruebas unitarias de {@link ReglasBola8}.
- *
- * <p>Cubre el orden de validación completo, incluyendo prioridad de
- * reglas (bola 8 antes de tiempo tiene prioridad sobre bola equivocada).</p>
- *
- * @author PoolHawk Team
- * @since 0.1.0
- */
 @DisplayName("ReglasBola8 - reglas de Bola 8")
 class ReglasBola8Test {
 
@@ -43,28 +35,26 @@ class ReglasBola8Test {
 
     private ReglasBola8 reglas;
     private Mesa mesa;
-    private Turnos turnos;
+    private Turnos<Jugador> turnos;
     private MatchState estado;
 
     @BeforeEach
     void setUp() {
         reglas = new ReglasBola8(ReglasConfig.porDefecto());
         mesa = new Mesa();
-        // Blanca
         mesa.agregarBola(Bola.crear(0, new Coordenada(50, 50)));
-        // Lisas 1-7
         for (int i = 1; i <= 7; i++) {
             mesa.agregarBola(Bola.crear(i, new Coordenada(100 + i * 5, 100)));
         }
-        // Ocho
         mesa.agregarBola(Bola.crear(8, new Coordenada(200, 100)));
-        // Rayadas 9-15
         for (int i = 9; i <= 15; i++) {
             mesa.agregarBola(Bola.crear(i, new Coordenada(100 + i * 5, 120)));
         }
 
-        turnos = new Turnos(List.of(ANA, BETO));
-        estado = new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, turnos, mesa, FECHA);
+        Equipo eqA = Equipo.individual("eA", ANA.nombre(), ANA);
+        Equipo eqB = Equipo.individual("eB", BETO.nombre(), BETO);
+        turnos = new Turnos<>(List.of(ANA, BETO));
+        estado = new MatchState(PARTIDA_ID, TipoModalidad.BOLA_8, eqA, eqB, turnos, mesa, FECHA);
         estado.iniciar();
     }
 
@@ -99,7 +89,6 @@ class ReglasBola8Test {
     @Nested
     @DisplayName("Nombre de modalidad")
     class NombreModalidad {
-
         @Test
         @DisplayName("Retorna 'Bola 8'")
         void nombre() {
@@ -166,7 +155,7 @@ class ReglasBola8Test {
         }
 
         @Test
-        @DisplayName("Falta si toca primero la bola 8")
+        @DisplayName("Falta si toca primero la bola 8 (grupo sucio)")
         void tocaOcho() {
             TiroEvent t = tiroSimple(ANA, bola(8));
             ResultadoTiro r = reglas.evaluar(estado, t);
@@ -184,16 +173,27 @@ class ReglasBola8Test {
         void victoriaConGrupoLimpio() {
             estado.asignarGrupo(ANA, Grupo.LISAS);
             estado.asignarGrupo(BETO, Grupo.RAYADAS);
-
-            // Embolsar todas las lisas
-            for (int i = 1; i <= 7; i++) {
-                mesa.embolsarBola(i);
-            }
+            for (int i = 1; i <= 7; i++) mesa.embolsarBola(i);
 
             TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
             ResultadoTiro r = reglas.evaluar(estado, t);
             assertTrue(r.esVictoria());
             assertFalse(r.esFalta());
+        }
+
+        @Test
+        @DisplayName("Victoria se detecta correctamente")
+        void victoriaDetectada() {
+            estado.asignarGrupo(ANA, Grupo.LISAS);
+            estado.asignarGrupo(BETO, Grupo.RAYADAS);
+            for (int i = 1; i <= 7; i++) mesa.embolsarBola(i);
+
+            TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+
+            assertTrue(r.esVictoria());
+            assertFalse(r.esFalta());
+            assertFalse(r.fueExitoso());
         }
     }
 
@@ -202,15 +202,15 @@ class ReglasBola8Test {
     class Derrota {
 
         @Test
-        @DisplayName("Falta si embolsa la 8 con grupo sucio")
+        @DisplayName("Derrota si embolsa la 8 con grupo sucio")
         void faltaOchoConGrupoSucio() {
             estado.asignarGrupo(ANA, Grupo.LISAS);
             estado.asignarGrupo(BETO, Grupo.RAYADAS);
 
-            // NO embolsar las lisas
             TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
             ResultadoTiro r = reglas.evaluar(estado, t);
-            assertTrue(r.esFalta());
+            
+            assertTrue(r.esDerrota());
             assertEquals(FaltaMotivo.BOLA_8_ANTES_DE_TIEMPO, r.motivo());
         }
     }
@@ -226,6 +226,16 @@ class ReglasBola8Test {
             reglas.evaluar(estado, t);
             assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(ANA));
             assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(BETO));
+        }
+
+        @Test
+        @DisplayName("Asigna grupo al tirador y opuesto al oponente")
+        void asignaGrupoAlEmbolsar() {
+            TiroEvent t = tiroConEmbolsada(ANA, bola(3), bola(3));
+            ResultadoTiro r = reglas.evaluar(estado, t);
+            
+            assertEquals(Grupo.LISAS, r.grupoAsignado());
+            // NOTA: La evaluación pura no muta el estado. El test de mutación está en MatchStateTest.
         }
     }
 
@@ -309,7 +319,7 @@ class ReglasBola8Test {
 
             ResultadoTiro r = reglas.evaluar(estado, t);
             assertFalse(r.esFalta());
-            assertFalse(r.cambiaTurno());  // sigue tirando
+            assertFalse(r.cambiaTurno());
         }
 
         @Test
@@ -319,22 +329,51 @@ class ReglasBola8Test {
             assertTrue(reglas.partidaTerminada(estado));
             assertNull(reglas.determinarGanador(estado));
         }
+    }
+    @Test
+    @DisplayName("Derrota si embolsa la 8 con primer contacto ilegal")
+    void derrotaOchoConContactoIlegal() {
+        estado.asignarGrupo(ANA, Grupo.LISAS);
+        estado.asignarGrupo(BETO, Grupo.RAYADAS);
+        for (int i = 1; i <= 7; i++) mesa.embolsarBola(i);
 
-        @Test
-        @DisplayName("Victoria se detecta correctamente")
-        void victoriaDetectada() {
-            estado.asignarGrupo(ANA, Grupo.LISAS);
-            estado.asignarGrupo(BETO, Grupo.RAYADAS);
-            for (int i = 1; i <= 7; i++) {
-                mesa.embolsarBola(i);
-            }
+        // Toca una rayada (ilegal) y embolsa la 8
+        TiroEvent t = tiroConEmbolsada(ANA, bola(11), bola(8));
+        ResultadoTiro r = reglas.evaluar(estado, t);
+        
+        assertTrue(r.esDerrota());
+        assertEquals(FaltaMotivo.BOLA_8_CON_CONTACTO_ILEGAL, r.motivo());
+    }
 
-            TiroEvent t = tiroConEmbolsada(ANA, bola(8), bola(8));
-            ResultadoTiro r = reglas.evaluar(estado, t);
+    @Test
+    @DisplayName("Derrota si embolsa la blanca y la 8 simultáneamente")
+    void derrotaBlancaYOcho() {
+        estado.asignarGrupo(ANA, Grupo.LISAS);
+        estado.asignarGrupo(BETO, Grupo.RAYADAS);
+        for (int i = 1; i <= 7; i++) mesa.embolsarBola(i);
 
-            assertTrue(r.esVictoria());
-            assertFalse(r.esFalta());
-            assertFalse(r.fueExitoso());  // victoria no es "tiro exitoso normal"
-        }
+        TiroEvent t = tiro(ANA, bola(8), List.of(bola(0), bola(8)), 
+            List.of(TroneraNombre.TOP_LEFT, TroneraNombre.TOP_LEFT));
+        ResultadoTiro r = reglas.evaluar(estado, t);
+        
+        assertTrue(r.esDerrota());
+        assertEquals(FaltaMotivo.BLANCA_Y_OCHO_EMBOLSADAS, r.motivo());
+    }
+
+    // Añade esto en cualquier bloque @Nested (ej. AsignacionGrupos o CasosBorde)
+    @Test
+    @DisplayName("Evaluar un tiro no modifica el estado (evaluación pura)")
+    void evaluarNoMutaElEstado() {
+        // No asignamos grupos inicialmente
+        assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(ANA));
+        
+        // Simulamos un tiro que embolsa una lisa (debería sugerir asignar LISAS)
+        TiroEvent t = tiroConEmbolsada(ANA, bola(1), bola(1));
+        ResultadoTiro r = reglas.evaluar(estado, t);
+        
+        // Verificamos que el resultado propone el grupo, pero el estado NO cambió
+        assertEquals(Grupo.LISAS, r.grupoAsignado());
+        assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(ANA));
+        assertEquals(Grupo.SIN_ASIGNAR, estado.grupoDe(BETO));
     }
 }

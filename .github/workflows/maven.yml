@@ -2,7 +2,7 @@ name: Maven CI
 
 on:
   push:
-    branches: [ main, develop, 'feature/**' ]
+    branches: [ main, develop, 'feature/**', 'fix/**' ]
   pull_request:
     branches: [ main, develop ]
 
@@ -10,8 +10,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    # Base de datos por si alguna prueba de integracion la necesita
-    # (mismos datos que usa application.yml en desarrollo).
     services:
       postgres:
         image: postgres:16-alpine

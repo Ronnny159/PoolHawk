@@ -251,4 +251,14 @@ public class Equipo {
             .filter(j -> !j.id().equals(jugadorId))
             .findFirst();
     }
+    /**
+     * Verifica si un jugador pertenece al equipo.
+     *
+     * @param jugador jugador a verificar
+     * @return {@code true} si pertenece al equipo
+     */
+    public boolean contiene(Jugador jugador) {
+        if (jugador == null) return false;
+        return jugadores.stream().anyMatch(j -> j.id().equals(jugador.id()));
+    }
 }
