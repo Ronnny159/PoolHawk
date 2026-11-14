@@ -7,14 +7,12 @@ import java.util.Objects;
 
 /**
  * Entidad JPA que persiste un {@code TiroEvent} del dominio junto con su
- * {@code ResultadoTiro}. Es la fuente durable de verdad para la idempotencia:
- * si el servidor se reinicia, el historial se reconstruye desde aquí y los
- * reintentos con el mismo {@code eventId} siguen resolviéndose.
+ * {@code ResultadoTiro}. Es la fuente durable de verdad para la idempotencia.
  *
- * <p>El identificador de la entidad es el mismo {@code eventId} del dominio.
- * Como los {@code eventId} son UUID generados por el cliente, la probabilidad
- * de colisión global es despreciable. Se añade además un constraint
- * {@code UNIQUE(partida_id, event_id)} como red de seguridad.</p>
+ * <p>Todos los campos JSON son {@code nullable = false}: un tiro persistido
+ * sin sus bolas, sin sus troneras o sin su resultado se considera corrupción
+ * y la reconstrucción fallará de forma explícita con
+ * {@link com.poolhawk.api.exception.PartidaCorruptaException}.</p>
  *
  * @author PoolHawk Team
  * @since 0.1.0
@@ -52,11 +50,11 @@ public class TiroEntity {
     private Integer primeraBolaTocada;
 
     /** Lista de números de bola embolsadas, serializada como JSON. */
-    @Column(name = "bolas_embolsadas_json", columnDefinition = "TEXT")
+    @Column(name = "bolas_embolsadas_json", columnDefinition = "TEXT", nullable = false)
     private String bolasEmbolsadasJson;
 
     /** Lista de nombres de tronera, serializada como JSON. */
-    @Column(name = "troneras_json", columnDefinition = "TEXT")
+    @Column(name = "troneras_json", columnDefinition = "TEXT", nullable = false)
     private String tronerasJson;
 
     /** Momento en que ocurrió el tiro. */
@@ -67,8 +65,8 @@ public class TiroEntity {
     @Column(name = "duracion_segundos", nullable = false)
     private Long duracionSegundos;
 
-    /** Veredicto del motor de reglas, serializado como JSON. */
-    @Column(name = "resultado_json", columnDefinition = "TEXT")
+    /** Veredicto del motor de reglas, serializado como JSON. Obligatorio. */
+    @Column(name = "resultado_json", columnDefinition = "TEXT", nullable = false)
     private String resultadoJson;
 
     public TiroEntity() {

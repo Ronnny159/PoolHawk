@@ -19,6 +19,8 @@ import com.poolhawk.rules.ReglasBillar;
 import com.poolhawk.rules.ReglasConfig;
 import com.poolhawk.rules.ReglasFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,9 @@ import java.util.stream.Collectors;
 
 @Service
 public class MatchService {
+
+    private static final Logger log = LoggerFactory.getLogger(MatchService.class);
+
     private final MatchStorage storage;
     private final MatchLiveHandler liveHandler;
     private final PartidaMapper responseMapper;
@@ -83,39 +88,48 @@ public class MatchService {
         return partida;
     }
 
+    /**
+     * Busca una partida por id. Si no está en caché, la reconstruye desde la
+     * base de datos cargando el historial de tiros mediante {@code @EntityGraph}.
+     *
+     * <p>{@code @Transactional(readOnly = true)} garantiza que la sesión JPA
+     * permanezca abierta durante el mapeo, independientemente de que Open
+     * Entity Manager in View esté activo o no.</p>
+     *
+     * @param id identificador de la partida
+     * @return la partida de dominio
+     * @throws PartidaNoEncontradaException si no existe
+     * @throws com.poolhawk.api.exception.PartidaCorruptaException si no puede reconstruirse
+     */
+    @Transactional(readOnly = true)
     public Partida buscar(String id) {
         if (partidasEnMemoria.containsKey(id)) return partidasEnMemoria.get(id);
 
-        PartidaEntity entity = storage.buscar(id)
+        PartidaEntity entity = storage.buscarConHistorial(id)
             .orElseThrow(() -> new PartidaNoEncontradaException(id));
 
         return persistenceMapper.toDomain(entity);
     }
 
+    /**
+     * Lista todas las partidas cargando su historial de tiros.
+     *
+     * <p>A diferencia del comportamiento anterior, ya no se descartan
+     * silenciosamente partidas corruptas: si alguna no puede reconstruirse,
+     * se propaga {@link com.poolhawk.api.exception.PartidaCorruptaException}
+     * para que el cliente reciba un error explícito (H-01).</p>
+     *
+     * @return lista de todas las partidas restaurables
+     */
     @Transactional(readOnly = true)
     public List<Partida> listarTodas() {
-        return storage.listarTodas().stream()
-            .map(entity -> {
-                try {
-                    return persistenceMapper.toDomain(entity);
-                } catch (Exception e) {
-                    System.err.println("Ignorando partida corrupta " + entity.getId() + ": " + e.getMessage());
-                    return null;
-                }
-            })
-            .filter(Objects::nonNull)
+        return storage.listarTodasConHistorial().stream()
+            .map(persistenceMapper::toDomain)
             .collect(Collectors.toList());
     }
 
     /**
-     * Registra un tiro aplicando idempotencia <b>transparente</b>:
-     * <ul>
-     *   <li>Si el {@code eventId} ya fue procesado con el mismo payload, se devuelve el
-     *       {@link ResultadoTiro} original con HTTP 200 y <b>sin mutar el estado</b>.</li>
-     *   <li>Si el {@code eventId} ya fue procesado con un payload diferente, se responde
-     *       HTTP 400 (Bad Request).</li>
-     *   <li>Si es un {@code eventId} nuevo, se evalúa, aplica, persiste y emite por WebSocket.</li>
-     * </ul>
+     * Registra un tiro aplicando idempotencia transparente.
      *
      * @param partidaId identificador de la partida
      * @param request   payload del tiro
@@ -128,7 +142,6 @@ public class MatchService {
         synchronized (lock) {
             Partida partida = buscar(partidaId);
 
-            // 1. IDEMPOTENCIA TRANSPARENTE
             if (request.eventId() == null || request.eventId().isBlank()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "El eventId es obligatorio para garantizar idempotencia.");
@@ -149,20 +162,16 @@ public class MatchService {
                         "El eventId ya fue utilizado con un payload diferente.");
                 }
 
-                // Reintento idéntico: 200 OK con el veredicto original, sin tocar estado.
                 return resultadoOriginal.get();
             }
 
-            // 2. VALIDACIÓN DE TURNO
             Jugador jugadorActual = partida.jugadorActual();
             if (!jugadorActual.id().equals(request.jugadorId())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No es el turno de este jugador.");
             }
 
-            // 3. CONSTRUCCIÓN Y VALIDACIÓN ESTRICTA
             TiroEvent evento = construirEventoValidado(partida, request, jugadorActual);
 
-            // 4. EVALUAR Y APLICAR
             ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
             ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
 
@@ -177,7 +186,6 @@ public class MatchService {
                 partida.finalizar(oponente);
             }
 
-            // 5. PERSISTIR
             PartidaEntity entityExistente = storage.buscar(partidaId).orElse(null);
             PartidaEntity entityNueva = persistenceMapper.toEntity(partida);
 
@@ -187,12 +195,12 @@ public class MatchService {
 
             storage.guardar(entityNueva);
 
-            // 6. WEBSOCKET
             try {
                 String json = jsonMapper.writeValueAsString(responseMapper.toResponse(partida));
                 liveHandler.broadcast(json);
             } catch (Exception e) {
-                System.err.println("Error serializando partida: " + e.getMessage());
+                log.warn("Error serializando o emitiendo partida {} por WebSocket: {}",
+                    partidaId, e.getMessage(), e);
             }
 
             return resultado;
@@ -200,19 +208,8 @@ public class MatchService {
     }
 
     /**
-     * Compara el payload del request con el {@link TiroEvent} originalmente procesado.
-     * Considera identidad si coinciden jugador, primera bola, bolas embolsadas,
-     * troneras y duración.
-     *
-     * <p>Regla estricta de idempotencia (H-03): <b>no se normalizan</b> valores nulos.
-     * Un reintento que incluya {@code null} en {@code troneras} se considera un payload
-     * distinto al original (que fue validado y no puede contener {@code null}), y por
-     * tanto se rechaza con 400. Aceptar silenciosamente un payload inválido como
-     * "idéntico" abriría la puerta a reintentos con datos divergentes.</p>
-     *
-     * @param request  payload recibido en el reintento
-     * @param original evento almacenado en el historial
-     * @return {@code true} si representan el mismo tiro
+     * Compara el payload del request con el {@link TiroEvent} original.
+     * Regla estricta: no se normalizan nulos en {@code troneras}.
      */
     private boolean mismoPayload(TiroEventRequest request, TiroEvent original) {
         if (!Objects.equals(request.jugadorId(), original.jugador().id())) {
@@ -236,7 +233,6 @@ public class MatchService {
             return false;
         }
 
-        // H-03: comparación estricta de troneras, sin filtrado de nulos.
         List<String> tronerasOriginal = original.troneras() == null
             ? List.of()
             : original.troneras().stream().map(Enum::name).toList();
@@ -247,12 +243,8 @@ public class MatchService {
         } else {
             tronerasRequest = new ArrayList<>(request.troneras().size());
             for (String t : request.troneras()) {
-                if (t == null) {
-                    // Un null en el reintento nunca puede ser equivalente al original,
-                    // que fue validado y no admite nulos.
-                    return false;
-                }
-                tronerasRequest.add(t.toUpperCase());
+                if (t == null) return false;
+                tronerasRequest.add(t.toUpperCase(Locale.ROOT));
             }
         }
         if (!tronerasOriginal.equals(tronerasRequest)) {
@@ -267,7 +259,6 @@ public class MatchService {
     private TiroEvent construirEventoValidado(Partida partida, TiroEventRequest request, Jugador jugadorActual) {
         String eventId = request.eventId();
 
-        // Validar primera bola tocada
         Bola primeraTocada = null;
         if (request.primeraBolaTocada() != null) {
             primeraTocada = partida.getMesa().buscarBola(request.primeraBolaTocada())
@@ -277,7 +268,6 @@ public class MatchService {
             }
         }
 
-        // Validar bolas embolsadas (incluyendo nulls y duplicados)
         List<Bola> embolsadas = new ArrayList<>();
         if (request.bolasEmbolsadas() != null && !request.bolasEmbolsadas().isEmpty()) {
             Set<Integer> bolasUnicas = new HashSet<>();
@@ -297,7 +287,6 @@ public class MatchService {
             }
         }
 
-        // Validar troneras
         List<TroneraNombre> troneras = new ArrayList<>();
         if (request.troneras() != null) {
             if (request.troneras().size() != embolsadas.size()) {
@@ -308,7 +297,7 @@ public class MatchService {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nombre de tronera nulo o vacío.");
                 }
                 try {
-                    troneras.add(TroneraNombre.valueOf(nombre.toUpperCase()));
+                    troneras.add(TroneraNombre.valueOf(nombre.toUpperCase(Locale.ROOT)));
                 } catch (IllegalArgumentException e) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tronera inválida: " + nombre);
                 }
