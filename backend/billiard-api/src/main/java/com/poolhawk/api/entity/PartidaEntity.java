@@ -2,6 +2,7 @@ package com.poolhawk.api.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -24,10 +25,25 @@ public class PartidaEntity {
     @Version
     private Long version;
 
-    // AGREGADO: @OrderColumn para garantizar el orden A1, B1, A2, B2
     @OneToMany(mappedBy = "partida", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @OrderColumn(name = "orden")
     private List<JugadorEntity> jugadores;
+
+    /**
+     * Historial durable de tiros. Es la fuente de verdad para la
+     * idempotencia tras un reinicio del servidor.
+     *
+     * <p>{@code orphanRemoval = true} garantiza que, al regenerar la
+     * lista completa desde {@code MatchPersistenceMapper.toEntity},
+     * los tiros eliminados del dominio se borran también de la BD.</p>
+     *
+     * <p>{@code @OrderColumn("orden")} preserva el orden de ejecución,
+     * necesario para reconstruir el historial de forma determinista.</p>
+     */
+    @OneToMany(mappedBy = "partida", cascade = CascadeType.ALL,
+               fetch = FetchType.LAZY, orphanRemoval = true)
+    @OrderColumn(name = "orden")
+    private List<TiroEntity> tiros = new ArrayList<>();
 
     // Getters y Setters
     public String getId() { return id; }
@@ -50,4 +66,6 @@ public class PartidaEntity {
     public void setVersion(Long version) { this.version = version; }
     public List<JugadorEntity> getJugadores() { return jugadores; }
     public void setJugadores(List<JugadorEntity> jugadores) { this.jugadores = jugadores; }
+    public List<TiroEntity> getTiros() { return tiros; }
+    public void setTiros(List<TiroEntity> tiros) { this.tiros = tiros; }
 }

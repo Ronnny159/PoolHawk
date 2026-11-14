@@ -1,15 +1,21 @@
 package com.poolhawk.api.mapper;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.poolhawk.api.entity.JugadorEntity;
 import com.poolhawk.api.entity.PartidaEntity;
+import com.poolhawk.api.entity.TiroEntity;
+import com.poolhawk.domain.event.ResultadoTiro;
+import com.poolhawk.domain.event.TiroEvent;
 import com.poolhawk.domain.match.*;
 import com.poolhawk.domain.player.Equipo;
 import com.poolhawk.domain.player.Jugador;
 import com.poolhawk.domain.table.Bola;
 import com.poolhawk.domain.table.Mesa;
+import com.poolhawk.domain.table.TroneraNombre;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -35,8 +41,8 @@ public class MatchPersistenceMapper {
             .map(j -> new Jugador(j.getId(), j.getNombre()))
             .toList();
 
-        FormatoJuego formatoGuardado = entity.getFormato() != null 
-            ? FormatoJuego.valueOf(entity.getFormato()) 
+        FormatoJuego formatoGuardado = entity.getFormato() != null
+            ? FormatoJuego.valueOf(entity.getFormato())
             : FormatoJuego.INDIVIDUAL;
 
         Equipo equipoA;
@@ -73,7 +79,7 @@ public class MatchPersistenceMapper {
         }
 
         Turnos<Jugador> turnos = new Turnos<>(rotacion);
-        MatchState estado = new MatchState(entity.getId(), TipoModalidad.valueOf(entity.getModalidad()), 
+        MatchState estado = new MatchState(entity.getId(), TipoModalidad.valueOf(entity.getModalidad()),
             equipoA, equipoB, turnos, mesa, entity.getFechaCreacion());
 
         // 4. Restaurar snapshot
@@ -83,6 +89,7 @@ public class MatchPersistenceMapper {
 
                 Map<Jugador, Integer> puntajesGuardados = new HashMap<>();
                 if (snapshot.containsKey("puntajes")) {
+                    @SuppressWarnings("unchecked")
                     Map<String, Integer> puntajesMap = (Map<String, Integer>) snapshot.get("puntajes");
                     for (Jugador j : rotacion) {
                         if (puntajesMap.containsKey(j.id())) {
@@ -93,6 +100,7 @@ public class MatchPersistenceMapper {
 
                 Map<Jugador, Grupo> gruposGuardados = new HashMap<>();
                 if (snapshot.containsKey("grupos")) {
+                    @SuppressWarnings("unchecked")
                     Map<String, String> gruposMap = (Map<String, String>) snapshot.get("grupos");
                     for (Jugador j : rotacion) {
                         if (gruposMap.containsKey(j.id()) && !gruposMap.get(j.id()).equals("SIN_ASIGNAR")) {
@@ -124,16 +132,93 @@ public class MatchPersistenceMapper {
             }
         }
 
-        // EL CAMBIO ESTÁ AQUÍ: Usamos el nuevo constructor que recibe el MatchState ya restaurado
+        // 5. Restaurar historial de tiros y resultados (idempotencia durable)
+        restaurarHistorialDesdeEntity(entity, mesa, rotacion, estado);
+
         return new Partida(
-            entity.getId(), 
-            TipoModalidad.valueOf(entity.getModalidad()), 
-            equipoA, 
-            equipoB, 
-            formatoGuardado, 
-            entity.getFechaCreacion(), 
-            estado // <-- ¡Le pasamos el estado que acabamos de restaurar!
+            entity.getId(),
+            TipoModalidad.valueOf(entity.getModalidad()),
+            equipoA,
+            equipoB,
+            formatoGuardado,
+            entity.getFechaCreacion(),
+            estado
         );
+    }
+
+    /**
+     * Reconstruye el historial de {@link TiroEvent} y el mapa {@code eventId -> ResultadoTiro}
+     * desde las entidades {@link TiroEntity} asociadas a la partida.
+     *
+     * <p>Si una fila no puede reconstruirse (p. ej. JSON corrupto), se omite y se
+     * emite un log con contexto. En Fase 5.4 se endurecerá este comportamiento
+     * para que un fallo de reconstrucción no pase desapercibido.</p>
+     *
+     * @param entity  entidad JPA de la partida
+     * @param mesa    mesa ya reconstruida (necesaria para resolver bolas por número)
+     * @param rotacion lista de jugadores en orden de turno
+     * @param estado  estado de partida donde inyectar el historial
+     */
+    private void restaurarHistorialDesdeEntity(PartidaEntity entity, Mesa mesa,
+                                                List<Jugador> rotacion, MatchState estado) {
+        if (entity.getTiros() == null || entity.getTiros().isEmpty()) {
+            return;
+        }
+
+        List<TiroEvent> historial = new ArrayList<>();
+        Map<String, ResultadoTiro> resultados = new HashMap<>();
+
+        for (TiroEntity te : entity.getTiros()) {
+            try {
+                Jugador jugador = rotacion.stream()
+                    .filter(j -> j.id().equals(te.getJugadorId()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException(
+                        "Jugador " + te.getJugadorId() + " no participa en la partida"));
+
+                Bola primeraBola = te.getPrimeraBolaTocada() != null
+                    ? mesa.buscarBola(te.getPrimeraBolaTocada()).orElse(null)
+                    : null;
+
+                List<Integer> numerosEmbolsados = te.getBolasEmbolsadasJson() != null
+                    ? jsonMapper.readValue(te.getBolasEmbolsadasJson(), new TypeReference<List<Integer>>() {})
+                    : List.of();
+                List<Bola> bolasEmbolsadas = new ArrayList<>();
+                for (Integer n : numerosEmbolsados) {
+                    mesa.buscarBola(n).ifPresent(bolasEmbolsadas::add);
+                }
+
+                List<String> nombresTroneras = te.getTronerasJson() != null
+                    ? jsonMapper.readValue(te.getTronerasJson(), new TypeReference<List<String>>() {})
+                    : List.of();
+                List<TroneraNombre> troneras = new ArrayList<>();
+                for (String nombre : nombresTroneras) {
+                    troneras.add(TroneraNombre.valueOf(nombre));
+                }
+
+                TiroEvent evento = new TiroEvent(
+                    te.getEventId(),
+                    entity.getId(),
+                    jugador,
+                    primeraBola,
+                    bolasEmbolsadas,
+                    troneras,
+                    te.getTimestamp(),
+                    Duration.ofSeconds(te.getDuracionSegundos() != null ? te.getDuracionSegundos() : 5L)
+                );
+                historial.add(evento);
+
+                if (te.getResultadoJson() != null) {
+                    ResultadoTiro resultado = jsonMapper.readValue(te.getResultadoJson(), ResultadoTiro.class);
+                    resultados.put(te.getEventId(), resultado);
+                }
+            } catch (Exception e) {
+                System.err.println("Error reconstruyendo tiro " + te.getEventId()
+                    + " de la partida " + entity.getId() + ": " + e.getMessage());
+            }
+        }
+
+        estado.restaurarHistorial(historial, resultados);
     }
 
     public PartidaEntity toEntity(Partida partida) {
@@ -172,7 +257,58 @@ public class MatchPersistenceMapper {
             jugadores.add(toJugadorEntity(j, "B", entity));
         }
         entity.setJugadores(jugadores);
+
+        // Historial durable de tiros (fuente de verdad para idempotencia tras reinicio)
+        List<TiroEntity> tiros = new ArrayList<>();
+        for (TiroEvent evento : partida.getEstado().getHistorial()) {
+            tiros.add(toTiroEntity(evento, partida, entity));
+        }
+        entity.setTiros(tiros);
+
         return entity;
+    }
+
+    /**
+     * Convierte un {@link TiroEvent} de dominio a su entidad JPA, incluyendo
+     * el {@link ResultadoTiro} asociado (si ya fue evaluado).
+     *
+     * @param evento  tiro de dominio
+     * @param partida partida de la que proviene
+     * @param entity  entidad padre a la que enlazar el tiro
+     * @return la entidad JPA del tiro lista para persistir
+     */
+    private TiroEntity toTiroEntity(TiroEvent evento, Partida partida, PartidaEntity entity) {
+        TiroEntity te = new TiroEntity();
+        te.setId(evento.id());
+        te.setEventId(evento.id());
+        te.setPartida(entity);
+        te.setJugadorId(evento.jugador().id());
+        te.setPrimeraBolaTocada(evento.primeraBolaTocada() != null
+            ? evento.primeraBolaTocada().numero()
+            : null);
+        te.setTimestamp(evento.timestamp());
+        te.setDuracionSegundos(evento.duracion() != null ? evento.duracion().getSeconds() : 5L);
+
+        try {
+            List<Integer> numerosEmbolsados = evento.bolasEmbolsadas().stream()
+                .map(Bola::numero)
+                .toList();
+            te.setBolasEmbolsadasJson(jsonMapper.writeValueAsString(numerosEmbolsados));
+
+            List<String> nombresTroneras = evento.troneras().stream()
+                .map(Enum::name)
+                .toList();
+            te.setTronerasJson(jsonMapper.writeValueAsString(nombresTroneras));
+
+            ResultadoTiro resultado = partida.getEstado().getResultadosPorEvento().get(evento.id());
+            if (resultado != null) {
+                te.setResultadoJson(jsonMapper.writeValueAsString(resultado));
+            }
+        } catch (Exception e) {
+            System.err.println("Error serializando tiro " + evento.id() + ": " + e.getMessage());
+        }
+
+        return te;
     }
 
     private JugadorEntity toJugadorEntity(Jugador j, String equipo, PartidaEntity partida) {

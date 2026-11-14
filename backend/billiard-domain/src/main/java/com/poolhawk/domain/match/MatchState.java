@@ -25,14 +25,7 @@ public class MatchState {
     private final Map<Jugador, Integer> puntajes;
     private final Map<Jugador, Grupo> gruposAsignados;
     private final List<TiroEvent> historial;
-
-    /**
-     * Resultados indexados por {@code eventId}. Permite la idempotencia
-     * transparente en {@code MatchService}: si llega un evento repetido,
-     * se devuelve el veredicto original sin re-evaluar ni mutar estado.
-     */
     private final Map<String, ResultadoTiro> resultadosPorEvento;
-
     private Jugador ganador;
 
     public MatchState(String partidaId, TipoModalidad modalidad,
@@ -109,7 +102,6 @@ public class MatchState {
 
     /**
      * Devuelve los números de las bolas que siguen sobre la mesa (incluida la blanca, id 0).
-     * Útil para que la capa API verifique situaciones como "falta con blanca que vuelve".
      *
      * @return lista ordenada de números de bola presentes en la mesa
      */
@@ -205,7 +197,7 @@ public class MatchState {
      * Aplica un tiro ya evaluado. Almacena también el {@link ResultadoTiro} indexado por
      * {@code eventId} para garantizar idempotencia transparente en reintentos posteriores.
      *
-     * @param evento   evento validado del tiro
+     * @param evento    evento validado del tiro
      * @param resultado veredicto devuelto por el motor de reglas
      */
     public void aplicarTiro(TiroEvent evento, ResultadoTiro resultado) {
@@ -218,7 +210,6 @@ public class MatchState {
 
         registrarTiro(evento);
 
-        // 1. Aplicar grupo si el tiro lo asignó
         if (resultado.grupoAsignado() != null) {
             Jugador tirador = evento.jugador();
             Jugador oponente = equipoA.contiene(tirador)
@@ -229,7 +220,6 @@ public class MatchState {
             if (!grupoDe(oponente).estaAsignado()) gruposAsignados.put(oponente, resultado.grupoAsignado().opuesto());
         }
 
-        // 2. Aplicar bolas embolsadas (CON EXCEPCIÓN DE LA BLANCA EN FALTA)
         for (Bola bola : evento.bolasEmbolsadas()) {
             if (resultado.esFalta() && resultado.motivo() == FaltaMotivo.BLANCA_EMBOLSADA && bola.esBlanca()) {
                 continue;
@@ -239,15 +229,12 @@ public class MatchState {
             }
         }
 
-        // 3. Sumar puntos
         if (resultado.puntos() > 0) sumarPuntos(evento.jugador(), resultado.puntos());
 
-        // 4. Cambiar turno SOLO si no es terminal
         if (resultado.cambiaTurno() && !resultado.esVictoria() && !resultado.esDerrota()) {
             avanzarTurno();
         }
 
-        // 5. Registrar el resultado para idempotencia (al final, cuando ya no puede fallar)
         resultadosPorEvento.put(evento.id(), resultado);
     }
 
@@ -256,6 +243,31 @@ public class MatchState {
         this.ganador = ganadorGuardado;
         if (puntajesGuardados != null) this.puntajes.putAll(puntajesGuardados);
         if (gruposGuardados != null) this.gruposAsignados.putAll(gruposGuardados);
+    }
+
+    /**
+     * Inyecta el historial y los resultados reconstruidos desde la base de datos
+     * <b>sin re-aplicar</b> los tiros. Debe llamarse únicamente después de
+     * {@link #restaurarEstado(FasePartida, Jugador, Map, Map)} para evitar
+     * doble mutación sobre puntajes, grupos y turnos.
+     *
+     * <p>Se usa en la rehidratación desde JPA para que la idempotencia sobreviva
+     * a un reinicio del servidor: los {@code eventId} ya procesados quedan
+     * indexados en {@code resultadosPorEvento} y los reintentos devuelven el
+     * {@link ResultadoTiro} original.</p>
+     *
+     * @param historialRestaurado lista de {@link TiroEvent} en orden de ejecución
+     * @param resultados          mapa {@code eventId -> ResultadoTiro}
+     */
+    public void restaurarHistorial(List<TiroEvent> historialRestaurado,
+                                   Map<String, ResultadoTiro> resultados) {
+        Objects.requireNonNull(historialRestaurado, "El historial no puede ser nulo");
+        Objects.requireNonNull(resultados, "Los resultados no pueden ser nulos");
+
+        this.historial.clear();
+        this.historial.addAll(historialRestaurado);
+        this.resultadosPorEvento.clear();
+        this.resultadosPorEvento.putAll(resultados);
     }
 
     @Override
