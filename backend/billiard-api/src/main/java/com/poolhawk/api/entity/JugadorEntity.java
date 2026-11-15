@@ -1,26 +1,32 @@
-package com.poolhawk.api.entity;
+package com.poolhawk.api.repository;
 
-import jakarta.persistence.*;
+import com.poolhawk.api.entity.PartidaEntity;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
-@Entity
-@Table(name = "jugadores")
-public class JugadorEntity {
-    @Id
-    private String id;
-    private String nombre;
-    private String equipo;
+import java.util.List;
+import java.util.Optional;
 
-    @ManyToOne
-    @JoinColumn(name = "partida_id")
-    private PartidaEntity partida;
+/**
+ * Repositorio JPA de partidas.
+ */
+@Repository
+public interface PartidaRepository extends JpaRepository<PartidaEntity, String> {
 
-    // Getters y Setters
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
-    public String getNombre() { return nombre; }
-    public void setNombre(String nombre) { this.nombre = nombre; }
-    public String getEquipo() { return equipo; }
-    public void setEquipo(String equipo) { this.equipo = equipo; }
-    public PartidaEntity getPartida() { return partida; }
-    public void setPartida(PartidaEntity partida) { this.partida = partida; }
+    /**
+     * Busca una partida por id cargando su historial de tiros.
+     */
+    @EntityGraph(attributePaths = {"tiros"})
+    @Query("SELECT p FROM PartidaEntity p WHERE p.id = :id")
+    Optional<PartidaEntity> findByIdConHistorial(@Param("id") String id);
+
+    /**
+     * Lista todas las partidas cargando su historial de tiros.
+     */
+    @EntityGraph(attributePaths = {"tiros"})
+    @Query("SELECT p FROM PartidaEntity p")
+    List<PartidaEntity> findAllConHistorial();
 }

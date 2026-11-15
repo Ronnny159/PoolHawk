@@ -66,7 +66,7 @@
             <version>${spring-boot.version}</version>
         </dependency>
 
-        <!-- Flyway para migraciones versionadas (H-04) -->
+        <!-- Flyway para migraciones versionadas -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
