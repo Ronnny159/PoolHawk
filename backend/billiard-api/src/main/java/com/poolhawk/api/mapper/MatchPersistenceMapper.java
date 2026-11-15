@@ -23,27 +23,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Mapper entre el agregado {@link Partida} y su representación JPA.
- *
- * <p>Reglas de robustez aplicadas en Fase 5:</p>
- * <ul>
- *   <li><b>H-01:</b> toda corrupción en la lectura se propaga como
- *       {@link PartidaCorruptaException}; no se omiten tiros ni se devuelven
- *       partidas parciales.</li>
- *   <li><b>H-02:</b> la serialización aborta con excepción; nunca se persiste
- *       un tiro sin {@code resultado_json}.</li>
- *   <li><b>H-05:</b> el snapshot de mesa incluye {@code ancho} y {@code alto}.
- *       Se mantiene compatibilidad con el formato viejo (array de bolas) para
- *       partidas persistidas antes del cambio.</li>
- *   <li><b>H-06:</b> cada tiro se valida estructuralmente al reconstruir:
- *       jugador existente, bola existente, troneras coincidentes, campos
- *       obligatorios presentes.</li>
- * </ul>
- *
- * @author PoolHawk Team
- * @since 0.1.0
- */
 @Component
 public class MatchPersistenceMapper {
 
@@ -53,13 +32,6 @@ public class MatchPersistenceMapper {
         this.jsonMapper = jsonMapper;
     }
 
-    /**
-     * Reconstruye el agregado {@link Partida} desde su entidad JPA.
-     *
-     * @param entity entidad con {@code tiros} inicializado (ver {@code @EntityGraph})
-     * @return la partida de dominio completamente restaurada
-     * @throws PartidaCorruptaException si algún dato persistido es inconsistente
-     */
     public Partida toDomain(PartidaEntity entity) {
         List<Jugador> jugadoresA = entity.getJugadores().stream()
             .filter(j -> "A".equals(j.getEquipo()))
@@ -116,17 +88,21 @@ public class MatchPersistenceMapper {
     /**
      * Reconstruye la mesa desde su snapshot JSON.
      *
-     * <p>Soporta dos formatos:</p>
+     * <p>Reglas de validación (H-03):</p>
      * <ul>
-     *   <li><b>Nuevo (objeto):</b> {@code {"ancho":254.0,"alto":127.0,"bolas":[...]}}.</li>
-     *   <li><b>Viejo (array):</b> {@code [{"numero":0,...},...]}. Se usan las
-     *       dimensiones por defecto.</li>
+     *   <li><b>Formato nuevo (objeto):</b> exige obligatoriamente
+     *       {@code ancho}, {@code alto} y {@code bolas}. Las dimensiones deben
+     *       ser numéricas, finitas y positivas. Un objeto sin los tres campos
+     *       se considera corrupto.</li>
+     *   <li><b>Formato antiguo (array puro de bolas):</b> se acepta por
+     *       compatibilidad con partidas persistidas antes de Fase 5. Se usan
+     *       las dimensiones por defecto.</li>
      * </ul>
      *
      * @param json      snapshot persistido, o {@code null}
      * @param partidaId id para contexto de error
      * @return mesa reconstruida
-     * @throws PartidaCorruptaException si el JSON no es interpretable
+     * @throws PartidaCorruptaException si el JSON es inválido o incompleto
      */
     private Mesa reconstruirMesa(String json, String partidaId) {
         if (json == null || json.isBlank()) {
@@ -134,6 +110,7 @@ public class MatchPersistenceMapper {
         }
         try {
             JsonNode node = jsonMapper.readTree(json);
+
             if (node.isArray()) {
                 Mesa mesa = new Mesa();
                 for (JsonNode b : node) {
@@ -141,19 +118,49 @@ public class MatchPersistenceMapper {
                 }
                 return mesa;
             }
-            if (node.isObject()) {
-                double ancho = node.has("ancho") ? node.get("ancho").asDouble() : Mesa.ANCHO_DEFECTO;
-                double alto = node.has("alto") ? node.get("alto").asDouble() : Mesa.ALTO_DEFECTO;
-                Mesa mesa = new Mesa(ancho, alto);
-                if (node.has("bolas") && node.get("bolas").isArray()) {
-                    for (JsonNode b : node.get("bolas")) {
-                        mesa.agregarBola(jsonMapper.treeToValue(b, Bola.class));
-                    }
-                }
-                return mesa;
+
+            if (!node.isObject()) {
+                throw new PartidaCorruptaException(partidaId,
+                    "estado_mesa_json no es un array ni un objeto");
             }
-            throw new PartidaCorruptaException(partidaId,
-                "estado_mesa_json no es un array ni un objeto");
+
+            // H-03: formato nuevo exige los tres campos
+            if (!node.has("ancho") || !node.has("alto") || !node.has("bolas")) {
+                throw new PartidaCorruptaException(partidaId,
+                    "snapshot de mesa incompleto: se requieren ancho, alto y bolas");
+            }
+
+            JsonNode anchoNode = node.get("ancho");
+            JsonNode altoNode = node.get("alto");
+            JsonNode bolasNode = node.get("bolas");
+
+            if (!anchoNode.isNumber() || !altoNode.isNumber()) {
+                throw new PartidaCorruptaException(partidaId,
+                    "ancho y alto deben ser numéricos");
+            }
+
+            double ancho = anchoNode.asDouble();
+            double alto = altoNode.asDouble();
+
+            if (!Double.isFinite(ancho) || !Double.isFinite(alto)) {
+                throw new PartidaCorruptaException(partidaId,
+                    "ancho y alto deben ser finitos. ancho=" + ancho + ", alto=" + alto);
+            }
+            if (ancho <= 0 || alto <= 0) {
+                throw new PartidaCorruptaException(partidaId,
+                    "ancho y alto deben ser positivos. ancho=" + ancho + ", alto=" + alto);
+            }
+
+            if (!bolasNode.isArray()) {
+                throw new PartidaCorruptaException(partidaId,
+                    "bolas debe ser un array en el snapshot de mesa");
+            }
+
+            Mesa mesa = new Mesa(ancho, alto);
+            for (JsonNode b : bolasNode) {
+                mesa.agregarBola(jsonMapper.treeToValue(b, Bola.class));
+            }
+            return mesa;
         } catch (PartidaCorruptaException e) {
             throw e;
         } catch (Exception e) {
@@ -164,6 +171,10 @@ public class MatchPersistenceMapper {
 
     /**
      * Restaura puntajes, grupos, turno, fase y ganador desde el snapshot JSON.
+     *
+     * <p>H-02: el {@code turnoActualId} persistido debe existir en la rotación.
+     * Si no existe, se lanza {@link PartidaCorruptaException} en lugar de
+     * dejar silenciosamente el turno en el jugador inicial.</p>
      *
      * @param entity   entidad JPA
      * @param rotacion orden de turnos
@@ -201,9 +212,31 @@ public class MatchPersistenceMapper {
 
             if (snapshot.containsKey("turnoActualId")) {
                 String turnoId = (String) snapshot.get("turnoActualId");
+
+                if (turnoId == null || turnoId.isBlank()) {
+                    throw new PartidaCorruptaException(entity.getId(),
+                        "turnoActualId en snapshot es nulo o en blanco");
+                }
+
+                // H-02: validar que el turno guardado pertenece a la partida
+                boolean existe = rotacion.stream().anyMatch(j -> j.id().equals(turnoId));
+                if (!existe) {
+                    throw new PartidaCorruptaException(entity.getId(),
+                        "turnoActualId '" + turnoId + "' no pertenece a la partida");
+                }
+
                 for (int i = 0; i < rotacion.size(); i++) {
                     if (estado.jugadorActual().id().equals(turnoId)) break;
                     estado.avanzarTurno();
+                }
+
+                // H-02: verificación final. Si el loop no aterrizó en turnoId
+                // (no debería ocurrir tras la comprobación anterior, pero se
+                // protege contra estados corruptos), se aborta.
+                if (!estado.jugadorActual().id().equals(turnoId)) {
+                    throw new PartidaCorruptaException(entity.getId(),
+                        "no se pudo posicionar el turno en '" + turnoId
+                        + "' (estado actual: '" + estado.jugadorActual().id() + "')");
                 }
             }
 
@@ -226,21 +259,6 @@ public class MatchPersistenceMapper {
         }
     }
 
-    /**
-     * Reconstruye el historial de {@link TiroEvent} y el mapa
-     * {@code eventId -> ResultadoTiro} desde las entidades {@link TiroEntity}.
-     *
-     * <p>Cualquier inconsistencia (jugador inexistente, bola inexistente,
-     * tronera desconocida, resultado ausente, campos obligatorios nulos)
-     * aborta la restauración con {@link PartidaCorruptaException}. No se
-     * omiten tiros silenciosamente.</p>
-     *
-     * @param entity   entidad JPA
-     * @param mesa     mesa reconstruida
-     * @param rotacion jugadores en orden de turno
-     * @param estado   estado donde inyectar el historial
-     * @throws PartidaCorruptaException si un tiro no puede reconstruirse
-     */
     private void restaurarHistorialDesdeEntity(PartidaEntity entity, Mesa mesa,
                                                 List<Jugador> rotacion, MatchState estado) {
         if (entity.getTiros() == null || entity.getTiros().isEmpty()) {
@@ -271,17 +289,6 @@ public class MatchPersistenceMapper {
         estado.restaurarHistorial(historial, resultados);
     }
 
-    /**
-     * Reconstruye un {@link TiroEvent} a partir de su fila JPA, validando
-     * integridad estructural.
-     *
-     * @param entity   entidad de partida
-     * @param te       fila del tiro
-     * @param mesa     mesa reconstruida
-     * @param rotacion jugadores en orden de turno
-     * @return el evento reconstruido
-     * @throws PartidaCorruptaException si algún dato es inconsistente
-     */
     private TiroEvent reconstruirTiro(PartidaEntity entity, TiroEntity te, Mesa mesa, List<Jugador> rotacion) {
         if (te.getEventId() == null || te.getEventId().isBlank()) {
             throw new PartidaCorruptaException(entity.getId(), "tiro sin event_id");
@@ -381,15 +388,6 @@ public class MatchPersistenceMapper {
         );
     }
 
-    /**
-     * Convierte el agregado {@link Partida} a su entidad JPA, incluyendo el
-     * snapshot de mesa con dimensiones, el snapshot de partida y el historial
-     * completo de tiros con sus resultados.
-     *
-     * @param partida partida de dominio
-     * @return la entidad lista para persistir
-     * @throws IllegalStateException si falla la serialización (provoca rollback)
-     */
     public PartidaEntity toEntity(Partida partida) {
         PartidaEntity entity = new PartidaEntity();
         entity.setId(partida.getId());
@@ -441,20 +439,6 @@ public class MatchPersistenceMapper {
         return entity;
     }
 
-    /**
-     * Convierte un {@link TiroEvent} a su entidad JPA, incluyendo el
-     * {@link ResultadoTiro} asociado.
-     *
-     * <p>Si no existe resultado para el evento o falla la serialización,
-     * se aborta la operación. Persistir un tiro sin resultado rompería la
-     * idempotencia tras un reinicio (H-02).</p>
-     *
-     * @param evento  tiro de dominio
-     * @param partida partida de origen
-     * @param entity  entidad padre
-     * @return la entidad lista para persistir
-     * @throws IllegalStateException si el tiro no tiene resultado o falla la serialización
-     */
     private TiroEntity toTiroEntity(TiroEvent evento, Partida partida, PartidaEntity entity) {
         TiroEntity te = new TiroEntity();
         te.setId(evento.id());
@@ -506,10 +490,6 @@ public class MatchPersistenceMapper {
 
     /**
      * Snapshot serializable de la mesa: dimensiones + bolas.
-     *
-     * @param ancho ancho en centímetros
-     * @param alto  alto en centímetros
-     * @param bolas bolas de la mesa (incluyendo embolsadas con su estado)
      */
     private record MesaSnapshot(double ancho, double alto, List<Bola> bolas) {
     }
