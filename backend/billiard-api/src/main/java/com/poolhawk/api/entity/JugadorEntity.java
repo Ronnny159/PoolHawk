@@ -1,32 +1,37 @@
-package com.poolhawk.api.repository;
+package com.poolhawk.api.entity;
 
-import com.poolhawk.api.entity.PartidaEntity;
-import org.springframework.data.jpa.repository.EntityGraph;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-
-import java.util.List;
-import java.util.Optional;
+import jakarta.persistence.*;
 
 /**
- * Repositorio JPA de partidas.
+ * Entidad JPA que representa a un jugador dentro de una partida.
  */
-@Repository
-public interface PartidaRepository extends JpaRepository<PartidaEntity, String> {
+@Entity
+@Table(name = "jugadores")
+public class JugadorEntity {
 
-    /**
-     * Busca una partida por id cargando su historial de tiros.
-     */
-    @EntityGraph(attributePaths = {"tiros"})
-    @Query("SELECT p FROM PartidaEntity p WHERE p.id = :id")
-    Optional<PartidaEntity> findByIdConHistorial(@Param("id") String id);
+    @Id
+    private String id;
+    
+    private String nombre;
+    
+    @Column(name = "equipo")
+    private String equipo; // "A" o "B"
 
-    /**
-     * Lista todas las partidas cargando su historial de tiros.
-     */
-    @EntityGraph(attributePaths = {"tiros"})
-    @Query("SELECT p FROM PartidaEntity p")
-    List<PartidaEntity> findAllConHistorial();
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "partida_id")
+    private PartidaEntity partida;
+
+    public JugadorEntity() {}
+
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
+    
+    public String getNombre() { return nombre; }
+    public void setNombre(String nombre) { this.nombre = nombre; }
+    
+    public String getEquipo() { return equipo; }
+    public void setEquipo(String equipo) { this.equipo = equipo; }
+    
+    public PartidaEntity getPartida() { return partida; }
+    public void setPartida(PartidaEntity partida) { this.partida = partida; }
 }

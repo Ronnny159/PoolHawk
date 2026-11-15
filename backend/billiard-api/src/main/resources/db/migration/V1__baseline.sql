@@ -22,8 +22,8 @@ CREATE TABLE IF NOT EXISTS jugadores (
 );
 
 CREATE TABLE IF NOT EXISTS tiros (
-    id VARCHAR(255) PRIMARY KEY,
-    event_id VARCHAR(255) NOT NULL,
+    id VARCHAR(255) PRIMARY KEY, -- H-06: ID interno UUID
+    event_id VARCHAR(255) NOT NULL, -- H-06: ID de idempotencia
     partida_id VARCHAR(255) NOT NULL REFERENCES partidas(id),
     jugador_id VARCHAR(255) NOT NULL,
     primera_bola_tocada INTEGER,
