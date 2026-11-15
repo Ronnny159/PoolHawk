@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 public class MatchPersistenceMapper {
@@ -85,25 +86,6 @@ public class MatchPersistenceMapper {
         );
     }
 
-    /**
-     * Reconstruye la mesa desde su snapshot JSON.
-     *
-     * <p>Reglas de validación (H-03):</p>
-     * <ul>
-     *   <li><b>Formato nuevo (objeto):</b> exige obligatoriamente
-     *       {@code ancho}, {@code alto} y {@code bolas}. Las dimensiones deben
-     *       ser numéricas, finitas y positivas. Un objeto sin los tres campos
-     *       se considera corrupto.</li>
-     *   <li><b>Formato antiguo (array puro de bolas):</b> se acepta por
-     *       compatibilidad con partidas persistidas antes de Fase 5. Se usan
-     *       las dimensiones por defecto.</li>
-     * </ul>
-     *
-     * @param json      snapshot persistido, o {@code null}
-     * @param partidaId id para contexto de error
-     * @return mesa reconstruida
-     * @throws PartidaCorruptaException si el JSON es inválido o incompleto
-     */
     private Mesa reconstruirMesa(String json, String partidaId) {
         if (json == null || json.isBlank()) {
             return new Mesa();
@@ -120,14 +102,11 @@ public class MatchPersistenceMapper {
             }
 
             if (!node.isObject()) {
-                throw new PartidaCorruptaException(partidaId,
-                    "estado_mesa_json no es un array ni un objeto");
+                throw new PartidaCorruptaException(partidaId, "estado_mesa_json no es un array ni un objeto");
             }
 
-            // H-03: formato nuevo exige los tres campos
             if (!node.has("ancho") || !node.has("alto") || !node.has("bolas")) {
-                throw new PartidaCorruptaException(partidaId,
-                    "snapshot de mesa incompleto: se requieren ancho, alto y bolas");
+                throw new PartidaCorruptaException(partidaId, "snapshot de mesa incompleto: se requieren ancho, alto y bolas");
             }
 
             JsonNode anchoNode = node.get("ancho");
@@ -135,25 +114,17 @@ public class MatchPersistenceMapper {
             JsonNode bolasNode = node.get("bolas");
 
             if (!anchoNode.isNumber() || !altoNode.isNumber()) {
-                throw new PartidaCorruptaException(partidaId,
-                    "ancho y alto deben ser numéricos");
+                throw new PartidaCorruptaException(partidaId, "ancho y alto deben ser numéricos");
             }
 
             double ancho = anchoNode.asDouble();
             double alto = altoNode.asDouble();
 
-            if (!Double.isFinite(ancho) || !Double.isFinite(alto)) {
-                throw new PartidaCorruptaException(partidaId,
-                    "ancho y alto deben ser finitos. ancho=" + ancho + ", alto=" + alto);
+            if (!Double.isFinite(ancho) || !Double.isFinite(alto) || ancho <= 0 || alto <= 0) {
+                throw new PartidaCorruptaException(partidaId, "ancho y alto deben ser finitos y positivos");
             }
-            if (ancho <= 0 || alto <= 0) {
-                throw new PartidaCorruptaException(partidaId,
-                    "ancho y alto deben ser positivos. ancho=" + ancho + ", alto=" + alto);
-            }
-
             if (!bolasNode.isArray()) {
-                throw new PartidaCorruptaException(partidaId,
-                    "bolas debe ser un array en el snapshot de mesa");
+                throw new PartidaCorruptaException(partidaId, "bolas debe ser un array");
             }
 
             Mesa mesa = new Mesa(ancho, alto);
@@ -164,23 +135,10 @@ public class MatchPersistenceMapper {
         } catch (PartidaCorruptaException e) {
             throw e;
         } catch (Exception e) {
-            throw new PartidaCorruptaException(partidaId,
-                "error leyendo mesa desde JSON: " + e.getMessage(), e);
+            throw new PartidaCorruptaException(partidaId, "error leyendo mesa desde JSON: " + e.getMessage(), e);
         }
     }
 
-    /**
-     * Restaura puntajes, grupos, turno, fase y ganador desde el snapshot JSON.
-     *
-     * <p>H-02: el {@code turnoActualId} persistido debe existir en la rotación.
-     * Si no existe, se lanza {@link PartidaCorruptaException} en lugar de
-     * dejar silenciosamente el turno en el jugador inicial.</p>
-     *
-     * @param entity   entidad JPA
-     * @param rotacion orden de turnos
-     * @param estado   estado a hidratar
-     * @throws PartidaCorruptaException si el snapshot es inconsistente
-     */
     @SuppressWarnings("unchecked")
     private void restaurarSnapshot(PartidaEntity entity, List<Jugador> rotacion, MatchState estado) {
         String json = entity.getEstadoPartidaJson();
@@ -214,15 +172,12 @@ public class MatchPersistenceMapper {
                 String turnoId = (String) snapshot.get("turnoActualId");
 
                 if (turnoId == null || turnoId.isBlank()) {
-                    throw new PartidaCorruptaException(entity.getId(),
-                        "turnoActualId en snapshot es nulo o en blanco");
+                    throw new PartidaCorruptaException(entity.getId(), "turnoActualId nulo o en blanco");
                 }
 
-                // H-02: validar que el turno guardado pertenece a la partida
                 boolean existe = rotacion.stream().anyMatch(j -> j.id().equals(turnoId));
                 if (!existe) {
-                    throw new PartidaCorruptaException(entity.getId(),
-                        "turnoActualId '" + turnoId + "' no pertenece a la partida");
+                    throw new PartidaCorruptaException(entity.getId(), "turnoActualId '" + turnoId + "' no pertenece a la partida");
                 }
 
                 for (int i = 0; i < rotacion.size(); i++) {
@@ -230,13 +185,8 @@ public class MatchPersistenceMapper {
                     estado.avanzarTurno();
                 }
 
-                // H-02: verificación final. Si el loop no aterrizó en turnoId
-                // (no debería ocurrir tras la comprobación anterior, pero se
-                // protege contra estados corruptos), se aborta.
                 if (!estado.jugadorActual().id().equals(turnoId)) {
-                    throw new PartidaCorruptaException(entity.getId(),
-                        "no se pudo posicionar el turno en '" + turnoId
-                        + "' (estado actual: '" + estado.jugadorActual().id() + "')");
+                    throw new PartidaCorruptaException(entity.getId(), "no se pudo posicionar el turno en '" + turnoId + "'");
                 }
             }
 
@@ -246,21 +196,18 @@ public class MatchPersistenceMapper {
                 ganadorGuardado = rotacion.stream()
                     .filter(j -> j.id().equals(entity.getGanadorId()))
                     .findFirst()
-                    .orElseThrow(() -> new PartidaCorruptaException(entity.getId(),
-                        "ganador " + entity.getGanadorId() + " no participa en la partida"));
+                    .orElseThrow(() -> new PartidaCorruptaException(entity.getId(), "ganador no participa"));
             }
 
             estado.restaurarEstado(faseGuardada, ganadorGuardado, puntajesGuardados, gruposGuardados);
         } catch (PartidaCorruptaException e) {
             throw e;
         } catch (Exception e) {
-            throw new PartidaCorruptaException(entity.getId(),
-                "error restaurando snapshot: " + e.getMessage(), e);
+            throw new PartidaCorruptaException(entity.getId(), "error restaurando snapshot: " + e.getMessage(), e);
         }
     }
 
-    private void restaurarHistorialDesdeEntity(PartidaEntity entity, Mesa mesa,
-                                                List<Jugador> rotacion, MatchState estado) {
+    private void restaurarHistorialDesdeEntity(PartidaEntity entity, Mesa mesa, List<Jugador> rotacion, MatchState estado) {
         if (entity.getTiros() == null || entity.getTiros().isEmpty()) {
             estado.restaurarHistorial(List.of(), Map.of());
             return;
@@ -274,15 +221,13 @@ public class MatchPersistenceMapper {
             historial.add(evento);
 
             if (te.getResultadoJson() == null || te.getResultadoJson().isBlank()) {
-                throw new PartidaCorruptaException(entity.getId(),
-                    "tiro " + te.getEventId() + " sin resultado_json");
+                throw new PartidaCorruptaException(entity.getId(), "tiro " + te.getEventId() + " sin resultado_json");
             }
             try {
                 ResultadoTiro resultado = jsonMapper.readValue(te.getResultadoJson(), ResultadoTiro.class);
                 resultados.put(te.getEventId(), resultado);
             } catch (Exception e) {
-                throw new PartidaCorruptaException(entity.getId(),
-                    "resultado_json inválido en tiro " + te.getEventId() + ": " + e.getMessage(), e);
+                throw new PartidaCorruptaException(entity.getId(), "resultado_json inválido en tiro " + te.getEventId());
             }
         }
 
@@ -297,84 +242,59 @@ public class MatchPersistenceMapper {
         Jugador jugador = rotacion.stream()
             .filter(j -> j.id().equals(te.getJugadorId()))
             .findFirst()
-            .orElseThrow(() -> new PartidaCorruptaException(entity.getId(),
-                "jugador " + te.getJugadorId() + " del tiro " + te.getEventId() + " no participa"));
+            .orElseThrow(() -> new PartidaCorruptaException(entity.getId(), "jugador " + te.getJugadorId() + " no participa"));
 
         Bola primeraBola = null;
         if (te.getPrimeraBolaTocada() != null) {
             primeraBola = mesa.buscarBola(te.getPrimeraBolaTocada())
-                .orElseThrow(() -> new PartidaCorruptaException(entity.getId(),
-                    "primera bola " + te.getPrimeraBolaTocada()
-                    + " inexistente en tiro " + te.getEventId()));
+                .orElseThrow(() -> new PartidaCorruptaException(entity.getId(), "primera bola inexistente"));
         }
 
         if (te.getBolasEmbolsadasJson() == null || te.getBolasEmbolsadasJson().isBlank()) {
-            throw new PartidaCorruptaException(entity.getId(),
-                "bolas_embolsadas_json nulo en tiro " + te.getEventId());
+            throw new PartidaCorruptaException(entity.getId(), "bolas_embolsadas_json nulo en tiro " + te.getEventId());
         }
         if (te.getTronerasJson() == null || te.getTronerasJson().isBlank()) {
-            throw new PartidaCorruptaException(entity.getId(),
-                "troneras_json nulo en tiro " + te.getEventId());
+            throw new PartidaCorruptaException(entity.getId(), "troneras_json nulo en tiro " + te.getEventId());
         }
 
         List<Integer> numerosEmbolsados;
         try {
-            numerosEmbolsados = jsonMapper.readValue(
-                te.getBolasEmbolsadasJson(), new TypeReference<List<Integer>>() {});
+            numerosEmbolsados = jsonMapper.readValue(te.getBolasEmbolsadasJson(), new TypeReference<List<Integer>>() {});
         } catch (Exception e) {
-            throw new PartidaCorruptaException(entity.getId(),
-                "bolas_embolsadas_json inválido en tiro " + te.getEventId() + ": " + e.getMessage(), e);
+            throw new PartidaCorruptaException(entity.getId(), "bolas_embolsadas_json inválido");
         }
 
         List<Bola> bolasEmbolsadas = new ArrayList<>();
         for (Integer n : numerosEmbolsados) {
-            if (n == null) {
-                throw new PartidaCorruptaException(entity.getId(),
-                    "bola nula en tiro " + te.getEventId());
-            }
+            if (n == null) throw new PartidaCorruptaException(entity.getId(), "bola nula en tiro " + te.getEventId());
             Bola bola = mesa.buscarBola(n)
-                .orElseThrow(() -> new PartidaCorruptaException(entity.getId(),
-                    "bola " + n + " inexistente en tiro " + te.getEventId()));
+                .orElseThrow(() -> new PartidaCorruptaException(entity.getId(), "bola inexistente en tiro"));
             bolasEmbolsadas.add(bola);
         }
 
         List<String> nombresTroneras;
         try {
-            nombresTroneras = jsonMapper.readValue(
-                te.getTronerasJson(), new TypeReference<List<String>>() {});
+            nombresTroneras = jsonMapper.readValue(te.getTronerasJson(), new TypeReference<List<String>>() {});
         } catch (Exception e) {
-            throw new PartidaCorruptaException(entity.getId(),
-                "troneras_json inválido en tiro " + te.getEventId() + ": " + e.getMessage(), e);
+            throw new PartidaCorruptaException(entity.getId(), "troneras_json inválido");
         }
 
         if (nombresTroneras.size() != bolasEmbolsadas.size()) {
-            throw new PartidaCorruptaException(entity.getId(),
-                "troneras (" + nombresTroneras.size() + ") y bolas ("
-                + bolasEmbolsadas.size() + ") no coinciden en tiro " + te.getEventId());
+            throw new PartidaCorruptaException(entity.getId(), "troneras y bolas no coinciden");
         }
 
         List<TroneraNombre> troneras = new ArrayList<>();
         for (String nombre : nombresTroneras) {
-            if (nombre == null) {
-                throw new PartidaCorruptaException(entity.getId(),
-                    "tronera nula en tiro " + te.getEventId());
-            }
+            if (nombre == null) throw new PartidaCorruptaException(entity.getId(), "tronera nula");
             try {
                 troneras.add(TroneraNombre.valueOf(nombre));
             } catch (IllegalArgumentException e) {
-                throw new PartidaCorruptaException(entity.getId(),
-                    "tronera inválida '" + nombre + "' en tiro " + te.getEventId(), e);
+                throw new PartidaCorruptaException(entity.getId(), "tronera inválida");
             }
         }
 
-        if (te.getTimestamp() == null) {
-            throw new PartidaCorruptaException(entity.getId(),
-                "timestamp nulo en tiro " + te.getEventId());
-        }
-        if (te.getDuracionSegundos() == null) {
-            throw new PartidaCorruptaException(entity.getId(),
-                "duracion_segundos nulo en tiro " + te.getEventId());
-        }
+        if (te.getTimestamp() == null) throw new PartidaCorruptaException(entity.getId(), "timestamp nulo");
+        if (te.getDuracionSegundos() == null) throw new PartidaCorruptaException(entity.getId(), "duracion nula");
 
         return new TiroEvent(
             te.getEventId(),
@@ -417,8 +337,7 @@ public class MatchPersistenceMapper {
 
             entity.setEstadoPartidaJson(jsonMapper.writeValueAsString(snapshot));
         } catch (Exception e) {
-            throw new IllegalStateException(
-                "Error serializando estado de la partida " + partida.getId() + ": " + e.getMessage(), e);
+            throw new IllegalStateException("Error serializando estado: " + e.getMessage(), e);
         }
 
         List<JugadorEntity> jugadores = new ArrayList<>();
@@ -441,39 +360,31 @@ public class MatchPersistenceMapper {
 
     private TiroEntity toTiroEntity(TiroEvent evento, Partida partida, PartidaEntity entity) {
         TiroEntity te = new TiroEntity();
-        te.setId(evento.id());
+        
+        // H-02: Separar el ID técnico (UUID) del ID de idempotencia (eventId)
+        te.setId(UUID.randomUUID().toString());
         te.setEventId(evento.id());
+        
         te.setPartida(entity);
         te.setJugadorId(evento.jugador().id());
-        te.setPrimeraBolaTocada(evento.primeraBolaTocada() != null
-            ? evento.primeraBolaTocada().numero()
-            : null);
+        te.setPrimeraBolaTocada(evento.primeraBolaTocada() != null ? evento.primeraBolaTocada().numero() : null);
         te.setTimestamp(evento.timestamp());
         te.setDuracionSegundos(evento.duracion() != null ? evento.duracion().getSeconds() : 5L);
 
         try {
-            List<Integer> numerosEmbolsados = evento.bolasEmbolsadas().stream()
-                .map(Bola::numero)
-                .toList();
+            List<Integer> numerosEmbolsados = evento.bolasEmbolsadas().stream().map(Bola::numero).toList();
             te.setBolasEmbolsadasJson(jsonMapper.writeValueAsString(numerosEmbolsados));
 
-            List<String> nombresTroneras = evento.troneras().stream()
-                .map(Enum::name)
-                .toList();
+            List<String> nombresTroneras = evento.troneras().stream().map(Enum::name).toList();
             te.setTronerasJson(jsonMapper.writeValueAsString(nombresTroneras));
 
             ResultadoTiro resultado = partida.getEstado().getResultadosPorEvento().get(evento.id());
-            if (resultado == null) {
-                throw new IllegalStateException(
-                    "El tiro " + evento.id() + " no tiene ResultadoTiro evaluado. "
-                    + "No se puede persistir sin resultado (viola H-02).");
-            }
+            if (resultado == null) throw new IllegalStateException("El tiro " + evento.id() + " no tiene ResultadoTiro.");
             te.setResultadoJson(jsonMapper.writeValueAsString(resultado));
         } catch (IllegalStateException e) {
             throw e;
         } catch (Exception e) {
-            throw new IllegalStateException(
-                "Error serializando tiro " + evento.id() + ": " + e.getMessage(), e);
+            throw new IllegalStateException("Error serializando tiro " + evento.id(), e);
         }
 
         return te;
@@ -488,9 +399,6 @@ public class MatchPersistenceMapper {
         return je;
     }
 
-    /**
-     * Snapshot serializable de la mesa: dimensiones + bolas.
-     */
     private record MesaSnapshot(double ancho, double alto, List<Bola> bolas) {
     }
 }

@@ -16,16 +16,11 @@
     <artifactId>billiard-api</artifactId>
     <packaging>jar</packaging>
 
-    <name>PoolHawk - Billiard API</name>
-    <description>
-        API REST de PoolHawk construida con Spring Boot. Expone endpoints
-        para crear partidas, registrar tiros y consultar el estado del juego.
-    </description>
-
     <properties>
         <spring-boot-maven-plugin.version>3.3.5</spring-boot-maven-plugin.version>
-        <!-- Spring Boot 3.3.5 gestiona Flyway 10.10.0 -->
         <flyway.version>10.10.0</flyway.version>
+        <!-- Actualizado a 0.12.6 para compatibilidad con Jackson 2.17 -->
+        <jjwt.version>0.12.6</jjwt.version>
     </properties>
 
     <dependencies>
@@ -59,14 +54,14 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Spring Data JPA para persistencia -->
+        <!-- Spring Data JPA -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
             <version>${spring-boot.version}</version>
         </dependency>
 
-        <!-- Flyway para migraciones versionadas -->
+        <!-- Flyway -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
@@ -100,29 +95,23 @@
             <version>${spring-boot.version}</version>
         </dependency>
 
-        <!-- JWT (JJWT) -->
+        <!-- JWT (JJWT 0.12.6 - Sin excluir Jackson) -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
-            <version>0.11.5</version>
+            <version>${jjwt.version}</version>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-impl</artifactId>
-            <version>0.11.5</version>
+            <version>${jjwt.version}</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-jackson</artifactId>
-            <version>0.11.5</version>
+            <version>${jjwt.version}</version>
             <scope>runtime</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.fasterxml.jackson.core</groupId>
-                    <artifactId>jackson-databind</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
     </dependencies>
 
@@ -142,5 +131,4 @@
             </plugin>
         </plugins>
     </build>
-
 </project>

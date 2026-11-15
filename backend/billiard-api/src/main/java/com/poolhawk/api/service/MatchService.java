@@ -25,6 +25,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
@@ -60,11 +62,29 @@ public class MatchService {
 
     @Transactional
     public Partida crear(CrearPartidaRequest request) {
-        // Validaciones previas omitidas por brevedad...
+        if (request.modalidad() == null || request.formato() == null || request.jugadores() == null) {
+            throw new IllegalArgumentException("Configuración incompleta.");
+        }
+        int cantidad = request.jugadores().size();
+        if (request.jugadores().stream().anyMatch(String::isBlank)) {
+            throw new IllegalArgumentException("Los nombres no pueden estar vacíos.");
+        }
+        if (request.formato() == FormatoJuego.PAREJAS && cantidad != 4) {
+            throw new IllegalArgumentException("Parejas requiere 4 jugadores.");
+        }
+        if (request.formato() == FormatoJuego.INDIVIDUAL && cantidad != 2 && cantidad != 4) {
+            throw new IllegalArgumentException("Individual requiere 2 o 4 jugadores.");
+        }
+        if (request.modalidad() == TipoModalidad.BOLA_8 && cantidad != 2) {
+            throw new IllegalArgumentException("Bola 8 solo permite 1 vs 1.");
+        }
+
         String id = UUID.randomUUID().toString();
         Partida partida = matchFactory.crearDesdeRequest(id, request);
+
         PartidaEntity entity = persistenceMapper.toEntity(partida);
         storage.guardar(entity);
+
         partidasEnMemoria.put(id, partida);
         return partida;
     }
@@ -72,13 +92,18 @@ public class MatchService {
     @Transactional(readOnly = true)
     public Partida buscar(String id) {
         if (partidasEnMemoria.containsKey(id)) return partidasEnMemoria.get(id);
-        PartidaEntity entity = storage.buscarConHistorial(id).orElseThrow(() -> new PartidaNoEncontradaException(id));
+
+        PartidaEntity entity = storage.buscarConHistorial(id)
+            .orElseThrow(() -> new PartidaNoEncontradaException(id));
+
         return persistenceMapper.toDomain(entity);
     }
 
     @Transactional(readOnly = true)
     public List<Partida> listarTodas() {
-        return storage.listarTodasConHistorial().stream().map(persistenceMapper::toDomain).collect(Collectors.toList());
+        return storage.listarTodasConHistorial().stream()
+            .map(persistenceMapper::toDomain)
+            .collect(Collectors.toList());
     }
 
     @Transactional
@@ -116,19 +141,31 @@ public class MatchService {
 
             if (resultado.esVictoria()) partida.finalizar(evento.jugador());
             else if (resultado.esDerrota()) {
-                Jugador oponente = partida.getEquipoA().contiene(evento.jugador()) ? partida.getEquipoB().getJugadores().get(0) : partida.getEquipoA().getJugadores().get(0);
+                Jugador oponente = partida.getEquipoA().contiene(evento.jugador()) 
+                    ? partida.getEquipoB().getJugadores().get(0) 
+                    : partida.getEquipoA().getJugadores().get(0);
                 partida.finalizar(oponente);
             }
 
-            try {
-                PartidaEntity entityExistente = storage.buscar(partidaId).orElse(null);
-                PartidaEntity entityNueva = persistenceMapper.toEntity(partida);
-                if (entityExistente != null) entityNueva.setVersion(entityExistente.getVersion());
-                storage.guardar(entityNueva);
-            } catch (Exception e) {
-                // H-04: Si falla la BD, limpiamos la caché para evitar divergencia.
-                partidasEnMemoria.remove(partidaId);
-                throw e;
+            PartidaEntity entityExistente = storage.buscar(partidaId).orElse(null);
+            PartidaEntity entityNueva = persistenceMapper.toEntity(partida);
+            if (entityExistente != null) entityNueva.setVersion(entityExistente.getVersion());
+            
+            storage.guardar(entityNueva);
+
+            // H-03: Sincronización de Caché y Transacción
+            // Si la transacción falla en el commit final (por ej. OptimisticLock), 
+            // invalidamos la partida en la caché para evitar divergencias con la BD.
+            if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        if (status != STATUS_COMMITTED) {
+                            partidasEnMemoria.remove(partidaId);
+                            log.warn("Transacción fallida para la partida {}. Caché invalidada.", partidaId);
+                        }
+                    }
+                });
             }
 
             try {
@@ -143,7 +180,6 @@ public class MatchService {
     }
 
     private boolean mismoPayload(TiroEventRequest request, TiroEvent original) {
-        // (Mismo código de comparación estricta...)
         if (!Objects.equals(request.jugadorId(), original.jugador().id())) return false;
         Integer primeraOriginal = original.primeraBolaTocada() != null ? original.primeraBolaTocada().numero() : null;
         if (!Objects.equals(request.primeraBolaTocada(), primeraOriginal)) return false;
@@ -159,7 +195,6 @@ public class MatchService {
     }
 
     private TiroEvent construirEventoValidado(Partida partida, TiroEventRequest request, Jugador jugadorActual) {
-        // (Mismo código de validaciones...)
         Bola primeraTocada = null;
         if (request.primeraBolaTocada() != null) {
             primeraTocada = partida.getMesa().buscarBola(request.primeraBolaTocada()).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola no existe."));
