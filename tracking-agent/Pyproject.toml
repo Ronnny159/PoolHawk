@@ -1,0 +1,20 @@
+# Configuración del proyecto del agente (H-08): las pruebas importan los módulos sin manipular sys.path.
+[project]
+name = "poolhawk-tracking-agent"
+version = "0.1.0"
+description = "Agente de visión por computador de PoolHawk"
+requires-python = ">=3.10"
+dependencies = ["opencv-python>=4.8", "numpy", "requests"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools]
+py-modules = [
+    "api_client", "ball_classifier", "ball_detector", "ball_tracker", "calibracion",
+    "camera_source", "cola_eventos", "config_agente", "shot_analyzer", "traza", "vision_agent",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["."]
