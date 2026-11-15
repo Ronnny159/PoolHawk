@@ -8,13 +8,24 @@ spring:
     password: ${DB_PASSWORD:poolhawk_password}
     driver-class-name: org.postgresql.Driver
 
+  # H-04: migraciones versionadas con Flyway.
+  # baseline-version=0 garantiza que en una BD vacía se apliquen V1 y V2.
+  # En una BD existente, Flyway marca baseline en 0 y aplica V1 (no-op por
+  # IF NOT EXISTS) y V2 (endurecimiento de NOT NULL con validación previa).
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
+    validate-on-migrate: true
+
   jpa:
     hibernate:
+      # En desarrollo se mantiene 'update' para no bloquear iteraciones rápidas.
+      # En producción debe cambiarse a 'validate' una vez las migraciones
+      # Flyway son la única fuente de verdad del esquema.
       ddl-auto: update
     show-sql: true
-    # H-03: no depender de Open Entity Manager in View.
-    # El acceso a relaciones LAZY debe ocurrir dentro de @Transactional explícito
-    # o resolverse con @EntityGraph en el repositorio.
     open-in-view: false
     properties:
       hibernate:

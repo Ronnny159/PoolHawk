@@ -3,10 +3,10 @@ package com.poolhawk.api.service;
 import com.poolhawk.api.dto.CrearPartidaRequest;
 import com.poolhawk.api.dto.TiroEventRequest;
 import com.poolhawk.api.entity.PartidaEntity;
+import com.poolhawk.api.event.PartidaActualizadaEvent;
 import com.poolhawk.api.exception.PartidaNoEncontradaException;
 import com.poolhawk.api.mapper.MatchPersistenceMapper;
 import com.poolhawk.api.mapper.PartidaMapper;
-import com.poolhawk.api.websocket.MatchLiveHandler;
 import com.poolhawk.domain.event.ResultadoTiro;
 import com.poolhawk.domain.event.TiroEvent;
 import com.poolhawk.domain.match.FormatoJuego;
@@ -21,6 +21,7 @@ import com.poolhawk.rules.ReglasFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,24 +39,27 @@ public class MatchService {
     private static final Logger log = LoggerFactory.getLogger(MatchService.class);
 
     private final MatchStorage storage;
-    private final MatchLiveHandler liveHandler;
     private final PartidaMapper responseMapper;
     private final MatchPersistenceMapper persistenceMapper;
     private final MatchFactory matchFactory;
     private final ObjectMapper jsonMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     private final Map<String, Partida> partidasEnMemoria = new ConcurrentHashMap<>();
     private final Map<String, Object> locksPorPartida = new ConcurrentHashMap<>();
 
-    public MatchService(MatchStorage storage, MatchLiveHandler liveHandler,
-                        PartidaMapper responseMapper, MatchPersistenceMapper persistenceMapper,
-                        MatchFactory matchFactory, ObjectMapper jsonMapper) {
+    public MatchService(MatchStorage storage,
+                        PartidaMapper responseMapper,
+                        MatchPersistenceMapper persistenceMapper,
+                        MatchFactory matchFactory,
+                        ObjectMapper jsonMapper,
+                        ApplicationEventPublisher eventPublisher) {
         this.storage = storage;
-        this.liveHandler = liveHandler;
         this.responseMapper = responseMapper;
         this.persistenceMapper = persistenceMapper;
         this.matchFactory = matchFactory;
         this.jsonMapper = jsonMapper;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -92,14 +96,8 @@ public class MatchService {
      * Busca una partida por id. Si no está en caché, la reconstruye desde la
      * base de datos cargando el historial de tiros mediante {@code @EntityGraph}.
      *
-     * <p>{@code @Transactional(readOnly = true)} garantiza que la sesión JPA
-     * permanezca abierta durante el mapeo, independientemente de que Open
-     * Entity Manager in View esté activo o no.</p>
-     *
      * @param id identificador de la partida
      * @return la partida de dominio
-     * @throws PartidaNoEncontradaException si no existe
-     * @throws com.poolhawk.api.exception.PartidaCorruptaException si no puede reconstruirse
      */
     @Transactional(readOnly = true)
     public Partida buscar(String id) {
@@ -112,14 +110,11 @@ public class MatchService {
     }
 
     /**
-     * Lista todas las partidas cargando su historial de tiros.
-     *
-     * <p>A diferencia del comportamiento anterior, ya no se descartan
+     * Lista todas las partidas cargando su historial de tiros. No se descartan
      * silenciosamente partidas corruptas: si alguna no puede reconstruirse,
-     * se propaga {@link com.poolhawk.api.exception.PartidaCorruptaException}
-     * para que el cliente reciba un error explícito (H-01).</p>
+     * se propaga {@link com.poolhawk.api.exception.PartidaCorruptaException}.
      *
-     * @return lista de todas las partidas restaurables
+     * @return lista de partidas restaurables
      */
     @Transactional(readOnly = true)
     public List<Partida> listarTodas() {
@@ -129,11 +124,12 @@ public class MatchService {
     }
 
     /**
-     * Registra un tiro aplicando idempotencia transparente.
+     * Registra un tiro aplicando idempotencia transparente y publicando la
+     * actualización para WebSocket <b>solo tras el commit</b> (H-01).
      *
      * @param partidaId identificador de la partida
      * @param request   payload del tiro
-     * @return veredicto del motor de reglas (original o recién calculado)
+     * @return veredicto del motor de reglas
      */
     @Transactional
     public ResultadoTiro registrarTiro(String partidaId, TiroEventRequest request) {
@@ -195,22 +191,20 @@ public class MatchService {
 
             storage.guardar(entityNueva);
 
+            // H-01: publicar evento de dominio. El listener escucha AFTER_COMMIT
+            // y solo entonces emite el WebSocket. Si la transacción hace rollback,
+            // el evento se descarta.
             try {
                 String json = jsonMapper.writeValueAsString(responseMapper.toResponse(partida));
-                liveHandler.broadcast(json);
+                eventPublisher.publishEvent(new PartidaActualizadaEvent(partidaId, json));
             } catch (Exception e) {
-                log.warn("Error serializando o emitiendo partida {} por WebSocket: {}",
-                    partidaId, e.getMessage(), e);
+                log.warn("Error serializando partida {} para WebSocket: {}", partidaId, e.getMessage(), e);
             }
 
             return resultado;
         }
     }
 
-    /**
-     * Compara el payload del request con el {@link TiroEvent} original.
-     * Regla estricta: no se normalizan nulos en {@code troneras}.
-     */
     private boolean mismoPayload(TiroEventRequest request, TiroEvent original) {
         if (!Objects.equals(request.jugadorId(), original.jugador().id())) {
             return false;
