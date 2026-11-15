@@ -9,6 +9,12 @@ El archivo es JSON y se reescribe de forma atómica (archivo temporal + ``os.rep
 escritura interrumpida deja intacta la versión anterior. Es seguro entre hilos (H-11), porque
 el agente envía tiros desde el hilo principal mientras otro hilo reintenta los pendientes.
 No contiene tokens ni credenciales.
+
+Bloqueo (H-03 de la auditoría de ``2088938``): los eventos de una partida son una SECUENCIA
+sobre un mismo estado, así que cuando un evento agota sus reintentos la cola completa se
+BLOQUEA: no se descarta el evento ni se siguen enviando los posteriores (llevarían una
+``versionEsperada`` obsoleta). Hay que reconciliar con el backend y luego :meth:`reanudar` el
+evento o :meth:`rechazar` (descartar) manualmente.
 """
 from __future__ import annotations
 
@@ -32,6 +38,7 @@ class ColaEventos:
         self._lock = threading.RLock()
         self._pendientes: Dict[str, Dict[str, Any]] = {}
         self._rechazados: List[Dict[str, Any]] = []
+        self._bloqueo: Optional[Dict[str, str]] = None
         self._cargar()
 
     # ------------------------------------------------------------------ consulta
@@ -39,6 +46,37 @@ class ColaEventos:
         """Copia de los eventos aún no confirmados por el backend, en orden de llegada."""
         with self._lock:
             return list(self._pendientes.values())
+
+    @property
+    def bloqueo(self) -> Optional[Dict[str, str]]:
+        """``{"eventId", "motivo"}`` del evento que bloquea la cola, o ``None`` si está libre."""
+        with self._lock:
+            return dict(self._bloqueo) if self._bloqueo else None
+
+    def bloquear(self, event_id: str, motivo: str) -> None:
+        """Bloquea la cola por un evento que agotó sus reintentos (no lo descarta)."""
+        with self._lock:
+            if self._bloqueo is None and event_id in self._pendientes:
+                self._bloqueo = {"eventId": event_id, "motivo": motivo}
+                self._guardar()
+
+    def reanudar(self) -> Optional[str]:
+        """Desbloquea la cola y reinicia el contador de intentos del evento bloqueante.
+
+        Debe llamarse solo después de reconciliar el estado con el backend.
+
+        Returns:
+            El ``eventId`` que bloqueaba, o ``None`` si la cola no estaba bloqueada.
+        """
+        with self._lock:
+            if self._bloqueo is None:
+                return None
+            event_id = self._bloqueo["eventId"]
+            if event_id in self._pendientes:
+                self._pendientes[event_id]["intentos"] = 0
+            self._bloqueo = None
+            self._guardar()
+            return event_id
 
     def contiene(self, event_id: str) -> bool:
         """Indica si el evento sigue pendiente."""
@@ -63,6 +101,7 @@ class ColaEventos:
         """El backend confirmó el evento: se elimina de la cola."""
         with self._lock:
             if self._pendientes.pop(event_id, None) is not None:
+                self._liberar_si_bloqueaba(event_id)
                 self._guardar()
 
     def registrar_intento(self, event_id: str) -> int:
@@ -82,7 +121,12 @@ class ColaEventos:
             if item is not None:
                 item["motivo"] = motivo
                 self._rechazados.append(item)
+                self._liberar_si_bloqueaba(event_id)
                 self._guardar()
+
+    def _liberar_si_bloqueaba(self, event_id: str) -> None:
+        if self._bloqueo is not None and self._bloqueo["eventId"] == event_id:
+            self._bloqueo = None
 
     # ------------------------------------------------------------------ disco
     def _cargar(self) -> None:
@@ -93,6 +137,7 @@ class ColaEventos:
                 datos = json.load(f)
             self._pendientes = {i["payload"]["eventId"]: i for i in datos.get("pendientes", [])}
             self._rechazados = list(datos.get("rechazados", []))
+            self._bloqueo = datos.get("bloqueo")
         except (OSError, ValueError, KeyError, TypeError) as e:
             # Un archivo corrupto no debe impedir arrancar; se conserva una copia para revisar.
             os.replace(self.ruta, self.ruta + ".corrupto")
@@ -101,7 +146,8 @@ class ColaEventos:
     def _guardar(self) -> None:
         if not self.ruta:
             return
-        datos = {"pendientes": self.pendientes(), "rechazados": self._rechazados}
+        datos = {"pendientes": self.pendientes(), "rechazados": self._rechazados,
+                 "bloqueo": self._bloqueo}
         carpeta = os.path.dirname(os.path.abspath(self.ruta))
         fd, tmp = tempfile.mkstemp(dir=carpeta, suffix=".tmp")
         try:

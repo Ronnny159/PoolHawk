@@ -18,6 +18,10 @@ Garantías (auditoría del commit ``ec639cb``):
 * H-03 (reintentos): :class:`ReintentadorPendientes` reenvía en segundo plano los eventos
   pendientes con espera incremental y un límite de intentos por evento, usando SIEMPRE el
   mismo ``eventId`` y payload.
+* GET vs POST: si falla la consulta inicial de la partida NO se inventa jugador ni versión ni
+  se encola nada (:class:`ErrorEstadoNoDisponible`); solo los fallos del POST dejan el evento
+  pendiente. Si un evento agota sus reintentos la cola se BLOQUEA (:class:`ErrorColaBloqueada`)
+  en lugar de seguir con eventos posteriores de versión obsoleta.
 * H-06/H-07: las respuestas se decodifican y validan; los fallos son ``ErrorApi``
   controlados y trazables (sin exponer el token).
 
@@ -35,12 +39,13 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 from urllib.parse import urlparse
 
 import requests
 
 from cola_eventos import ColaEventos
+import traza as _traza
 from shot_analyzer import TiroObservado
 
 log = logging.getLogger("poolhawk.api")
@@ -60,6 +65,14 @@ class ErrorRed(ErrorApi):
 
 class ErrorConflicto(ErrorApi):
     """HTTP 409: el estado de la partida cambió respecto a ``versionEsperada``."""
+
+
+class ErrorEstadoNoDisponible(ErrorApi):
+    """No se pudo consultar la partida: el tiro NO se encoló (no hay jugador ni versión fiables)."""
+
+
+class ErrorColaBloqueada(ErrorApi):
+    """La cola está bloqueada por un evento que agotó sus reintentos; requiere intervención."""
 
 
 class ErrorRespuesta(ErrorApi):
@@ -226,17 +239,30 @@ class PoolHawkApiClient:
             El veredicto del backend, o ``None`` si el tiro requiere revisión y no se envió.
 
         Raises:
-            ErrorRed: la API no respondió; el evento queda pendiente para reenviarse.
+            ErrorColaBloqueada: hay un evento bloqueando la cola; el tiro no se encola.
+            ErrorEstadoNoDisponible: falló el GET inicial; el tiro NO se encoló.
+            ErrorRed: falló el POST; el evento YA está en la cola y se reenviará igual.
             ErrorConflicto / ErrorApi: el backend lo rechazó; pasa a rechazados.
             ErrorRespuesta: la API no devolvió un estado interpretable.
         """
         if tiro.requiere_revision:
             return None
+        bloqueo = self.cola.bloqueo
+        if bloqueo is not None:
+            raise ErrorColaBloqueada(
+                f"Cola bloqueada por el evento {bloqueo['eventId']} ({bloqueo['motivo']}). Reconcilia "
+                "con el backend y reanuda (--reanudar-cola) o descarta ese evento (--descartar-evento)")
         existente = next((i for i in self.cola.pendientes()
                           if i["payload"]["eventId"] == tiro.event_id), None)
         if existente is not None:
             return self._enviar(existente["matchId"], existente["payload"])
-        estado = self.obtener_estado(match_id)
+        try:
+            estado = self.obtener_estado(match_id)
+        except ErrorApi as e:
+            # Sin GET no hay jugador ni versión fiables: no se inventan y NO se encola nada.
+            raise ErrorEstadoNoDisponible(
+                f"No se pudo consultar la partida ({e}); el tiro no se encoló y requiere revisión "
+                "manual", e.status) from e
         payload = self.construir_payload(tiro, estado.jugador_actual_id, estado.version)
         self.cola.agregar(match_id, payload)
         return self._enviar(match_id, payload)
@@ -263,36 +289,53 @@ class PoolHawkApiClient:
         except ErrorRespuesta:
             return {}
 
-    def reenviar_pendientes(self, reintentos: Optional[int] = None) -> Dict[str, int]:
+    def reenviar_pendientes(self, reintentos: Optional[int] = None,
+                            observador: Optional[Callable[[str, str, Optional[str]], None]] = None
+                            ) -> Dict[str, int]:
         """Reintenta los eventos guardados (al arrancar o desde el reintentador).
 
-        Se detiene al primer :class:`ErrorRed` porque la API sigue caída. Cada fallo de red
-        cuenta como un intento del evento; al llegar a ``max_intentos_evento`` el evento se
-        descarta con motivo "reintentos agotados" para revisión manual (no se pierde en
-        silencio: queda en la lista de rechazados y en el log).
+        Se detiene al primer :class:`ErrorRed` porque la API sigue caída y, para preservar el
+        orden, no se salta ningún evento. Cada fallo de red cuenta como un intento; al llegar a
+        ``max_intentos_evento`` la cola se BLOQUEA (el evento no se descarta ni se envían los
+        posteriores, cuya ``versionEsperada`` sería obsoleta) hasta :meth:`ColaEventos.reanudar`
+        o descartar el evento.
 
         Args:
             reintentos: intentos HTTP por evento en esta pasada (por defecto ``max_reintentos``).
+            observador: ``f(event_id, estado, detalle)`` llamado en cada transición (traza).
 
         Returns:
-            Conteo ``{"enviados", "rechazados", "agotados", "pendientes"}``.
+            Conteo ``{"enviados", "rechazados", "bloqueada", "pendientes"}``.
         """
-        enviados = rechazados = agotados = 0
+        notificar = observador or (lambda *_: None)
+        enviados = rechazados = bloqueada = 0
+        if self.cola.bloqueo is not None:
+            return {"enviados": 0, "rechazados": 0, "bloqueada": 1,
+                    "pendientes": len(self.cola.pendientes())}
         for item in self.cola.pendientes():
             event_id = item["payload"]["eventId"]
             try:
                 self._enviar(item["matchId"], item["payload"], reintentos)
                 enviados += 1
-            except ErrorRed:
+                notificar(event_id, _traza.ENVIADO, "confirmado en un reintento")
+            except ErrorRed as e:
                 intentos = self.cola.registrar_intento(event_id)
+                notificar(event_id, _traza.REINTENTO,
+                          f"intento {intentos}/{self.max_intentos_evento}: {e}")
                 if intentos >= self.max_intentos_evento:
-                    self.cola.rechazar(event_id, f"reintentos agotados tras {intentos} fallos de red")
-                    log.error("Evento %s descartado: reintentos agotados (%d)", event_id, intentos)
-                    agotados += 1
+                    motivo = f"reintentos agotados tras {intentos} fallos de red"
+                    self.cola.bloquear(event_id, motivo)
+                    log.error("Cola bloqueada por el evento %s: %s", event_id, motivo)
+                    notificar(event_id, _traza.BLOQUEADO, motivo)
+                    bloqueada = 1
                 break
-            except ErrorApi:
+            except ErrorConflicto as e:
                 rechazados += 1
-        return {"enviados": enviados, "rechazados": rechazados, "agotados": agotados,
+                notificar(event_id, _traza.CONFLICTO, str(e))
+            except ErrorApi as e:
+                rechazados += 1
+                notificar(event_id, _traza.RECHAZADO, str(e))
+        return {"enviados": enviados, "rechazados": rechazados, "bloqueada": bloqueada,
                 "pendientes": len(self.cola.pendientes())}
 
 
@@ -310,14 +353,15 @@ class ReintentadorPendientes:
         maximo: espera máxima entre pasadas, en segundos (>= base).
         reloj: función de tiempo monótono (inyectable para pruebas).
         sondeo: cada cuántos segundos el hilo comprueba si toca reintentar.
+        observador: ``f(event_id, estado, detalle)`` para anotar cada transición en la traza.
     """
 
     def __init__(self, cliente: PoolHawkApiClient, base: float = 2.0, maximo: float = 60.0,
-                 reloj=time.monotonic, sondeo: float = 0.5):
+                 reloj=time.monotonic, sondeo: float = 0.5, observador=None):
         if base <= 0 or maximo < base or sondeo <= 0:
             raise ValueError("Se requiere base > 0, maximo >= base y sondeo > 0")
         self._cliente, self._base, self._maximo = cliente, base, maximo
-        self._reloj, self._sondeo = reloj, sondeo
+        self._reloj, self._sondeo, self._observador = reloj, sondeo, observador
         self._espera, self._proximo = base, 0.0
         self._detener = threading.Event()
         self._hilo: Optional[threading.Thread] = None
@@ -330,12 +374,12 @@ class ReintentadorPendientes:
     def intentar(self) -> Optional[Dict[str, int]]:
         """Hace una pasada si ya toca. Devuelve su resumen, o ``None`` si no hubo pasada."""
         ahora = self._reloj()
-        if ahora < self._proximo:
-            return None
+        if ahora < self._proximo or self._cliente.cola.bloqueo is not None:
+            return None  # cola bloqueada: espera intervención manual, no se insiste
         if not self._cliente.cola.pendientes():
             self._espera = self._base
             return None
-        resumen = self._cliente.reenviar_pendientes(reintentos=1)
+        resumen = self._cliente.reenviar_pendientes(reintentos=1, observador=self._observador)
         self._espera = min(self._espera * 2, self._maximo) if resumen["pendientes"] else self._base
         self._proximo = ahora + self._espera
         return resumen
@@ -348,11 +392,28 @@ class ReintentadorPendientes:
         self._hilo = threading.Thread(target=self._bucle, name="poolhawk-reintentos", daemon=True)
         self._hilo.start()
 
-    def detener(self, timeout: float = 5.0) -> None:
-        """Detiene el hilo y espera a que termine."""
+    def detener(self, timeout: Optional[float] = None, drenar: bool = True) -> Dict[str, Any]:
+        """Cierre controlado: deja de programar pasadas y ESPERA a que acabe la petición activa.
+
+        Args:
+            timeout: segundos máximos de espera del hilo; por defecto el timeout HTTP del cliente
+                más un margen, para no abandonar una petición en curso (H-04).
+            drenar: tras parar el hilo, hace una última pasada de envío (un intento por evento).
+
+        Returns:
+            ``{"terminado": bool, "pendientes": int}``. Si ``terminado`` es falso el hilo sigue
+            ocupado y no se hizo la pasada final; ``pendientes`` cuenta los eventos que quedan
+            guardados en la cola para el próximo arranque.
+        """
+        limite = timeout if timeout is not None else self._cliente.timeout + 5.0
         self._detener.set()
+        terminado = True
         if self._hilo is not None:
-            self._hilo.join(timeout)
+            self._hilo.join(limite)
+            terminado = not self._hilo.is_alive()
+        if terminado and drenar and self._cliente.cola.bloqueo is None:
+            self._cliente.reenviar_pendientes(reintentos=1, observador=self._observador)
+        return {"terminado": terminado, "pendientes": len(self._cliente.cola.pendientes())}
 
     def _bucle(self) -> None:
         while not self._detener.wait(self._sondeo):

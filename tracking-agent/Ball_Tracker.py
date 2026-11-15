@@ -4,7 +4,9 @@ Seguimiento temporal de bolas (Fase 4 de la auditoría, H-05).
 Mantiene una identidad persistente por bola entre fotogramas. Asocia detecciones a pistas
 mediante una ASIGNACIÓN GLOBAL ÓPTIMA (algoritmo húngaro) que minimiza un coste combinado de
 distancia a la posición predicha, diferencia de radio y consistencia de clasificación
-(H-04/H-09 de la auditoría), en lugar de una asociación voraz. Estima el número de cada bola
+(H-04/H-09 de la auditoría), en lugar de una asociación voraz. Se añaden asignaciones ficticias
+de coste fijo (``COSTE_SIN_ASOCIAR``): una pista prefiere quedarse sin detección antes que
+aceptar una asociación demasiado dudosa, y entonces la detección crea una pista nueva. Estima el número de cada bola
 por VOTACIÓN de observaciones confiables (una clasificación errónea aislada no cambia la
 identidad) y distingue entre bolas quietas, en movimiento y desaparecidas.
 
@@ -28,6 +30,7 @@ PESO_RADIO = 0.5       # peso de la diferencia relativa de radio en el coste de 
 PENALIZACION_NUMERO = 1.0  # coste extra si la clasificación contradice la identidad de la pista
 CRECIMIENTO_BUSQUEDA = 0.1  # el radio de búsqueda crece un 10 % por fotograma oculta...
 MAX_FACTOR_BUSQUEDA = 2.0   # ...hasta duplicarse
+COSTE_SIN_ASOCIAR = 1.6  # coste de dejar una pista sin detección; un par más caro se rechaza
 _PROHIBIDO = 1e9       # coste de un emparejamiento fuera de alcance
 
 
@@ -170,12 +173,14 @@ class BallTracker:
         self.ultimas_perdidas = []
 
         ids = list(self._tracks)
-        costos = [[self._coste(self._tracks[ti], *entradas[di]) for di in range(len(entradas))]
+        n_dets = len(entradas)
+        costos = [[self._coste(self._tracks[ti], *entradas[di]) for di in range(n_dets)]
+                  + [COSTE_SIN_ASOCIAR] * len(ids)      # asignaciones ficticias: "sin correspondencia"
                   for ti in ids]
         pistas_usadas, dets_usadas = set(), set()
         for fila, di in asignacion_optima(costos):
-            if costos[fila][di] >= _PROHIBIDO:
-                continue  # el mejor emparejamiento disponible estaba fuera de alcance
+            if di >= n_dets or costos[fila][di] >= _PROHIBIDO:
+                continue  # la pista queda sin detección: ninguna era lo bastante fiable
             ti = ids[fila]
             pistas_usadas.add(ti)
             dets_usadas.add(di)

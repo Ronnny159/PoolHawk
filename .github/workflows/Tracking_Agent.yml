@@ -42,7 +42,7 @@ jobs:
       - name: Compilar y verificar imports
         run: |
           python -m compileall -q .
-          python -c "import api_client, cola_eventos, ball_classifier, ball_detector, ball_tracker, camera_source, shot_analyzer, traza, calibracion, vision_agent"
+          python -c "import api_client, cola_eventos, ball_classifier, ball_detector, ball_tracker, camera_source, shot_analyzer, traza, config_agente, calibracion, vision_agent"
 
       - name: Verificar que se descubren pruebas
         run: python -m pytest --collect-only test -q
