@@ -179,10 +179,8 @@ public class MatchService {
                 return resultado;
 
             } catch (Exception e) {
-                // H-01: Invalidación de caché ante excepciones inmediatas (antes del commit)
-                // Esto evita que la partida quede mutada en memoria si la persistencia falla.
                 partidasEnMemoria.remove(partidaId);
-                log.error("Fallo inmediato al persistir el tiro para la partida {}. Caché invalidada para forzar recarga desde BD.", partidaId, e);
+                log.error("Fallo de persistencia. Caché invalidada.", e);
                 throw e;
             }
         }
