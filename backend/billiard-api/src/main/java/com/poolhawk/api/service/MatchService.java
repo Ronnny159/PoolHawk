@@ -154,8 +154,7 @@ public class MatchService {
             storage.guardar(entityNueva);
 
             // H-03: Sincronización de Caché y Transacción
-            // Si la transacción falla en el commit final (por ej. OptimisticLock), 
-            // invalidamos la partida en la caché para evitar divergencias con la BD.
+            // Si la transacción falla en el commit final, invalidamos la partida en la caché.
             if (TransactionSynchronizationManager.isActualTransactionActive()) {
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                     @Override
