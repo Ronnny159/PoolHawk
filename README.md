@@ -121,31 +121,31 @@ cd backend
 
 ## Seguridad básica
 
-Se aplicaron tres medidas de seguridad en la infraestructura.
+Este proyecto es un prototipo de demostración. Varias protecciones se dejaron abiertas a propósito para que la API y el marcador en vivo funcionen sin bloqueos durante la presentación. Esta sección describe con exactitud qué está protegido y qué no.
 
-### 1. Credenciales en variables de entorno
+### Lo que sí está protegido
 
-Las credenciales de PostgreSQL ya no están escritas en `docker-compose.yml`: se leen del archivo `.env` en la raíz del proyecto.
-
-- `.env` contiene las contraseñas reales y **está ignorado por Git**, por lo que no se sube al repositorio.
-- `.env.example` es la plantilla que sí se versiona. Cópiala a `.env` y ajusta los valores.
-- Si falta alguna variable, `docker compose` se detiene con un mensaje claro en lugar de usar valores en blanco.
+- La contraseña de PostgreSQL (`POSTGRES_PASSWORD`) del servicio de base de datos se lee del archivo `.env`. Si falta, `docker compose` se detiene con un mensaje claro en lugar de usar valores en blanco.
+- `.env` está ignorado por Git y no se sube al repositorio. `.env.example` es la plantilla que sí se versiona: cópiala a `.env` y ajusta los valores.
 - Si cambias la contraseña después de haber creado la base, borra el volumen (`docker compose down -v`), porque PostgreSQL solo lee sus credenciales al inicializarse.
+- No hay ninguna configuración que active el stacktrace en las respuestas de error. Spring Boot lo oculta por defecto.
 
-### 2. CORS restringido en el WebSocket
+### Lo que está abierto para la demostración
 
-El endpoint `/ws/matches` solo acepta conexiones cuyo origen sea `http://localhost:5173` (el frontend). Una página alojada en otro origen no puede conectarse al marcador en vivo. Si el frontend se publica en otra dirección, hay que actualizar `setAllowedOrigins(...)` en `WebSocketConfig.java`.
+- **La API no exige autenticación.** `SecurityConfig` permite todas las peticiones (`anyRequest().permitAll()`) y el filtro JWT no forma parte de la cadena de seguridad. La pantalla de inicio de sesión del frontend es solo una pantalla de entrada: no protege los endpoints.
+- **CORS abierto.** `SecurityConfig` acepta cualquier origen y el endpoint `/ws/matches` usa `setAllowedOrigins("*")`, de modo que el marcador en vivo se puede abrir desde cualquier dirección.
+- **Credenciales de desarrollo en `docker-compose.yml`.** El servicio `backend` tiene escritos directamente `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` y `JWT_SECRET`. Son valores de desarrollo y deben coincidir con los del `.env`.
 
-Nota: abrir el frontend como `http://127.0.0.1:5173` cuenta como otro origen y será rechazado.
+### Para un entorno real
 
-### 3. Stacktrace oculto en errores
-
-En `application.yml` se configuró `server.error.include-stacktrace: never`, para que las respuestas de error de la API no incluyan trazas internas de Java. Spring Boot ya oculta el stacktrace por defecto; la línea hace explícita esa decisión y evita que se active por accidente.
+- Volver a poner el filtro JWT en la cadena de seguridad y exigir token en los endpoints de escritura.
+- Restringir CORS y `setAllowedOrigins` a la dirección real del frontend.
+- Mover la contraseña de la base y `JWT_SECRET` al `.env` o a un gestor de secretos, y cambiar los valores de ejemplo (`poolhawk_password`).
+- Declarar `server.error.include-stacktrace: never` de forma explícita en `application.yml`.
 
 ### Limitaciones conocidas
 
-- Para el desarrollo local, `application.yml` conserva las credenciales de la base de datos de desarrollo. En Docker, esos valores se sobrescriben con las variables del `.env`.
-- Los valores de ejemplo (`poolhawk_password`) son solo para desarrollo y deben cambiarse en cualquier entorno real.
+- Para el desarrollo local, `application.yml` conserva las credenciales de la base de datos de desarrollo.
 
 ## Acceso (demostración)
 
