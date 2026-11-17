@@ -37,6 +37,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class MatchService {
+
     private static final Logger log = LoggerFactory.getLogger(MatchService.class);
 
     private final MatchStorage storage;
@@ -81,35 +82,32 @@ public class MatchService {
 
         String id = UUID.randomUUID().toString();
         Partida partida = matchFactory.crearDesdeRequest(id, request);
-
         PartidaEntity entity = persistenceMapper.toEntity(partida);
         storage.guardar(entity);
-
         partidasEnMemoria.put(id, partida);
         return partida;
     }
 
     @Transactional(readOnly = true)
     public Partida buscar(String id) {
-        if (partidasEnMemoria.containsKey(id)) return partidasEnMemoria.get(id);
-
+        if (partidasEnMemoria.containsKey(id)) {
+            return partidasEnMemoria.get(id);
+        }
         PartidaEntity entity = storage.buscarConHistorial(id)
-            .orElseThrow(() -> new PartidaNoEncontradaException(id));
-
+                .orElseThrow(() -> new PartidaNoEncontradaException(id));
         return persistenceMapper.toDomain(entity);
     }
 
     @Transactional(readOnly = true)
     public List<Partida> listarTodas() {
         return storage.listarTodasConHistorial().stream()
-            .map(persistenceMapper::toDomain)
-            .collect(Collectors.toList());
+                .map(persistenceMapper::toDomain)
+                .collect(Collectors.toList());
     }
 
     @Transactional
     public ResultadoTiro registrarTiro(String partidaId, TiroEventRequest request) {
         Object lock = locksPorPartida.computeIfAbsent(partidaId, k -> new Object());
-
         synchronized (lock) {
             Partida partida = buscar(partidaId);
 
@@ -120,8 +118,8 @@ public class MatchService {
             Optional<ResultadoTiro> resultadoOriginal = partida.getEstado().buscarResultadoPorEvento(request.eventId());
             if (resultadoOriginal.isPresent()) {
                 TiroEvent tiroOriginal = partida.getEstado().getHistorial().stream()
-                    .filter(e -> e.id().equals(request.eventId())).findFirst()
-                    .orElseThrow(() -> new IllegalStateException("Inconsistencia de idempotencia."));
+                        .filter(e -> e.id().equals(request.eventId())).findFirst()
+                        .orElseThrow(() -> new IllegalStateException("Inconsistencia de idempotencia."));
                 if (!mismoPayload(request, tiroOriginal)) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El eventId ya fue utilizado con otro payload.");
                 }
@@ -137,44 +135,56 @@ public class MatchService {
             ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
             ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
 
-            partida.aplicarTiro(evento, resultado);
-
-            if (resultado.esVictoria()) partida.finalizar(evento.jugador());
-            else if (resultado.esDerrota()) {
-                Jugador oponente = partida.getEquipoA().contiene(evento.jugador()) 
-                    ? partida.getEquipoB().getJugadores().get(0) 
-                    : partida.getEquipoA().getJugadores().get(0);
-                partida.finalizar(oponente);
-            }
-
-            PartidaEntity entityExistente = storage.buscar(partidaId).orElse(null);
-            PartidaEntity entityNueva = persistenceMapper.toEntity(partida);
-            if (entityExistente != null) entityNueva.setVersion(entityExistente.getVersion());
-            
-            storage.guardar(entityNueva);
-
-            // H-03: Sincronización de Caché y Transacción
-            // Si la transacción falla en el commit final, invalidamos la partida en la caché.
-            if (TransactionSynchronizationManager.isActualTransactionActive()) {
-                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                    @Override
-                    public void afterCompletion(int status) {
-                        if (status != STATUS_COMMITTED) {
-                            partidasEnMemoria.remove(partidaId);
-                            log.warn("Transacción fallida para la partida {}. Caché invalidada.", partidaId);
-                        }
-                    }
-                });
-            }
-
             try {
-                String json = jsonMapper.writeValueAsString(responseMapper.toResponse(partida));
-                eventPublisher.publishEvent(new PartidaActualizadaEvent(partidaId, json));
-            } catch (Exception e) {
-                log.warn("Error serializando partida {} para WebSocket", partidaId);
-            }
+                // 1. Mutación del estado en memoria
+                partida.aplicarTiro(evento, resultado);
+                if (resultado.esVictoria()) {
+                    partida.finalizar(evento.jugador());
+                } else if (resultado.esDerrota()) {
+                    Jugador oponente = partida.getEquipoA().contiene(evento.jugador())
+                            ? partida.getEquipoB().getJugadores().get(0)
+                            : partida.getEquipoA().getJugadores().get(0);
+                    partida.finalizar(oponente);
+                }
 
-            return resultado;
+                // 2. Persistencia en base de datos
+                PartidaEntity entityExistente = storage.buscar(partidaId).orElse(null);
+                PartidaEntity entityNueva = persistenceMapper.toEntity(partida);
+                if (entityExistente != null) {
+                    entityNueva.setVersion(entityExistente.getVersion());
+                }
+                storage.guardar(entityNueva);
+
+                // 3. Sincronización para fallos en el commit final de la transacción
+                if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                        @Override
+                        public void afterCompletion(int status) {
+                            if (status != STATUS_COMMITTED) {
+                                partidasEnMemoria.remove(partidaId);
+                                log.warn("Transacción fallida en commit para la partida {}. Caché invalidada.", partidaId);
+                            }
+                        }
+                    });
+                }
+
+                // 4. Publicación de evento para WebSockets
+                try {
+                    String json = jsonMapper.writeValueAsString(responseMapper.toResponse(partida));
+                    eventPublisher.publishEvent(new PartidaActualizadaEvent(partidaId, json));
+                } catch (Exception e) {
+                    log.warn("Error serializando partida {} para WebSocket", partidaId);
+                }
+
+                return resultado;
+
+            } catch (Exception e) {
+                // H-01: Invalidación de caché ante excepciones inmediatas (antes del commit)
+                // Esto evita que la partida quede mutada en memoria si la persistencia falla.
+                partidasEnMemoria.remove(partidaId);
+                log.error("Fallo inmediato al persistir el tiro para la partida {}. Caché invalidada para forzar recarga desde BD.", partidaId, e);
+                throw e;
+            }
         }
     }
 
@@ -182,12 +192,15 @@ public class MatchService {
         if (!Objects.equals(request.jugadorId(), original.jugador().id())) return false;
         Integer primeraOriginal = original.primeraBolaTocada() != null ? original.primeraBolaTocada().numero() : null;
         if (!Objects.equals(request.primeraBolaTocada(), primeraOriginal)) return false;
+        
         List<Integer> bolasOriginal = original.bolasEmbolsadas() == null ? List.of() : original.bolasEmbolsadas().stream().map(Bola::numero).toList();
         List<Integer> bolasRequest = request.bolasEmbolsadas() == null ? List.of() : request.bolasEmbolsadas();
         if (!bolasOriginal.equals(bolasRequest)) return false;
+        
         List<String> tronerasOriginal = original.troneras() == null ? List.of() : original.troneras().stream().map(Enum::name).toList();
         List<String> tronerasRequest = request.troneras() == null ? List.of() : request.troneras().stream().map(t -> t != null ? t.toUpperCase(Locale.ROOT) : null).toList();
         if (tronerasRequest.contains(null) || !tronerasOriginal.equals(tronerasRequest)) return false;
+        
         long duracionOriginal = original.duracion() != null ? original.duracion().getSeconds() : 5L;
         long duracionRequest = request.duracionSegundos() != null ? request.duracionSegundos() : 5L;
         return duracionOriginal == duracionRequest;
@@ -199,6 +212,7 @@ public class MatchService {
             primeraTocada = partida.getMesa().buscarBola(request.primeraBolaTocada()).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola no existe."));
             if (!primeraTocada.enMesa()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La bola ya no está en la mesa.");
         }
+
         List<Bola> embolsadas = new ArrayList<>();
         if (request.bolasEmbolsadas() != null && !request.bolasEmbolsadas().isEmpty()) {
             Set<Integer> unicas = new HashSet<>();
@@ -210,15 +224,22 @@ public class MatchService {
                 embolsadas.add(b);
             }
         }
+
         List<TroneraNombre> troneras = new ArrayList<>();
         if (request.troneras() != null) {
             if (request.troneras().size() != embolsadas.size()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Troneras no coinciden.");
             for (String nombre : request.troneras()) {
                 if (nombre == null || nombre.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tronera nula.");
-                try { troneras.add(TroneraNombre.valueOf(nombre.toUpperCase(Locale.ROOT))); } 
-                catch (IllegalArgumentException e) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tronera inválida: " + nombre); }
+                try {
+                    troneras.add(TroneraNombre.valueOf(nombre.toUpperCase(Locale.ROOT)));
+                } catch (IllegalArgumentException e) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tronera inválida: " + nombre);
+                }
             }
-        } else if (!embolsadas.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Faltan troneras.");
+        } else if (!embolsadas.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Faltan troneras.");
+        }
+
         Duration duracion = request.duracionSegundos() != null ? Duration.ofSeconds(request.duracionSegundos()) : Duration.ofSeconds(5);
         return new TiroEvent(request.eventId(), partida.getId(), jugadorActual, primeraTocada, embolsadas, troneras, Instant.now(), duracion);
     }
