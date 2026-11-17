@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
-         http://maven.apache.org/xsd/maven-4.0.0.xsd">
-
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
@@ -15,7 +13,6 @@
 
     <artifactId>billiard-api</artifactId>
     <packaging>jar</packaging>
-
     <name>PoolHawk - Billiard API</name>
     <description>
         API REST de PoolHawk construida con Spring Boot. Expone endpoints
@@ -23,22 +20,25 @@
     </description>
 
     <properties>
+        <spring-boot.version>3.3.5</spring-boot.version>
         <spring-boot-maven-plugin.version>3.3.5</spring-boot-maven-plugin.version>
-        <jjwt.version>0.12.6</jjwt.version> <!-- Actualizado a 0.12.6 -->
+        <jjwt.version>0.12.6</jjwt.version>
     </properties>
 
     <dependencies>
-        <!-- Modulos internos -->
+        <!-- Módulos internos -->
         <dependency>
             <groupId>com.poolhawk</groupId>
             <artifactId>billiard-domain</artifactId>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>com.poolhawk</groupId>
             <artifactId>billiard-rules</artifactId>
+            <version>${project.version}</version>
         </dependency>
 
-        <!-- Spring Boot -->
+        <!-- Spring Boot Starters -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -79,7 +79,7 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- JWT (JJWT) - Actualizado a 0.12.6 -->
+        <!-- JWT (JJWT) -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
@@ -112,7 +112,8 @@
                 </exclusion>
             </exclusions>
         </dependency>
-                <!-- H2 para tests unitarios -->
+
+        <!-- H2 para tests unitarios -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
@@ -137,5 +138,4 @@
             </plugin>
         </plugins>
     </build>
-
 </project>

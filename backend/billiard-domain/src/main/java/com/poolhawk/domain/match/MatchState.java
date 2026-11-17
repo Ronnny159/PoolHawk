@@ -9,8 +9,18 @@ import com.poolhawk.domain.table.Bola;
 import com.poolhawk.domain.table.Mesa;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
+/**
+ * Representa el estado mutable de una partida de billar en memoria.
+ * Gestiona los turnos, puntajes, grupos asignados, historial de tiros y el estado físico de la mesa.
+ */
 public class MatchState {
 
     private final String partidaId;
@@ -20,7 +30,7 @@ public class MatchState {
     private final Turnos<Jugador> turnos;
     private final Mesa mesa;
     private final Instant fechaInicio;
-
+    
     private FasePartida fase;
     private final Map<Jugador, Integer> puntajes;
     private final Map<Jugador, Grupo> gruposAsignados;
@@ -28,6 +38,9 @@ public class MatchState {
     private final Map<String, ResultadoTiro> resultadosPorEvento;
     private Jugador ganador;
 
+    /**
+     * Construye un nuevo estado de partida.
+     */
     public MatchState(String partidaId, TipoModalidad modalidad,
                       Equipo equipoA, Equipo equipoB,
                       Turnos<Jugador> turnos, Mesa mesa, Instant fechaInicio) {
@@ -38,7 +51,7 @@ public class MatchState {
         Objects.requireNonNull(turnos, "El gestor de turnos no puede ser nulo");
         Objects.requireNonNull(mesa, "La mesa no puede ser nula");
         Objects.requireNonNull(fechaInicio, "La fecha de inicio no puede ser nula");
-
+        
         if (partidaId.isBlank()) {
             throw new IllegalArgumentException("El id de la partida no puede estar en blanco");
         }
@@ -63,7 +76,8 @@ public class MatchState {
         }
     }
 
-    // GETTERS Y CONSULTAS
+    // --- GETTERS Y CONSULTAS ---
+
     public String getPartidaId() { return partidaId; }
     public TipoModalidad getModalidad() { return modalidad; }
     public Equipo getEquipoA() { return equipoA; }
@@ -73,10 +87,11 @@ public class MatchState {
     public Instant getFechaInicio() { return fechaInicio; }
     public FasePartida getFase() { return fase; }
     public Jugador getGanador() { return ganador; }
-
     public Jugador jugadorActual() { return turnos.jugadorActual(); }
+    
     public int puntajeDe(Jugador jugador) { return puntajes.getOrDefault(jugador, 0); }
     public Grupo grupoDe(Jugador jugador) { return gruposAsignados.getOrDefault(jugador, Grupo.SIN_ASIGNAR); }
+    
     public Map<Jugador, Integer> getPuntajes() { return Collections.unmodifiableMap(puntajes); }
     public Map<Jugador, Grupo> getGruposAsignados() { return Collections.unmodifiableMap(gruposAsignados); }
     public List<TiroEvent> getHistorial() { return Collections.unmodifiableList(historial); }
@@ -84,9 +99,10 @@ public class MatchState {
 
     /**
      * Devuelve el veredicto original asociado a un {@code eventId}, si ya fue procesado.
+     * Fundamental para la idempotencia.
      *
-     * @param eventId identificador idempotente del tiro
-     * @return el {@link ResultadoTiro} original, o {@link Optional#empty()} si es nuevo
+     * @param eventId identificador idempotente del tiro.
+     * @return el {@link ResultadoTiro} original, o {@link Optional#empty()} si es nuevo.
      */
     public Optional<ResultadoTiro> buscarResultadoPorEvento(String eventId) {
         if (eventId == null || eventId.isBlank()) return Optional.empty();
@@ -94,7 +110,7 @@ public class MatchState {
     }
 
     /**
-     * @return mapa inmutable {@code eventId -> ResultadoTiro} de todos los tiros procesados
+     * @return mapa inmutable {@code eventId -> ResultadoTiro} de todos los tiros procesados.
      */
     public Map<String, ResultadoTiro> getResultadosPorEvento() {
         return Collections.unmodifiableMap(resultadosPorEvento);
@@ -103,7 +119,7 @@ public class MatchState {
     /**
      * Devuelve los números de las bolas que siguen sobre la mesa (incluida la blanca, id 0).
      *
-     * @return lista ordenada de números de bola presentes en la mesa
+     * @return lista ordenada de números de bola presentes en la mesa.
      */
     public List<Integer> bolasEnMesa() {
         List<Integer> resultado = new ArrayList<>();
@@ -142,7 +158,8 @@ public class MatchState {
         return !quedanBolasDeGrupo(grupo);
     }
 
-    // MODIFICACIÓN DE ESTADO
+    // --- MODIFICACIÓN DE ESTADO ---
+
     public void iniciar() {
         if (fase != FasePartida.CREADA) throw new IllegalStateException("Solo se puede iniciar en CREADA.");
         fase = FasePartida.EN_CURSO;
@@ -186,7 +203,9 @@ public class MatchState {
         gruposAsignados.put(jugador, grupo);
     }
 
-    public void avanzarTurno() { turnos.avanzar(); }
+    public void avanzarTurno() { 
+        turnos.avanzar(); 
+    }
 
     public void registrarTiro(TiroEvent evento) {
         Objects.requireNonNull(evento, "El evento no puede ser nulo");
@@ -197,29 +216,26 @@ public class MatchState {
      * Aplica un tiro ya evaluado. Almacena también el {@link ResultadoTiro} indexado por
      * {@code eventId} para garantizar idempotencia transparente en reintentos posteriores.
      *
-     * @param evento    evento validado del tiro
-     * @param resultado veredicto devuelto por el motor de reglas
+     * @param evento    evento validado del tiro.
+     * @param resultado veredicto devuelto por el motor de reglas.
      */
     public void aplicarTiro(TiroEvent evento, ResultadoTiro resultado) {
         Objects.requireNonNull(evento, "El evento no puede ser nulo");
         Objects.requireNonNull(resultado, "El resultado no puede ser nulo");
-
         if (fase != FasePartida.EN_CURSO) {
             throw new IllegalStateException("Solo se aplican tiros en EN_CURSO.");
         }
-
         registrarTiro(evento);
-
+        
         if (resultado.grupoAsignado() != null) {
             Jugador tirador = evento.jugador();
             Jugador oponente = equipoA.contiene(tirador)
-                ? equipoB.getJugadores().get(0)
-                : equipoA.getJugadores().get(0);
-
+                    ? equipoB.getJugadores().get(0)
+                    : equipoA.getJugadores().get(0);
             if (!grupoDe(tirador).estaAsignado()) gruposAsignados.put(tirador, resultado.grupoAsignado());
             if (!grupoDe(oponente).estaAsignado()) gruposAsignados.put(oponente, resultado.grupoAsignado().opuesto());
         }
-
+        
         for (Bola bola : evento.bolasEmbolsadas()) {
             if (resultado.esFalta() && resultado.motivo() == FaltaMotivo.BLANCA_EMBOLSADA && bola.esBlanca()) {
                 continue;
@@ -228,16 +244,17 @@ public class MatchState {
                 mesa.embolsarBola(bola.numero());
             }
         }
-
+        
         if (resultado.puntos() > 0) sumarPuntos(evento.jugador(), resultado.puntos());
-
         if (resultado.cambiaTurno() && !resultado.esVictoria() && !resultado.esDerrota()) {
             avanzarTurno();
         }
-
         resultadosPorEvento.put(evento.id(), resultado);
     }
 
+    /**
+     * Restaura el estado macro de la partida desde la base de datos.
+     */
     public void restaurarEstado(FasePartida faseGuardada, Jugador ganadorGuardado, Map<Jugador, Integer> puntajesGuardados, Map<Jugador, Grupo> gruposGuardados) {
         this.fase = faseGuardada;
         this.ganador = ganadorGuardado;
@@ -256,14 +273,12 @@ public class MatchState {
      * indexados en {@code resultadosPorEvento} y los reintentos devuelven el
      * {@link ResultadoTiro} original.</p>
      *
-     * @param historialRestaurado lista de {@link TiroEvent} en orden de ejecución
-     * @param resultados          mapa {@code eventId -> ResultadoTiro}
+     * @param historialRestaurado lista de {@link TiroEvent} en orden de ejecución.
+     * @param resultados          mapa {@code eventId -> ResultadoTiro}.
      */
-    public void restaurarHistorial(List<TiroEvent> historialRestaurado,
-                                   Map<String, ResultadoTiro> resultados) {
+    public void restaurarHistorial(List<TiroEvent> historialRestaurado, Map<String, ResultadoTiro> resultados) {
         Objects.requireNonNull(historialRestaurado, "El historial no puede ser nulo");
         Objects.requireNonNull(resultados, "Los resultados no pueden ser nulos");
-
         this.historial.clear();
         this.historial.addAll(historialRestaurado);
         this.resultadosPorEvento.clear();
@@ -278,7 +293,9 @@ public class MatchState {
     }
 
     @Override
-    public int hashCode() { return Objects.hash(partidaId); }
+    public int hashCode() { 
+        return Objects.hash(partidaId); 
+    }
 
     @Override
     public String toString() {
