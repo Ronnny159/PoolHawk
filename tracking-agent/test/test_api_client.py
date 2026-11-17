@@ -6,13 +6,11 @@ import sys
 import pytest
 import requests
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from api_client import (  # noqa: E402
-    ErrorApi, ErrorConflicto, ErrorRed, ErrorRespuesta, PoolHawkApiClient, parsear_partida,
+from api_client import (
+    ErrorApi, ErrorConflicto, ErrorEstadoNoDisponible, ErrorRed, ErrorRespuesta, PoolHawkApiClient, parsear_partida,
 )
-from cola_eventos import ColaEventos  # noqa: E402
-from shot_analyzer import TiroObservado  # noqa: E402
+from cola_eventos import ColaEventos
+from shot_analyzer import TiroObservado
 
 
 def partida(jugador_id="b1", version=3):
@@ -70,6 +68,7 @@ def test_modulo_se_importa_y_el_cliente_se_construye():
 @pytest.mark.parametrize("kw", [
     {"base_url": ""}, {"base_url": "localhost:8080"}, {"base_url": "ftp://x"},
     {"max_reintentos": 0}, {"max_reintentos": True}, {"espera": -1}, {"timeout": 0},
+    {"max_intentos_evento": 0},
 ])
 def test_configuracion_invalida_se_rechaza(kw):
     args = {"base_url": "http://x", **kw}
@@ -143,7 +142,7 @@ def test_respuesta_perdida_y_reinicio_reenvian_el_mismo_evento(tmp_path):
     # "reinicio": cliente y cola nuevos leyendo el mismo archivo
     s2 = SesionFalsa([Resp(200, {"ok": 1})])
     nuevo = cliente(s2, ColaEventos(ruta))
-    assert nuevo.reenviar_pendientes() == {"enviados": 1, "rechazados": 0, "pendientes": 0}
+    assert nuevo.reenviar_pendientes() == {"enviados": 1, "rechazados": 0, "bloqueada": 0, "pendientes": 0}
     assert s2.posts[0] == s1.posts[0]  # mismo eventId y mismo payload exacto
 
 
@@ -192,8 +191,31 @@ def test_post_exitoso_con_cuerpo_ilegible_no_reenvia_el_tiro():
     assert cola.pendientes() == [] and len(s.posts) == 1
 
 
-def test_get_caido_no_encola_nada():
+def test_get_caido_no_encola_nada_y_se_distingue_del_fallo_de_post():
+    """H-02 (2088938): si falla el GET no hay jugador ni versión; NO debe parecer 'pendiente'."""
     cola = ColaEventos()
-    with pytest.raises(ErrorRed):
-        cliente(SesionFalsa(get=requests.ConnectionError()), cola).registrar_tiro("m1", tiro())
+    s = SesionFalsa(get=requests.ConnectionError())
+    with pytest.raises(ErrorEstadoNoDisponible) as e:
+        cliente(s, cola).registrar_tiro("m1", tiro())
+    assert not isinstance(e.value, ErrorRed)
+    assert cola.pendientes() == [] and s.posts == []
+
+
+def test_get_con_respuesta_invalida_tampoco_encola():
+    cola = ColaEventos()
+    with pytest.raises(ErrorEstadoNoDisponible):
+        cliente(SesionFalsa(get=Resp(200, {"id": "m1"})), cola).registrar_tiro("m1", tiro())
     assert cola.pendientes() == []
+
+
+def test_post_caido_deja_el_evento_en_la_cola_con_el_payload_fijado():
+    """H-02 (2088938), segundo escenario: el POST falla -> el evento SÍ está persistido."""
+    cola = ColaEventos()
+    s = SesionFalsa([requests.Timeout()] * 4, get=Resp(200, partida(version=3)))
+    with pytest.raises(ErrorRed):
+        cliente(s, cola).registrar_tiro("m1", tiro(event_id="evt-7"))
+    pendiente = cola.pendientes()[0]["payload"]
+    assert pendiente["eventId"] == "evt-7" and pendiente["versionEsperada"] == 3
+    s2 = SesionFalsa([Resp(200, {"ok": 1})], get=Resp(200, partida(version=99)))
+    assert cliente(s2, cola).reenviar_pendientes()["enviados"] == 1
+    assert s2.posts[0] == pendiente and s2.gets == 0

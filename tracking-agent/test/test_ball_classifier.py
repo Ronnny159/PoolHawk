@@ -10,9 +10,7 @@ import cv2
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from ball_classifier import (  # noqa: E402
+from ball_classifier import (
     BLANCA, DESCONOCIDA, LISA, NEGRA, RAYADA,
     clasificar_bola, recortar_roi,
 )

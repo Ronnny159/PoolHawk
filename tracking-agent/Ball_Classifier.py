@@ -63,6 +63,34 @@ COLOR_A_NUMERO = {
     "VINO": 7,
 }
 
+_UMBRALES_CONFIGURABLES = {
+    "UMBRAL_BLANCA": (0.0, 1.0), "UMBRAL_NEGRA": (0.0, 1.0), "MAX_COLOR_EN_NEGRA": (0.0, 1.0),
+    "UMBRAL_RAYADA": (0.0, 1.0), "ANILLO_INTERIOR": (0.0, 1.0), "MIN_COLOR_TOTAL": (0.0, 1.0),
+    "UMBRAL_CONFIANZA": (0.0, 1.0), "BLANCO_S_MAX": (0, 255), "BLANCO_V_MIN": (0, 255),
+    "NEGRO_V_MAX": (0, 255), "COLOR_S_MIN": (0, 255), "COLOR_V_MIN": (0, 255),
+}
+
+
+def umbrales_actuales() -> dict:
+    """Valores vigentes de los umbrales configurables (para guardarlos con la calibración)."""
+    return {nombre: globals()[nombre] for nombre in _UMBRALES_CONFIGURABLES}
+
+
+def configurar_umbrales(**valores: float) -> None:
+    """Sustituye umbrales del clasificador por valores calibrados con la mesa real.
+
+    Raises:
+        ValueError: si un nombre no es configurable o un valor cae fuera de su rango.
+    """
+    for nombre, valor in valores.items():
+        if nombre not in _UMBRALES_CONFIGURABLES:
+            raise ValueError(f"Umbral de clasificador desconocido: {nombre}")
+        bajo, alto = _UMBRALES_CONFIGURABLES[nombre]
+        if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not bajo <= valor <= alto:
+            raise ValueError(f"{nombre} debe estar entre {bajo} y {alto} (recibido: {valor!r})")
+    globals().update(valores)
+
+
 BLANCA = "BLANCA"
 NEGRA = "NEGRA"
 LISA = "LISA"

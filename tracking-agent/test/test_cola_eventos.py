@@ -5,9 +5,7 @@ import sys
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from cola_eventos import ColaEventos  # noqa: E402
+from cola_eventos import ColaEventos
 
 
 def test_agregar_no_duplica_el_mismo_event_id():

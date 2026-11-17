@@ -7,10 +7,14 @@ grabaciones de tu mesa, en lugar de confiar en valores por defecto.
 
 Subcomandos::
 
-    python calibracion.py troneras    --source partida.mp4 --salida troneras.json
-    python calibracion.py roi         --source partida.mp4
+    python calibracion.py troneras    --source partida.mp4 --config configuracion.json
+    python calibracion.py roi         --source partida.mp4 --config configuracion.json
     python calibracion.py diagnostico --source partida.mp4 --max-frames 300 --bolas-esperadas 16
     python calibracion.py evaluar     --source partida.mp4 --esperado esperado.json
+
+Con ``--config`` la calibración se guarda en el archivo único que lee el agente
+(``vision_agent.py --config``), junto con la resolución a la que se hizo; ver ``config_agente.py``.
+Sin ``--config``, ``troneras`` escribe el JSON suelto de ``--salida`` (formato anterior).
 
 Formato de ``esperado.json`` (índices de fotograma de la fuente, de 0 en adelante)::
 
@@ -34,6 +38,7 @@ from ball_classifier import Observacion, clasificar_bola, recortar_roi
 from ball_detector import BallDetector, ConfigDetector, Deteccion
 from ball_tracker import asignacion_optima
 from camera_source import abrir_fuente, leer_frames
+from config_agente import ErrorConfig, guardar_calibracion
 
 ORDEN_TRONERAS = ["TOP_LEFT", "TOP_RIGHT", "MIDDLE_LEFT", "MIDDLE_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"]
 Punto = Tuple[float, float]
@@ -219,9 +224,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     for nombre in ("troneras", "roi", "diagnostico", "evaluar"):
         p = sub.add_parser(nombre)
         p.add_argument("--source", default="0", help="Cámara, vídeo o URL")
-    sub.choices["troneras"].add_argument("--salida", default="troneras.json")
+    sub.choices["troneras"].add_argument("--salida", default="troneras.json",
+                                         help="JSON suelto (formato anterior; se ignora con --config)")
     sub.choices["troneras"].add_argument("--frame", type=int, default=0, help="Fotograma a usar")
     sub.choices["roi"].add_argument("--frame", type=int, default=0)
+    for nombre in ("troneras", "roi"):
+        sub.choices[nombre].add_argument("--config", default=None,
+                                         help="configuracion.json donde guardar la calibración")
     d = sub.choices["diagnostico"]
     d.add_argument("--max-frames", type=int, default=300)
     d.add_argument("--bolas-esperadas", type=int, default=None)
@@ -239,12 +248,25 @@ def main(argv: Optional[List[str]] = None) -> int:
             if problemas:
                 print("❌ Calibración inválida:\n  - " + "\n  - ".join(problemas), file=sys.stderr)
                 return 1
-            guardar_troneras(troneras, args.salida)
-            print(f"✅ Troneras guardadas en {args.salida}")
+            if args.config:
+                guardar_calibracion(args.config, (frame.shape[1], frame.shape[0]), troneras=troneras)
+                print(f"✅ Troneras guardadas en {args.config} ({frame.shape[1]}x{frame.shape[0]})")
+            else:
+                guardar_troneras(troneras, args.salida)
+                print(f"✅ Troneras guardadas en {args.salida}")
         elif args.cmd == "roi":
-            x, y, w, h = cv2.selectROI("Selecciona el paño y pulsa ENTER", _frame_de(args.source, args.frame))
+            frame = _frame_de(args.source, args.frame)
+            x, y, w, h = cv2.selectROI("Selecciona el paño y pulsa ENTER", frame)
             cv2.destroyAllWindows()
-            print(f"--roi {x},{y},{w},{h}")
+            if w <= 0 or h <= 0:
+                print("❌ No se seleccionó ninguna región", file=sys.stderr)
+                return 1
+            if args.config:
+                guardar_calibracion(args.config, (frame.shape[1], frame.shape[0]),
+                                    roi=(int(x), int(y), int(w), int(h)))
+                print(f"✅ ROI guardado en {args.config} ({frame.shape[1]}x{frame.shape[0]})")
+            else:
+                print(f"--roi {x},{y},{w},{h}")
         elif args.cmd == "diagnostico":
             cap = abrir_fuente(args.source)
             ancho = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
@@ -260,7 +282,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             if metricas["precision"] < args.min_precision or metricas["recall"] < args.min_recall:
                 print("❌ Por debajo de los mínimos exigidos", file=sys.stderr)
                 return 1
-    except (RuntimeError, KeyboardInterrupt, OSError, ValueError, KeyError) as exc:
+    except (RuntimeError, KeyboardInterrupt, OSError, ValueError, KeyError, ErrorConfig) as exc:
         print(f"❌ {exc}", file=sys.stderr)
         return 1
     return 0

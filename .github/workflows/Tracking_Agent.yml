@@ -28,10 +28,10 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: tracking-agent/requirements*.txt
+          cache-dependency-path: tracking-agent/pyproject.toml
 
-      - name: Instalar dependencias (OpenCV headless para CI)
-        run: pip install opencv-python-headless numpy requests pytest
+      - name: Instalar el proyecto (editable, con OpenCV headless y pytest)
+        run: pip install -e ".[dev,headless]"
 
       - name: Verificar que los modulos estan en minuscula (Linux distingue mayusculas)
         run: |
@@ -42,7 +42,7 @@ jobs:
       - name: Compilar y verificar imports
         run: |
           python -m compileall -q .
-          python -c "import Api_Client, cola_eventos, Ball_Classifier, Ball_Detector, Ball_Tracker, Camera_Source, Shot_Analyzer, traza, config_agente, calibracion, Vision_agent"
+          python -c "import api_client, cola_eventos, ball_classifier, ball_detector, ball_tracker, camera_source, shot_analyzer, traza, config_agente, calibracion, vision_agent"
 
       - name: Verificar que se descubren pruebas
         run: python -m pytest --collect-only test -q

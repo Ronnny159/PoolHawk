@@ -19,16 +19,16 @@ from typing import List, Optional, Tuple
 import cv2
 import numpy as np
 
-from Ball_Classifierlassifier import Observacion, clasificar_bola, recortar_roi
-from Ball_Detector import BallDetector, ConfigDetector, Deteccion
-from Ball_Tracker import BallTracker, Track
+from ball_classifier import Observacion, clasificar_bola, recortar_roi
+from ball_detector import BallDetector, ConfigDetector, Deteccion
+from ball_tracker import BallTracker, Track
 from camera_source import abrir_fuente, leer_frames
-from Api_Client import (ErrorApi, ErrorColaBloqueada, ErrorConflicto, ErrorEstadoNoDisponible,
+from api_client import (ErrorApi, ErrorColaBloqueada, ErrorConflicto, ErrorEstadoNoDisponible,
                         ErrorRed, PoolHawkApiClient, ReintentadorPendientes)
-from Ball_Classifier import configurar_umbrales
+from ball_classifier import configurar_umbrales
 from config_agente import ConfigAgente, ErrorConfig
 from cola_eventos import ColaEventos
-from Shot_Analyzer import ShotAnalyzer, TiroObservado
+from shot_analyzer import ShotAnalyzer, TiroObservado
 import traza
 from traza import TrazaTiros
 

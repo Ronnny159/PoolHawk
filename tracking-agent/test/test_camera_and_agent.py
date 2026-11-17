@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import pytest
 
-import Vision_agent
+import vision_agent
 from ball_detector import BallDetector
 from ball_tracker import BallTracker
 from camera_source import abrir_fuente, leer_frames
@@ -43,16 +43,16 @@ def test_pipeline_sigue_la_misma_bola_en_todo_el_video(video):
     detector, tracker = BallDetector(), BallTracker()
     ids = set()
     for frame in leer_frames(cap):
-        for t in Vision_agent.procesar_frame(frame, detector, tracker):
+        for t in vision_agent.procesar_frame(frame, detector, tracker):
             ids.add(t.id)
     cap.release()
     assert 1 <= len(ids) <= 2        # tolerancia a un fallo aislado de Hough
 
 
 def test_main_headless_con_video_termina_bien(video, capsys):
-    assert Vision_agent.main(["--source", video, "--no-gui", "--max-frames", "10"]) == 0
+    assert vision_agent.main(["--source", video, "--no-gui", "--max-frames", "10"]) == 0
     assert "Fotogramas procesados: 10" in capsys.readouterr().out
 
 
 def test_main_con_fuente_invalida_devuelve_error(capsys):
-    assert Vision_agent.main(["--source", "no_existe.avi", "--no-gui"]) == 1
+    assert vision_agent.main(["--source", "no_existe.avi", "--no-gui"]) == 1

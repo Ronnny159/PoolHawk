@@ -1,12 +1,22 @@
-# Configuración del proyecto del agente (H-08): las pruebas importan los módulos sin manipular sys.path.
+# Configuración del agente de visión de PoolHawk.
+#   pip install -e ".[dev,headless]"   -> desarrollo y CI (OpenCV sin interfaz gráfica)
+#   pip install -e ".[gui]"            -> uso con cámara y ventana (cv2.imshow)
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "poolhawk-tracking-agent"
 version = "0.1.0"
 description = "Agente de visión por computador de PoolHawk"
+readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["opencv-python>=4.8", "numpy", "requests"]
+dependencies = ["numpy", "requests"]
 
 [project.optional-dependencies]
+# OpenCV va en extras porque 'opencv-python' y 'opencv-python-headless' no deben instalarse juntos.
+gui = ["opencv-python>=4.8"]
+headless = ["opencv-python-headless>=4.8"]
 dev = ["pytest>=8.0"]
 
 [tool.setuptools]
