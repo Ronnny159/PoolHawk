@@ -2,6 +2,7 @@ package com.poolhawk.api.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -24,12 +25,15 @@ public class PartidaEntity {
     @Version
     private Long version;
 
-    // AGREGADO: @OrderColumn para garantizar el orden A1, B1, A2, B2
     @OneToMany(mappedBy = "partida", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @OrderColumn(name = "orden")
     private List<JugadorEntity> jugadores;
 
-    // Getters y Setters
+    @OneToMany(mappedBy = "partida", cascade = CascadeType.ALL,
+               fetch = FetchType.LAZY, orphanRemoval = true)
+    @OrderColumn(name = "orden")
+    private List<TiroEntity> tiros = new ArrayList<>();
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getModalidad() { return modalidad; }
@@ -50,4 +54,6 @@ public class PartidaEntity {
     public void setVersion(Long version) { this.version = version; }
     public List<JugadorEntity> getJugadores() { return jugadores; }
     public void setJugadores(List<JugadorEntity> jugadores) { this.jugadores = jugadores; }
+    public List<TiroEntity> getTiros() { return tiros; }
+    public void setTiros(List<TiroEntity> tiros) { this.tiros = tiros; }
 }

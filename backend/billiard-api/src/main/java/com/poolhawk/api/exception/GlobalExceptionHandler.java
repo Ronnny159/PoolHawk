@@ -1,7 +1,11 @@
 package com.poolhawk.api.exception;
 
 import com.poolhawk.api.dto.ErrorResponse;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -14,9 +18,9 @@ import java.time.Instant;
 /**
  * Manejador global de excepciones de la API.
  *
- * <p>Captura las excepciones lanzadas por los controladores y las
- * convierte en respuestas HTTP con un cuerpo {@link ErrorResponse}
- * estandarizado.</p>
+ * <p>Captura las excepciones lanzadas por los controladores y por el proxy
+ * transaccional, y las convierte en respuestas HTTP con un cuerpo
+ * {@link ErrorResponse} estandarizado.</p>
  *
  * @author PoolHawk Team
  * @since 0.1.0
@@ -24,8 +28,14 @@ import java.time.Instant;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     /**
      * Convierte {@link PartidaNoEncontradaException} en HTTP 404.
+     *
+     * @param ex      excepción de partida inexistente.
+     * @param request petición HTTP actual.
+     * @return respuesta 404 con cuerpo estandarizado.
      */
     @ExceptionHandler(PartidaNoEncontradaException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(
@@ -40,7 +50,11 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Convierte errores de validacion de Bean Validation en HTTP 400.
+     * Convierte errores de validación de Bean Validation en HTTP 400.
+     *
+     * @param ex      excepción de validación de argumentos.
+     * @param request petición HTTP actual.
+     * @return respuesta 400 con el primer error de campo detectado.
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(
@@ -60,6 +74,10 @@ public class GlobalExceptionHandler {
 
     /**
      * Convierte {@link IllegalArgumentException} en HTTP 400.
+     *
+     * @param ex      excepción de argumento inválido.
+     * @param request petición HTTP actual.
+     * @return respuesta 400 con cuerpo estandarizado.
      */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(
@@ -74,10 +92,13 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Captura {@link ResponseStatusException} y devuelve el código HTTP
-     * y el mensaje que trae la excepción. Esto es fundamental para que
-     * los tests de idempotencia (409 Conflict) y validaciones (400 Bad Request)
-     * devuelvan el código correcto al cliente.
+     * Captura {@link ResponseStatusException} y respeta el código HTTP que trae.
+     * Es la vía por la que el servicio reporta 400 (validación/idempotencia) y
+     * 409 (conflicto detectado dentro del método transaccional).
+     *
+     * @param ex      excepción con estado HTTP explícito.
+     * @param request petición HTTP actual.
+     * @return respuesta con el código y motivo originales.
      */
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ErrorResponse> handleResponseStatus(
@@ -92,11 +113,41 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Captura cualquier excepcion no manejada como HTTP 500.
+     * Traduce conflictos de bloqueo optimista a HTTP 409.
+     *
+     * <p>Cubre el escenario que el {@code try/catch} del servicio no puede ver:
+     * la colisión de {@code @Version} detectada durante el <i>flush</i> o el
+     * <i>commit</i>, es decir, después de que el método transaccional retornó.
+     * La caché ya fue invalidada por el callback {@code afterCompletion}.</p>
+     *
+     * @param ex      excepción de bloqueo optimista (Spring o JPA).
+     * @param request petición HTTP actual.
+     * @return respuesta 409 con cuerpo estandarizado.
+     */
+    @ExceptionHandler({OptimisticLockingFailureException.class, OptimisticLockException.class})
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(
+            Exception ex, HttpServletRequest request) {
+        log.warn("Conflicto de versión durante el commit en {}: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse error = new ErrorResponse(
+            Instant.now(),
+            HttpStatus.CONFLICT.value(),
+            "Conflict",
+            "La partida fue modificada por otro proceso. Intente de nuevo.",
+            request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
+    /**
+     * Captura cualquier excepción no manejada como HTTP 500.
+     *
+     * @param ex      excepción no controlada.
+     * @param request petición HTTP actual.
+     * @return respuesta 500 con cuerpo estandarizado.
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(
             Exception ex, HttpServletRequest request) {
+        log.error("Error no controlado en {}", request.getRequestURI(), ex);
         ErrorResponse error = new ErrorResponse(
             Instant.now(),
             HttpStatus.INTERNAL_SERVER_ERROR.value(),
