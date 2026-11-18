@@ -5,9 +5,9 @@ services:
     container_name: poolhawk-db
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?Define POSTGRES_USER en el archivo .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en el archivo .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Define POSTGRES_DB en el archivo .env}
     ports:
       - "5433:5432"
     volumes:
@@ -38,10 +38,10 @@ services:
         condition: service_healthy
     environment:
       # Aquí conectamos el backend a la misma BD que creó Docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:?Define POSTGRES_DB en el archivo .env}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:?Define POSTGRES_USER en el archivo .env}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en el archivo .env}
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en el archivo .env}
     ports:
       - "8080:8080"
 
