@@ -1,5 +1,7 @@
 package com.poolhawk.api.controller;
 
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.poolhawk.api.BilliardApplication;
@@ -27,17 +29,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Verifica idempotencia durable tras un reinicio real del ApplicationContext.
- *
- * <p><b>Estrategia:</b> La clase se divide en dos métodos ordenados. El primero
- * crea la partida y registra el tiro. El segundo se ejecuta DESPUÉS de que Spring
- * haya cerrado y recreado el contexto (gracias a {@code @DirtiesContext}).
- * Los datos se comparten mediante variables estáticas porque el contexto se
- * destruye entre métodos, pero la base de datos PostgreSQL persiste los datos.</p>
- */
 @SpringBootTest(classes = BilliardApplication.class)
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
+@ActiveProfiles("test")
+@TestPropertySource(properties = {
+    "spring.datasource.url=jdbc:h2:mem:restartdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+    "spring.jpa.hibernate.ddl-auto=update"
+})
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @DisplayName("API REST - Reinicio real del ApplicationContext (H-05)")
 class MatchControllerRestartIT {
@@ -48,8 +46,6 @@ class MatchControllerRestartIT {
     @Autowired
     private ObjectMapper objectMapper;
 
-    // Variables estáticas para compartir estado entre contextos de Spring.
-    // No se limpian entre métodos, es intencional.
     private static String partidaId;
     private static TiroEventRequest payloadOriginal;
     private static String bodyPrimero;
@@ -86,27 +82,23 @@ class MatchControllerRestartIT {
     @Order(2)
     @DisplayName("Fase 2: reintento tras reinicio real devuelve el mismo resultado (contexto nuevo)")
     void fase2_reintentarTrasReinicioReal() throws Exception {
-        // Aseguramos que la fase 1 se ejecutó correctamente
         assertNotNull(partidaId, "La fase 1 debió ejecutarse primero y persistir la partida");
         assertNotNull(payloadOriginal, "El payload original debe estar disponible");
 
-        // Reintento del mismo eventId con el mismo payload
         String bodySegundo = mockMvc.perform(post("/api/v1/matches/" + partidaId + "/events")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(payloadOriginal)))
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString();
 
-        // Verificamos que el resultado es EXACTAMENTE el mismo
         JsonNode primero = objectMapper.readTree(bodyPrimero);
         JsonNode segundo = objectMapper.readTree(bodySegundo);
         assertEquals(primero, segundo, "El reintento tras reinicio real debe devolver el ResultadoTiro original");
 
-        // Verificamos que el historial no se duplicó
         String partidaRes = mockMvc.perform(get("/api/v1/matches/" + partidaId))
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString();
         int cantidadTiros = objectMapper.readTree(partidaRes).get("cantidadTiros").asInt();
-        assertEquals(1, cantidadTiros, "Tras el reintento debe haber exactamente 1 tiro persistido");
+        assertEquals(1, cantidadTiros, "Tras el reinicio debe haber exactamente 1 tiro persistido");
     }
 }

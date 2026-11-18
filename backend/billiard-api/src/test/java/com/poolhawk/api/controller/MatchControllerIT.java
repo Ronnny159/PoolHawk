@@ -14,6 +14,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -29,7 +31,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(classes = BilliardApplication.class)
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
+@ActiveProfiles("test") // <-- CRÍTICO: Usa H2 y desactiva Flyway
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS) // <-- Aísla el contexto
 @DisplayName("API REST - Integración Dinámica y Persistencia")
 class MatchControllerIT {
 
@@ -96,7 +100,6 @@ class MatchControllerIT {
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString();
 
-        // Simular que el backend perdió la memoria (pero Spring sigue vivo)
         vaciarCacheEnMemoria();
 
         String bodySegundo = mockMvc.perform(post("/api/v1/matches/" + partidaId + "/events")
