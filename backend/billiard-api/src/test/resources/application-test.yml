@@ -7,6 +7,9 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      ddl-auto: create-drop
+      # 'update' y no 'create-drop': al cerrar el primer contexto de Spring
+      # el esquema debe sobrevivir para que el segundo contexto recupere los datos.
+      ddl-auto: update
+    open-in-view: false
   flyway:
     enabled: false
