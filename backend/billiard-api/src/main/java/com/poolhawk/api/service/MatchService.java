@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -35,6 +36,10 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+/**
+ * Servicio principal para la gestión del ciclo de vida de las partidas y el registro de tiros.
+ * Garantiza idempotencia, consistencia transaccional y manejo seguro de concurrencia.
+ */
 @Service
 public class MatchService {
 
@@ -90,19 +95,17 @@ public class MatchService {
 
     @Transactional(readOnly = true)
     public Partida buscar(String id) {
-        if (partidasEnMemoria.containsKey(id)) {
-            return partidasEnMemoria.get(id);
-        }
+        if (partidasEnMemoria.containsKey(id)) return partidasEnMemoria.get(id);
         PartidaEntity entity = storage.buscarConHistorial(id)
-                .orElseThrow(() -> new PartidaNoEncontradaException(id));
+            .orElseThrow(() -> new PartidaNoEncontradaException(id));
         return persistenceMapper.toDomain(entity);
     }
 
     @Transactional(readOnly = true)
     public List<Partida> listarTodas() {
         return storage.listarTodasConHistorial().stream()
-                .map(persistenceMapper::toDomain)
-                .collect(Collectors.toList());
+            .map(persistenceMapper::toDomain)
+            .collect(Collectors.toList());
     }
 
     @Transactional
@@ -118,8 +121,8 @@ public class MatchService {
             Optional<ResultadoTiro> resultadoOriginal = partida.getEstado().buscarResultadoPorEvento(request.eventId());
             if (resultadoOriginal.isPresent()) {
                 TiroEvent tiroOriginal = partida.getEstado().getHistorial().stream()
-                        .filter(e -> e.id().equals(request.eventId())).findFirst()
-                        .orElseThrow(() -> new IllegalStateException("Inconsistencia de idempotencia."));
+                    .filter(e -> e.id().equals(request.eventId())).findFirst()
+                    .orElseThrow(() -> new IllegalStateException("Inconsistencia de idempotencia."));
                 if (!mismoPayload(request, tiroOriginal)) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El eventId ya fue utilizado con otro payload.");
                 }
@@ -135,15 +138,18 @@ public class MatchService {
             ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
             ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
 
+            // =========================================================================
+            // BLOQUE TRY-CATCH CRÍTICO: Manejo de fallos inmediatos, concurrencia y limpieza
+            // =========================================================================
             try {
                 // 1. Mutación del estado en memoria
                 partida.aplicarTiro(evento, resultado);
                 if (resultado.esVictoria()) {
                     partida.finalizar(evento.jugador());
                 } else if (resultado.esDerrota()) {
-                    Jugador oponente = partida.getEquipoA().contiene(evento.jugador())
-                            ? partida.getEquipoB().getJugadores().get(0)
-                            : partida.getEquipoA().getJugadores().get(0);
+                    Jugador oponente = partida.getEquipoA().contiene(evento.jugador()) 
+                        ? partida.getEquipoB().getJugadores().get(0) 
+                        : partida.getEquipoA().getJugadores().get(0);
                     partida.finalizar(oponente);
                 }
 
@@ -155,14 +161,20 @@ public class MatchService {
                 }
                 storage.guardar(entityNueva);
 
-                // 3. Sincronización para fallos en el commit final de la transacción
+                // H-05: Limpieza segura de locks solo cuando la partida ha terminado exitosamente.
+                // Es seguro porque las reglas de negocio impiden registrar tiros en partidas finalizadas.
+                if (partida.getEstado().estaTerminada()) {
+                    locksPorPartida.remove(partidaId);
+                }
+
+                // 3. Sincronización para fallos en el commit final de la transacción (Rollback)
                 if (TransactionSynchronizationManager.isActualTransactionActive()) {
                     TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                         @Override
                         public void afterCompletion(int status) {
-                            if (status != STATUS_COMMITTED) {
+                            if (status != TransactionSynchronization.STATUS_COMMITTED) {
                                 partidasEnMemoria.remove(partidaId);
-                                log.warn("Transacción fallida en commit para la partida {}. Caché invalidada.", partidaId);
+                                log.warn("Transacción fallida (rollback) para la partida {}. Caché invalidada.", partidaId);
                             }
                         }
                     });
@@ -178,11 +190,19 @@ public class MatchService {
 
                 return resultado;
 
-            } catch (Exception e) {
+            } catch (ObjectOptimisticLockingFailureException e) {
+                // H-04: Manejo explícito de conflictos de concurrencia (Optimistic Locking)
                 partidasEnMemoria.remove(partidaId);
-                log.error("Fallo de persistencia. Caché invalidada.", e);
+                log.warn("Conflicto de concurrencia detectado en partida {}. Caché invalidada.", partidaId);
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "La partida fue modificada por otro proceso. Intente de nuevo.");
+                
+            } catch (Exception e) {
+                // H-01: Invalidación de caché ante excepciones inmediatas (antes del commit)
+                partidasEnMemoria.remove(partidaId);
+                log.error("Fallo inmediato al persistir el tiro para la partida {}. Caché invalidada para forzar recarga desde BD.", partidaId, e);
                 throw e;
             }
+            // =========================================================================
         }
     }
 
@@ -228,10 +248,10 @@ public class MatchService {
             if (request.troneras().size() != embolsadas.size()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Troneras no coinciden.");
             for (String nombre : request.troneras()) {
                 if (nombre == null || nombre.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tronera nula.");
-                try {
-                    troneras.add(TroneraNombre.valueOf(nombre.toUpperCase(Locale.ROOT)));
-                } catch (IllegalArgumentException e) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tronera inválida: " + nombre);
+                try { 
+                    troneras.add(TroneraNombre.valueOf(nombre.toUpperCase(Locale.ROOT))); 
+                } catch (IllegalArgumentException e) { 
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tronera inválida: " + nombre); 
                 }
             }
         } else if (!embolsadas.isEmpty()) {
