@@ -1,0 +1,8 @@
+{
+  "TOP_LEFT": [30, 40],
+  "TOP_RIGHT": [610, 40],
+  "MIDDLE_LEFT": [20, 240],
+  "MIDDLE_RIGHT": [620, 240],
+  "BOTTOM_LEFT": [30, 440],
+  "BOTTOM_RIGHT": [610, 440]
+}
