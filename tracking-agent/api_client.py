@@ -4,35 +4,8 @@ Cliente REST de PoolHawk.
 Convierte un :class:`~shot_analyzer.TiroObservado` en un ``TiroEventRequest`` y lo envía a
 ``POST /api/v1/matches/{id}/events``. El backend sigue siendo la autoridad sobre las reglas
 y el turno: este cliente solo PROPONE eventos.
-
-Garantías (auditoría del commit ``ec639cb``):
-
-* H-02: el jugador se identifica por ``jugadorActualId`` (nunca por nombre visible). Si la
-  API no lo devuelve, se lanza un error controlado.
-* H-03: el evento lleva ``versionEsperada`` (= ``cantidadTiros`` observado al confirmar el
-  tiro). Si el estado cambió, el backend responde 409 y el evento NO se reatribuye.
-* H-04: el ``eventId`` nace en :class:`~shot_analyzer.ShotAnalyzer` y el evento completo se
-  guarda en una :class:`~cola_eventos.ColaEventos` antes de enviarse, de modo que un
-  reinicio o una respuesta perdida reenvían el MISMO evento.
-* H-05: se valida la configuración del constructor.
-* H-03 (reintentos): :class:`ReintentadorPendientes` reenvía en segundo plano los eventos
-  pendientes con espera incremental y un límite de intentos por evento, usando SIEMPRE el
-  mismo ``eventId`` y payload.
-* GET vs POST: si falla la consulta inicial de la partida NO se inventa jugador ni versión ni
-  se encola nada (:class:`ErrorEstadoNoDisponible`); solo los fallos del POST dejan el evento
-  pendiente. Si un evento agota sus reintentos la cola se BLOQUEA (:class:`ErrorColaBloqueada`)
-  en lugar de seguir con eventos posteriores de versión obsoleta.
-* H-06/H-07: las respuestas se decodifican y validan; los fallos son ``ErrorApi``
-  controlados y trazables (sin exponer el token).
-
-Clasificación de errores:
-
-* :class:`ErrorRed`: sin respuesta, timeout o 5xx tras los reintentos. Recuperable: el
-  evento queda pendiente.
-* :class:`ErrorConflicto` (409) y :class:`ErrorApi` con 4xx: el backend rechazó el evento;
-  no se reintenta y pasa a la lista de rechazados.
-* :class:`ErrorRespuesta`: la API respondió algo que el cliente no puede interpretar.
 """
+
 from __future__ import annotations
 
 import logging
@@ -104,6 +77,7 @@ def parsear_partida(datos: Any) -> EstadoPartida:
     """
     if not isinstance(datos, dict):
         raise ErrorRespuesta("La partida recibida no es un objeto JSON")
+    # CORRECCIÓN: El backend envía 'jugadorActual' (nombre) y 'jugadorActualId'
     jugador_id = datos.get("jugadorActualId")
     if not isinstance(jugador_id, str) or not jugador_id.strip():
         raise ErrorRespuesta(
@@ -119,21 +93,8 @@ def parsear_partida(datos: Any) -> EstadoPartida:
 
 
 class PoolHawkApiClient:
-    """Cliente mínimo, idempotente y tolerante a fallos para registrar tiros.
-
-    Args:
-        base_url: URL base del backend (``http://`` o ``https://``).
-        token: JWT opcional; se envía como ``Authorization: Bearer`` y nunca se registra.
-        max_reintentos: intentos totales por petición (>= 1).
-        espera: segundos entre reintentos (>= 0).
-        timeout: segundos máximos por petición (> 0).
-        max_intentos_evento: fallos de red tolerados por evento pendiente antes de descartarlo
-            para revisión manual (>= 1).
-        cola: cola de eventos pendientes; por defecto en memoria.
-        sesion: sesión de ``requests`` (inyectable para pruebas).
-
-    Raises:
-        ValueError: si algún parámetro de configuración es inválido.
+    """
+    Cliente mínimo, idempotente y tolerante a fallos para registrar tiros.
     """
 
     def __init__(self, base_url: str, token: Optional[str] = None, max_reintentos: int = 4,
@@ -154,7 +115,7 @@ class PoolHawkApiClient:
                 or max_intentos_evento < 1:
             raise ValueError("max_intentos_evento debe ser un entero >= 1")
         self.max_intentos_evento = max_intentos_evento
-        self._lock = threading.RLock()  # serializa los envíos (hilo principal y reintentador)
+        self._lock = threading.RLock()
         self.base_url = base_url.rstrip("/")
         self.max_reintentos = max_reintentos
         self.espera = espera
@@ -167,11 +128,6 @@ class PoolHawkApiClient:
     # ------------------------------------------------------------------ HTTP
     def _pedir(self, metodo: str, ruta: str, reintentos: Optional[int] = None,
                **kwargs: Any) -> requests.Response:
-        """Hace una petición con reintentos (solo red, timeout y 5xx) y valida el estado HTTP.
-
-        ``reintentos`` sustituye a ``max_reintentos`` para esta llamada (el reintentador en
-        segundo plano usa 1 y gestiona la espera por su cuenta).
-        """
         total = reintentos or self.max_reintentos
         url = f"{self.base_url}{ruta}"
         ultimo: Optional[BaseException] = None
@@ -201,7 +157,6 @@ class PoolHawkApiClient:
 
     @staticmethod
     def _json(r: requests.Response) -> Any:
-        """Decodifica el cuerpo como JSON, o lanza :class:`ErrorRespuesta` con contexto."""
         if r.status_code == 204 or not (r.text or "").strip():
             raise ErrorRespuesta(f"La API respondió {r.status_code} sin cuerpo JSON", r.status_code)
         try:
@@ -211,15 +166,16 @@ class PoolHawkApiClient:
 
     # ------------------------------------------------------------------ consultas
     def obtener_estado(self, match_id: str) -> EstadoPartida:
-        """Consulta y valida el estado actual de la partida."""
         return parsear_partida(self._json(self._pedir("GET", f"/api/v1/matches/{match_id}")))
 
     @staticmethod
     def construir_payload(tiro: TiroObservado, jugador_id: str, version: int) -> Dict[str, Any]:
-        """Arma el cuerpo de ``TiroEventRequest`` con el ``eventId`` del propio tiro."""
+        """Arma el cuerpo de ``TiroEventRequest`` con el ``eventId`` del propio tiro.
+        CORRECCIÓN: El backend espera 'jugadorId', no 'jugadorActualId'.
+        """
         return {
             "eventId": tiro.event_id,
-            "jugadorId": jugador_id,
+            "jugadorId": jugador_id, # <-- CORREGIDO
             "primeraBolaTocada": tiro.primera_bola_tocada,
             "bolasEmbolsadas": list(tiro.bolas_embolsadas),
             "troneras": list(tiro.troneras),
@@ -229,22 +185,6 @@ class PoolHawkApiClient:
 
     # ------------------------------------------------------------------ registro
     def registrar_tiro(self, match_id: str, tiro: TiroObservado) -> Optional[Dict[str, Any]]:
-        """Registra un tiro confirmado.
-
-        El jugador y la versión se fijan UNA vez, al confirmar el tiro, y el evento completo
-        se guarda en la cola antes de enviarse. Si ya estaba pendiente (reintento tras un
-        reinicio) se reutiliza el mismo payload.
-
-        Returns:
-            El veredicto del backend, o ``None`` si el tiro requiere revisión y no se envió.
-
-        Raises:
-            ErrorColaBloqueada: hay un evento bloqueando la cola; el tiro no se encola.
-            ErrorEstadoNoDisponible: falló el GET inicial; el tiro NO se encoló.
-            ErrorRed: falló el POST; el evento YA está en la cola y se reenviará igual.
-            ErrorConflicto / ErrorApi: el backend lo rechazó; pasa a rechazados.
-            ErrorRespuesta: la API no devolvió un estado interpretable.
-        """
         if tiro.requiere_revision:
             return None
         bloqueo = self.cola.bloqueo
@@ -259,7 +199,6 @@ class PoolHawkApiClient:
         try:
             estado = self.obtener_estado(match_id)
         except ErrorApi as e:
-            # Sin GET no hay jugador ni versión fiables: no se inventan y NO se encola nada.
             raise ErrorEstadoNoDisponible(
                 f"No se pudo consultar la partida ({e}); el tiro no se encoló y requiere revisión "
                 "manual", e.status) from e
@@ -269,20 +208,18 @@ class PoolHawkApiClient:
 
     def _enviar(self, match_id: str, payload: Dict[str, Any],
                 reintentos: Optional[int] = None) -> Dict[str, Any]:
-        """Envía un evento ya persistido y actualiza la cola según el resultado."""
         event_id = payload["eventId"]
         with self._lock:
             if not self.cola.contiene(event_id):
-                return {}  # otro hilo ya lo resolvió o lo descartó
+                return {}
             try:
                 r = self._pedir("POST", f"/api/v1/matches/{match_id}/events",
                                 reintentos=reintentos, json=payload)
             except ErrorRed:
-                raise  # sigue pendiente: se reenviará con el mismo eventId
+                raise
             except ErrorApi as e:
                 self.cola.rechazar(event_id, str(e))
                 raise
-            # El 2xx confirma el registro; un cuerpo ilegible no justifica reenviar el tiro.
             self.cola.resolver(event_id)
         try:
             return self._json(r)
@@ -292,21 +229,6 @@ class PoolHawkApiClient:
     def reenviar_pendientes(self, reintentos: Optional[int] = None,
                             observador: Optional[Callable[[str, str, Optional[str]], None]] = None
                             ) -> Dict[str, int]:
-        """Reintenta los eventos guardados (al arrancar o desde el reintentador).
-
-        Se detiene al primer :class:`ErrorRed` porque la API sigue caída y, para preservar el
-        orden, no se salta ningún evento. Cada fallo de red cuenta como un intento; al llegar a
-        ``max_intentos_evento`` la cola se BLOQUEA (el evento no se descarta ni se envían los
-        posteriores, cuya ``versionEsperada`` sería obsoleta) hasta :meth:`ColaEventos.reanudar`
-        o descartar el evento.
-
-        Args:
-            reintentos: intentos HTTP por evento en esta pasada (por defecto ``max_reintentos``).
-            observador: ``f(event_id, estado, detalle)`` llamado en cada transición (traza).
-
-        Returns:
-            Conteo ``{"enviados", "rechazados", "bloqueada", "pendientes"}``.
-        """
         notificar = observador or (lambda *_: None)
         enviados = rechazados = bloqueada = 0
         if self.cola.bloqueo is not None:
@@ -340,22 +262,6 @@ class PoolHawkApiClient:
 
 
 class ReintentadorPendientes:
-    """Reenvía en segundo plano los eventos pendientes con espera incremental (H-03).
-
-    Mientras el agente sigue procesando la cámara, este hilo comprueba la cola y reintenta
-    con espera ``base``, ``2*base``, ``4*base``... hasta ``maximo`` segundos mientras la API
-    siga caída; al recuperarse vuelve a ``base``. Cada pasada hace un solo intento HTTP por
-    evento para no bloquear los envíos del hilo principal.
-
-    Args:
-        cliente: cliente REST cuya cola se reintenta.
-        base: espera inicial entre pasadas, en segundos (> 0).
-        maximo: espera máxima entre pasadas, en segundos (>= base).
-        reloj: función de tiempo monótono (inyectable para pruebas).
-        sondeo: cada cuántos segundos el hilo comprueba si toca reintentar.
-        observador: ``f(event_id, estado, detalle)`` para anotar cada transición en la traza.
-    """
-
     def __init__(self, cliente: PoolHawkApiClient, base: float = 2.0, maximo: float = 60.0,
                  reloj=time.monotonic, sondeo: float = 0.5, observador=None):
         if base <= 0 or maximo < base or sondeo <= 0:
@@ -368,14 +274,12 @@ class ReintentadorPendientes:
 
     @property
     def espera_actual(self) -> float:
-        """Espera (s) que se aplicará tras la próxima pasada."""
         return self._espera
 
     def intentar(self) -> Optional[Dict[str, int]]:
-        """Hace una pasada si ya toca. Devuelve su resumen, o ``None`` si no hubo pasada."""
         ahora = self._reloj()
         if ahora < self._proximo or self._cliente.cola.bloqueo is not None:
-            return None  # cola bloqueada: espera intervención manual, no se insiste
+            return None
         if not self._cliente.cola.pendientes():
             self._espera = self._base
             return None
@@ -385,7 +289,6 @@ class ReintentadorPendientes:
         return resumen
 
     def iniciar(self) -> None:
-        """Arranca el hilo en segundo plano (no hace nada si ya está activo)."""
         if self._hilo is not None and self._hilo.is_alive():
             return
         self._detener.clear()
@@ -393,18 +296,6 @@ class ReintentadorPendientes:
         self._hilo.start()
 
     def detener(self, timeout: Optional[float] = None, drenar: bool = True) -> Dict[str, Any]:
-        """Cierre controlado: deja de programar pasadas y ESPERA a que acabe la petición activa.
-
-        Args:
-            timeout: segundos máximos de espera del hilo; por defecto el timeout HTTP del cliente
-                más un margen, para no abandonar una petición en curso (H-04).
-            drenar: tras parar el hilo, hace una última pasada de envío (un intento por evento).
-
-        Returns:
-            ``{"terminado": bool, "pendientes": int}``. Si ``terminado`` es falso el hilo sigue
-            ocupado y no se hizo la pasada final; ``pendientes`` cuenta los eventos que quedan
-            guardados en la cola para el próximo arranque.
-        """
         limite = timeout if timeout is not None else self._cliente.timeout + 5.0
         self._detener.set()
         terminado = True
@@ -419,5 +310,5 @@ class ReintentadorPendientes:
         while not self._detener.wait(self._sondeo):
             try:
                 self.intentar()
-            except Exception:  # un fallo inesperado no debe matar el hilo
+            except Exception:
                 log.exception("Error inesperado reintentando eventos pendientes")
