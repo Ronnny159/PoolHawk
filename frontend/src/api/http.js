@@ -16,13 +16,6 @@ const http = axios.create({
 http.interceptors.request.use(
   (config) => {
     let token = localStorage.getItem('token')
-    
-    // TRUCO TEMPORAL PARA DESARROLLO:
-    // Si no hay token (porque no hay Login aún), usamos uno de prueba
-    if (!token) {
-      token = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhcmJpdHJvIiwiaWF0IjoxNzkzMzIwOTg3LCJleHAiOjE3OTM0MDczODd9.xG7MAlz5IScZRuKKzMowTZysKHsXOCpR9fNN5Mgnse4'
-    }
-    
     config.headers.Authorization = `Bearer ${token}`
     return config
   },
