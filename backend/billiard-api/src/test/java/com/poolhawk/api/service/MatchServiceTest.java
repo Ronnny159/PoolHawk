@@ -1,4 +1,4 @@
-package com.poolhawk.api.service;
+﻿package com.poolhawk.api.service;
 
 import com.poolhawk.api.dto.CrearPartidaRequest;
 import com.poolhawk.api.dto.TiroEventRequest;
@@ -10,6 +10,7 @@ import com.poolhawk.domain.player.Jugador;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,14 +20,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Pruebas de integración del servicio de partidas.
- * <p>Utiliza la base de datos real (H2 en local, PostgreSQL en CI) para validar
- * la persistencia y el ciclo de vida completo. No se mockea el almacenamiento
- * para garantizar que la invalidación de caché y la recuperación desde BD funcionen.</p>
+ * Pruebas de integracion del servicio de partidas.
+ * Utiliza la base de datos H2 en local (profile test).
  */
+@ActiveProfiles("test")
 @SpringBootTest
-@Transactional // Garantiza que cada test haga rollback y la BD quede limpia
-@DisplayName("MatchService - Pruebas de Integración")
+@Transactional
+@DisplayName("MatchService - Pruebas de Integracion")
 class MatchServiceTest {
 
     @Autowired
@@ -63,7 +63,7 @@ class MatchServiceTest {
 
         Jugador ana = partida.getEquipoA().getJugadores().get(0);
         Jugador beto = partida.getEquipoB().getJugadores().get(0);
-        
+
         // Asignar grupos para que la regla de derrota funcione correctamente
         partida.getEstado().asignarGrupo(ana, Grupo.LISAS);
         partida.getEstado().asignarGrupo(beto, Grupo.RAYADAS);
