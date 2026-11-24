@@ -2,7 +2,6 @@ import axios from 'axios'
 
 /**
  * Instancia centralizada de Axios para comunicarse con el backend.
- * 
  * BaseURL: apunta al servidor de Spring Boot.
  * Timeout: 5 segundos (5000 ms) para evitar que la app se quede colgada.
  */
@@ -12,11 +11,14 @@ const http = axios.create({
   headers: { 'Content-Type': 'application/json' }
 })
 
-// Interceptor para imprimir errores en consola (útil en desarrollo)
+// Interceptor para añadir el token SOLO si existe
 http.interceptors.request.use(
   (config) => {
-    let token = localStorage.getItem('token')
-    config.headers.Authorization = `Bearer ${token}`
+    const token = localStorage.getItem('token')
+    // H-04 CORRECCIÓN: Solo agregar la cabecera si el token existe y no es nulo
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
     return config
   },
   (error) => Promise.reject(error)
