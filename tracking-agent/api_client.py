@@ -158,15 +158,19 @@ class PoolHawkApiClient:
                 f"Cola bloqueada por el evento {bloqueo['eventId']} ({bloqueo['motivo']}). Reconcilia "
                 "con el backend y reanuda (--reanudar-cola) o descarta ese evento (--descartar-evento)")
         
-        # H-03: No construir nuevo tiro si ya hay uno pendiente para esta partida
+        # H-03 CORREGIDO: Bloquear solo si hay un evento pendiente con un eventId DIFERENTE.
+        # Si el eventId es el mismo, es un reintento legítimo del mismo evento y debe permitirse.
         pendientes_mismo_match = [i for i in self.cola.pendientes() if i["matchId"] == match_id]
         if pendientes_mismo_match:
-            raise ErrorColaBloqueada(
-                f"Hay tiros pendientes de confirmación para la partida {match_id}. "
-                "Espere a que se resuelvan antes de inferir nuevos eventos."
-            )
+            for pendiente in pendientes_mismo_match:
+                if pendiente["payload"]["eventId"] != tiro.event_id:
+                    raise ErrorColaBloqueada(
+                        f"Hay un tiro pendiente de confirmación para la partida {match_id} con otro eventId. "
+                        "Espere a que se resuelva antes de inferir nuevos eventos."
+                    )
 
-        existente = next((i for i in self.cola.pendientes() if i["payload"]["eventId"] == tiro.event_id), None)
+        existente = next((i for i in self.cola.pendientes()
+                          if i["payload"]["eventId"] == tiro.event_id), None)
         if existente is not None:
             return self._enviar(existente["matchId"], existente["payload"])
         
@@ -198,7 +202,8 @@ class PoolHawkApiClient:
         except ErrorRespuesta:
             return {}
 
-    def reenviar_pendientes(self, reintentos: Optional[int] = None, observador: Optional[Callable[[str, str, Optional[str]], None]] = None) -> Dict[str, int]:
+    def reenviar_pendientes(self, reintentos: Optional[int] = None,
+                            observador: Optional[Callable[[str, str, Optional[str]], None]] = None) -> Dict[str, int]:
         notificar = observador or (lambda *_: None)
         enviados = rechazados = bloqueada = 0
         if self.cola.bloqueo is not None:
@@ -229,7 +234,8 @@ class PoolHawkApiClient:
         return {"enviados": enviados, "rechazados": rechazados, "bloqueada": bloqueada, "pendientes": len(self.cola.pendientes())}
 
 class ReintentadorPendientes:
-    def __init__(self, cliente: PoolHawkApiClient, base: float = 2.0, maximo: float = 60.0, reloj=time.monotonic, sondeo: float = 0.5, observador=None):
+    def __init__(self, cliente: PoolHawkApiClient, base: float = 2.0, maximo: float = 60.0,
+                 reloj=time.monotonic, sondeo: float = 0.5, observador=None):
         if base <= 0 or maximo < base or sondeo <= 0:
             raise ValueError("Se requiere base > 0, maximo >= base y sondeo > 0")
         self._cliente, self._base, self._maximo = cliente, base, maximo
