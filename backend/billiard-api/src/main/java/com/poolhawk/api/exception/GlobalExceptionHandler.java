@@ -15,15 +15,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 
-/**
- * Manejador global de excepciones de la API.
- * <p>Captura las excepciones lanzadas por los controladores y las
- * convierte en respuestas HTTP con un cuerpo {@link ErrorResponse}
- * estandarizado.</p>
- *
- * @author PoolHawk Team
- * @since 0.1.0
- */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -82,16 +73,18 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * H-02: Captura conflictos de versión optimista que ocurren durante el commit 
-     * de la transacción, devolviendo un HTTP 409 Conflict en lugar de 500.
+     * Captura conflictos de bloqueo optimista que ocurren durante el commit.
      */
-        @ExceptionHandler({org.springframework.dao.OptimisticLockingFailureException.class, jakarta.persistence.OptimisticLockException.class})
+    @ExceptionHandler({OptimisticLockingFailureException.class, OptimisticLockException.class})
     public ResponseEntity<ErrorResponse> handleOptimisticLock(Exception ex, HttpServletRequest request) {
         log.warn("Conflicto de versión durante el commit en {}: {}", request.getRequestURI(), ex.getMessage());
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(
-            Instant.now(), HttpStatus.CONFLICT.value(), "Conflict",
+        ErrorResponse error = new ErrorResponse(
+            Instant.now(),
+            HttpStatus.CONFLICT.value(),
+            "Conflict",
             "La partida fue modificada por otro proceso. Intente de nuevo.",
-            request.getRequestURI()));
+            request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
     @ExceptionHandler(Exception.class)

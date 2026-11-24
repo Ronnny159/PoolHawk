@@ -19,11 +19,12 @@ import com.poolhawk.rules.ReglasBillar;
 import com.poolhawk.rules.ReglasConfig;
 import com.poolhawk.rules.ReglasFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.OptimisticLockException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -48,8 +49,8 @@ public class MatchService {
     private final ObjectMapper jsonMapper;
     private final ApplicationEventPublisher eventPublisher;
 
+    // ELIMINADO: locksPorPartida. JPA @Version gestiona la concurrencia.
     private final Map<String, Partida> partidasEnMemoria = new ConcurrentHashMap<>();
-    // ELIMINADO: locksPorPartida (H-01: JPA @Version gestiona la concurrencia)
 
     public MatchService(MatchStorage storage, PartidaMapper responseMapper,
                         MatchPersistenceMapper persistenceMapper, MatchFactory matchFactory,
@@ -86,7 +87,7 @@ public class MatchService {
         PartidaEntity entity = persistenceMapper.toEntity(partida);
         storage.guardar(entity);
         
-        // H-02: Publicar en caché SOLO tras commit exitoso.
+        // H-02: Publicar en caché SOLO tras commit exitoso. Evita partidas fantasma.
         registrarInvalidacionEnRollback(id);
         publicarEnCacheTrasCommit(id, partida);
         
@@ -96,8 +97,10 @@ public class MatchService {
     @Transactional(readOnly = true)
     public Partida buscar(String id) {
         Partida cacheada = partidasEnMemoria.get(id);
-        if (cacheada != null) return cacheada;
-        
+        if (cacheada != null) {
+            return cacheada;
+        }
+        // CORREGIDO: usa storage.buscar() que sí existe en MatchStorage
         PartidaEntity entity = storage.buscar(id)
             .orElseThrow(() -> new PartidaNoEncontradaException(id));
         Partida reconstruida = persistenceMapper.toDomain(entity);
@@ -107,10 +110,12 @@ public class MatchService {
 
     @Transactional(readOnly = true)
     public List<Partida> listarTodas() {
+        // CORREGIDO: usa storage.listarTodas() que sí existe en MatchStorage
         return storage.listarTodas().stream()
             .map(entity -> {
-                try { return persistenceMapper.toDomain(entity); } 
-                catch (Exception e) {
+                try {
+                    return persistenceMapper.toDomain(entity);
+                } catch (Exception e) {
                     log.warn("Ignorando partida corrupta {}: {}", entity.getId(), e.getMessage());
                     return null;
                 }
@@ -125,10 +130,13 @@ public class MatchService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El eventId es obligatorio.");
         }
 
+        // Registrar invalidación ANTES de mutar (cubre fallos en commit)
         registrarInvalidacionEnRollback(partidaId);
+        
+        // Cargar snapshot propio de esta transacción (no el objeto compartido de la caché)
         Partida partida = cargarParaEscritura(partidaId);
 
-        // 1. Idempotencia transparente
+        // 1. Idempotencia transparente (SIEMPRE primero, antes de validar turno)
         Optional<ResultadoTiro> resultadoOriginal = partida.getEstado().buscarResultadoPorEvento(request.eventId());
         if (resultadoOriginal.isPresent()) {
             TiroEvent tiroOriginal = partida.getEstado().getHistorial().stream()
@@ -140,39 +148,37 @@ public class MatchService {
             return resultadoOriginal.get();
         }
 
-        // 2. H-01: CONTROL DE VERSIÓN EXPLÍCITO (Requisito del auditor)
+        // 2. H-01: Validación de versión esperada por el agente
         if (request.versionEsperada() != null
                 && request.versionEsperada().intValue() != partida.getEstado().cantidadTiros()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                "El estado de la partida cambió: se esperaba la versión "
-                    + request.versionEsperada() + " y la actual es "
-                    + partida.getEstado().cantidadTiros() + ".");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, 
+                "Estado desactualizado. Versión esperada: " + request.versionEsperada() + 
+                ", versión actual en BD: " + partida.getEstado().cantidadTiros());
         }
 
-        // 3. Validación de turno
+        // 3. Validación de turno (solo si NO es un reintento idempotente)
         Jugador jugadorActual = partida.jugadorActual();
         if (!jugadorActual.id().equals(request.jugadorId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No es el turno de este jugador.");
         }
 
-        // 4. Construcción y evaluación
         TiroEvent evento = construirEventoValidado(partida, request, jugadorActual);
         ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
         ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
 
         try {
-            // 5. Mutación del estado
+            // 4. Mutación del estado en memoria
             partida.aplicarTiro(evento, resultado);
             if (resultado.esVictoria()) {
                 partida.finalizar(evento.jugador());
             } else if (resultado.esDerrota()) {
-                Jugador oponente = partida.getEquipoA().contiene(evento.jugador())
-                    ? partida.getEquipoB().getJugadores().get(0)
+                Jugador oponente = partida.getEquipoA().contiene(evento.jugador()) 
+                    ? partida.getEquipoB().getJugadores().get(0) 
                     : partida.getEquipoA().getJugadores().get(0);
                 partida.finalizar(oponente);
             }
 
-            // 6. Persistencia
+            // 5. Persistencia
             PartidaEntity entityExistente = storage.buscar(partidaId).orElse(null);
             PartidaEntity entityNueva = persistenceMapper.toEntity(partida);
             if (entityExistente != null) {
@@ -180,10 +186,10 @@ public class MatchService {
             }
             storage.guardar(entityNueva);
 
-            // 7. H-01: Invalidar caché tras commit (evita sobrescritura con versión vieja)
+            // 6. Invalidar caché tras commit (H-01)
             invalidarCacheTrasCommit(partidaId);
 
-            // 8. Publicar evento para WebSocket (el listener lo emite AFTER_COMMIT)
+            // 7. Publicar evento WebSocket AFTER_COMMIT
             try {
                 String json = jsonMapper.writeValueAsString(responseMapper.toResponse(partida));
                 eventPublisher.publishEvent(new PartidaActualizadaEvent(partidaId, json));
@@ -193,7 +199,7 @@ public class MatchService {
 
             return resultado;
 
-        } catch (ObjectOptimisticLockingFailureException e) {
+        } catch (OptimisticLockingFailureException | OptimisticLockException e) {
             partidasEnMemoria.remove(partidaId);
             log.warn("Conflicto de versión en partida {}. Caché invalidada.", partidaId);
             throw new ResponseStatusException(HttpStatus.CONFLICT, "La partida fue modificada por otro proceso. Intente de nuevo.");
