@@ -85,16 +85,13 @@ public class GlobalExceptionHandler {
      * H-02: Captura conflictos de versión optimista que ocurren durante el commit 
      * de la transacción, devolviendo un HTTP 409 Conflict en lugar de 500.
      */
-    @ExceptionHandler({OptimisticLockingFailureException.class, OptimisticLockException.class})
+        @ExceptionHandler({org.springframework.dao.OptimisticLockingFailureException.class, jakarta.persistence.OptimisticLockException.class})
     public ResponseEntity<ErrorResponse> handleOptimisticLock(Exception ex, HttpServletRequest request) {
         log.warn("Conflicto de versión durante el commit en {}: {}", request.getRequestURI(), ex.getMessage());
-        ErrorResponse error = new ErrorResponse(
-            Instant.now(),
-            HttpStatus.CONFLICT.value(),
-            "Conflict",
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(
+            Instant.now(), HttpStatus.CONFLICT.value(), "Conflict",
             "La partida fue modificada por otro proceso. Intente de nuevo.",
-            request.getRequestURI());
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+            request.getRequestURI()));
     }
 
     @ExceptionHandler(Exception.class)
