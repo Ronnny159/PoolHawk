@@ -26,12 +26,14 @@ public class MatchStorage {
     }
 
     /**
-     * Guarda una partida. Si ya existe, la actualiza (merge) respetando la versión.
-     * Si no existe, la inserta.
+     * Guarda una partida y fuerza la sincronización con la BD dentro de la
+     * transacción actual. El flush es importante para que los conflictos de
+     * @Version se detecten dentro del bloque try/catch del servicio y puedan
+     * convertirse en HTTP 409 antes de que el método transaccional retorne.
      */
     public void guardar(PartidaEntity partida) {
-        // merge() actualiza si existe o inserta si no existe, sin lanzar Duplicate Key
         entityManager.merge(partida);
+        entityManager.flush();
     }
 
     public Optional<PartidaEntity> buscar(String id) {
