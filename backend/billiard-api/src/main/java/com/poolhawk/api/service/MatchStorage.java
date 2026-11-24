@@ -1,3 +1,4 @@
+
 package com.poolhawk.api.service;
 
 import com.poolhawk.api.entity.PartidaEntity;
@@ -26,12 +27,13 @@ public class MatchStorage {
     }
 
     /**
-     * Guarda una partida. Si ya existe, la actualiza (merge) respetando la versión.
-     * Si no existe, la inserta.
+     * Guarda una partida y fuerza la sincronización con la BD dentro de la
+     * transacción actual. Esto permite detectar conflictos de @Version
+     * durante la ejecución del servicio.
      */
     public void guardar(PartidaEntity partida) {
-        // merge() actualiza si existe o inserta si no existe, sin lanzar Duplicate Key
         entityManager.merge(partida);
+        entityManager.flush();
     }
 
     public Optional<PartidaEntity> buscar(String id) {

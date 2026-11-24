@@ -19,56 +19,39 @@ from shot_analyzer import TiroObservado
 log = logging.getLogger("poolhawk.api")
 
 class ErrorApi(Exception):
-    """Error base del cliente. `status` es el código HTTP si lo hubo."""
     def __init__(self, mensaje: str, status: Optional[int] = None):
         super().__init__(mensaje)
         self.status = status
 
-class ErrorRed(ErrorApi):
-    """La API no respondió (conexión, timeout o 5xx) tras todos los reintentos."""
-
-class ErrorConflicto(ErrorApi):
-    """HTTP 409: el estado de la partida cambió respecto a `versionEsperada`."""
-
-class ErrorEstadoNoDisponible(ErrorApi):
-    """No se pudo consultar la partida: el tiro NO se encoló (no hay jugador ni versión fiables)."""
-
-class ErrorColaBloqueada(ErrorApi):
-    """La cola está bloqueada por un evento que agotó sus reintentos; requiere intervención."""
-
-class ErrorRespuesta(ErrorApi):
-    """Respuesta exitosa pero con cuerpo o estructura que el cliente no puede interpretar."""
+class ErrorRed(ErrorApi): pass
+class ErrorConflicto(ErrorApi): pass
+class ErrorEstadoNoDisponible(ErrorApi): pass
+class ErrorColaBloqueada(ErrorApi): pass
+class ErrorRespuesta(ErrorApi): pass
 
 @dataclass(frozen=True)
 class EstadoPartida:
-    """Subconjunto validado de `PartidaResponse` que necesita el agente."""
     id: str
     jugador_actual_id: str
     version: int
     fase: Optional[str]
 
 def parsear_partida(datos: Any) -> EstadoPartida:
-    """Valida el JSON de `GET /matches/{id}` y extrae lo que el agente necesita."""
     if not isinstance(datos, dict):
         raise ErrorRespuesta("La partida recibida no es un objeto JSON")
-    
     jugador_id = datos.get("jugadorActualId")
     if not isinstance(jugador_id, str) or not jugador_id.strip():
-        raise ErrorRespuesta("La API no devolvió 'jugadorActualId'; actualiza el backend")
-    
+        raise ErrorRespuesta("La API no devolvió 'jugadorActualId'")
     version = datos.get("cantidadTiros")
     if isinstance(version, bool) or not isinstance(version, int) or version < 0:
         raise ErrorRespuesta("La API no devolvió un 'cantidadTiros' válido")
-    
     partida_id = datos.get("id")
     if not isinstance(partida_id, str) or not partida_id:
         raise ErrorRespuesta("La API no devolvió el 'id' de la partida")
-    
     fase = datos.get("fase")
     return EstadoPartida(partida_id, jugador_id, version, fase if isinstance(fase, str) else None)
 
 class PoolHawkApiClient:
-    """Cliente mínimo, idempotente y tolerante a fallos para registrar tiros."""
     def __init__(self, base_url: str, token: Optional[str] = None, max_reintentos: int = 4,
                  espera: float = 1.0, timeout: float = 10.0, max_intentos_evento: int = 50,
                  cola: Optional[ColaEventos] = None, sesion: Optional[requests.Session] = None):
@@ -77,15 +60,6 @@ class PoolHawkApiClient:
         partes = urlparse(base_url)
         if partes.scheme not in ("http", "https") or not partes.netloc:
             raise ValueError("base_url debe ser una URL http:// o https:// válida")
-        if isinstance(max_reintentos, bool) or not isinstance(max_reintentos, int) or max_reintentos < 1:
-            raise ValueError("max_reintentos debe ser un entero >= 1")
-        if espera < 0:
-            raise ValueError("espera no puede ser negativa")
-        if timeout <= 0:
-            raise ValueError("timeout debe ser mayor que 0")
-        if isinstance(max_intentos_evento, bool) or not isinstance(max_intentos_evento, int) or max_intentos_evento < 1:
-            raise ValueError("max_intentos_evento debe ser un entero >= 1")
-        
         self.max_intentos_evento = max_intentos_evento
         self._lock = threading.RLock()
         self.base_url = base_url.rstrip("/")
@@ -152,36 +126,39 @@ class PoolHawkApiClient:
         if tiro.requiere_revision:
             return None
         
-        bloqueo = self.cola.bloqueo
-        if bloqueo is not None:
-            raise ErrorColaBloqueada(
-                f"Cola bloqueada por el evento {bloqueo['eventId']} ({bloqueo['motivo']}). Reconcilia "
-                "con el backend y reanuda (--reanudar-cola) o descarta ese evento (--descartar-evento)")
-        
-        # H-03 CORREGIDO: Bloquear solo si hay un evento pendiente con un eventId DIFERENTE.
-        # Si el eventId es el mismo, es un reintento legítimo del mismo evento y debe permitirse.
-        pendientes_mismo_match = [i for i in self.cola.pendientes() if i["matchId"] == match_id]
-        if pendientes_mismo_match:
-            for pendiente in pendientes_mismo_match:
-                if pendiente["payload"]["eventId"] != tiro.event_id:
+        # H-01: Primera comprobación rápida dentro del lock
+        with self._lock:
+            if self.cola.bloqueo is not None:
+                raise ErrorColaBloqueada(
+                    f"Cola bloqueada por el evento {self.cola.bloqueo['eventId']} ({self.cola.bloqueo['motivo']}).")
+            
+            existente = next((i for i in self.cola.pendientes() if i["payload"]["eventId"] == tiro.event_id), None)
+            if existente is not None:
+                payload = existente["payload"]
+            else:
+                # Verificar si hay OTRO evento pendiente para esta partida
+                if any(i["matchId"] == match_id for i in self.cola.pendientes()):
                     raise ErrorColaBloqueada(
-                        f"Hay un tiro pendiente de confirmación para la partida {match_id} con otro eventId. "
-                        "Espere a que se resuelva antes de inferir nuevos eventos."
-                    )
-
-        existente = next((i for i in self.cola.pendientes()
-                          if i["payload"]["eventId"] == tiro.event_id), None)
-        if existente is not None:
-            return self._enviar(existente["matchId"], existente["payload"])
+                        f"Hay un tiro pendiente de confirmación para la partida {match_id}. "
+                        "Espere a que se resuelva antes de inferir nuevos eventos.")
         
-        try:
-            estado = self.obtener_estado(match_id)
-        except ErrorApi as e:
-            raise ErrorEstadoNoDisponible(
-                f"No se pudo consultar la partida ({e}); el tiro no se encoló y requiere revisión manual", e.status) from e
+        # Si no existe, obtenemos el estado FUERA del lock para no bloquear otros hilos innecesariamente
+        if existente is None:
+            try:
+                estado = self.obtener_estado(match_id)
+            except ErrorApi as e:
+                raise ErrorEstadoNoDisponible(
+                    f"No se pudo consultar la partida ({e}); el tiro no se encoló y requiere revisión manual", e.status) from e
+            
+            payload = self.construir_payload(tiro, estado.jugador_actual_id, estado.version)
+            
+            # H-01: Double-Checked Locking: volver a verificar dentro del lock antes de agregar
+            with self._lock:
+                if any(i["matchId"] == match_id for i in self.cola.pendientes()):
+                    raise ErrorColaBloqueada(
+                        "El estado de la partida cambió mientras se consultaba. Espere a que el tiro pendiente se resuelva.")
+                self.cola.agregar(match_id, payload)
         
-        payload = self.construir_payload(tiro, estado.jugador_actual_id, estado.version)
-        self.cola.agregar(match_id, payload)
         return self._enviar(match_id, payload)
 
     def _enviar(self, match_id: str, payload: Dict[str, Any], reintentos: Optional[int] = None) -> Dict[str, Any]:
@@ -226,8 +203,14 @@ class PoolHawkApiClient:
                     bloqueada = 1
                 break
             except ErrorConflicto as e:
+                # H-02: Bloquear explícitamente el evento en lugar de dejarlo pendiente infinitamente
                 rechazados += 1
-                notificar(event_id, _traza.CONFLICTO, str(e))
+                motivo = f"Conflicto de versión (409): {e}"
+                self.cola.bloquear(event_id, motivo)
+                log.error("Evento %s bloqueado por conflicto de versión. Requiere reconciliación.", event_id)
+                notificar(event_id, _traza.BLOQUEADO, motivo)
+                bloqueada = 1
+                break # Detener el reenvío de esta cola hasta que el usuario la desbloquee manualmente
             except ErrorApi as e:
                 rechazados += 1
                 notificar(event_id, _traza.RECHAZADO, str(e))
