@@ -1,7 +1,11 @@
 package com.poolhawk.api.exception;
 
 import com.poolhawk.api.dto.ErrorResponse;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -13,7 +17,6 @@ import java.time.Instant;
 
 /**
  * Manejador global de excepciones de la API.
- *
  * <p>Captura las excepciones lanzadas por los controladores y las
  * convierte en respuestas HTTP con un cuerpo {@link ErrorResponse}
  * estandarizado.</p>
@@ -24,9 +27,8 @@ import java.time.Instant;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    /**
-     * Convierte {@link PartidaNoEncontradaException} en HTTP 404.
-     */
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     @ExceptionHandler(PartidaNoEncontradaException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(
             PartidaNoEncontradaException ex, HttpServletRequest request) {
@@ -39,9 +41,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
 
-    /**
-     * Convierte errores de validacion de Bean Validation en HTTP 400.
-     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(
             MethodArgumentNotValidException ex, HttpServletRequest request) {
@@ -58,9 +57,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(error);
     }
 
-    /**
-     * Convierte {@link IllegalArgumentException} en HTTP 400.
-     */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(
             IllegalArgumentException ex, HttpServletRequest request) {
@@ -73,12 +69,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(error);
     }
 
-    /**
-     * Captura {@link ResponseStatusException} y devuelve el código HTTP
-     * y el mensaje que trae la excepción. Esto es fundamental para que
-     * los tests de idempotencia (409 Conflict) y validaciones (400 Bad Request)
-     * devuelvan el código correcto al cliente.
-     */
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ErrorResponse> handleResponseStatus(
             ResponseStatusException ex, HttpServletRequest request) {
@@ -92,16 +82,29 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Captura cualquier excepcion no manejada como HTTP 500.
+     * H-02: Captura conflictos de versión optimista que ocurren durante el commit 
+     * de la transacción, devolviendo un HTTP 409 Conflict en lugar de 500.
      */
+    @ExceptionHandler({OptimisticLockingFailureException.class, OptimisticLockException.class})
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(Exception ex, HttpServletRequest request) {
+        log.warn("Conflicto de versión durante el commit en {}: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse error = new ErrorResponse(
+            Instant.now(),
+            HttpStatus.CONFLICT.value(),
+            "Conflict",
+            "La partida fue modificada por otro proceso. Intente de nuevo.",
+            request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGeneric(
-            Exception ex, HttpServletRequest request) {
+    public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
+        log.error("Error no controlado en {}", request.getRequestURI(), ex);
         ErrorResponse error = new ErrorResponse(
             Instant.now(),
             HttpStatus.INTERNAL_SERVER_ERROR.value(),
             "Internal Server Error",
-            ex.getMessage(),
+            "Ocurrió un error inesperado en el servidor.",
             request.getRequestURI());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }

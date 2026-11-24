@@ -24,10 +24,9 @@ const simularTiro = async (tipo) => {
   cargando.value = true
 
   try {
-    const todosLosJugadores = [...props.partida.equipoA, ...props.partida.equipoB]
-    const jugadorActual = todosLosJugadores.find(j => j.nombre === props.partida.jugadorActual)
-
-    if (!jugadorActual) throw new Error('Jugador actual no encontrado')
+    // H-07: Usar jugadorActualId directamente en lugar de buscar por nombre
+    const jugadorId = props.partida.jugadorActualId
+    if (!jugadorId) throw new Error('Jugador actual no encontrado (falta jugadorActualId)')
 
     // Lista de bolas disponibles (excluyendo la 8 para que no termine la partida)
     const bolasDisponibles = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15]
@@ -38,10 +37,12 @@ const simularTiro = async (tipo) => {
     // del bucle comparten el mismo eventId (idempotencia transparente).
     const eventId = crypto.randomUUID()
 
+    // H-07: Enviar versionEsperada basada en la cantidad de tiros actual
     let payload = {
       eventId,
-      jugadorId: jugadorActual.id,
-      duracionSegundos: 5
+      jugadorId: jugadorId,
+      duracionSegundos: 5,
+      versionEsperada: props.partida.cantidadTiros
     }
 
     if (tipo === 'FALLO') {
@@ -56,7 +57,7 @@ const simularTiro = async (tipo) => {
       payload.troneras = ['TOP_LEFT']
     }
 
-    console.log(`Simulando tiro para ${jugadorActual.nombre} con bola ${bolaRandom}`, payload)
+    console.log(`Simulando tiro para jugador ${jugadorId} con bola ${bolaRandom}`, payload)
 
     let exito = false
     let intentos = 0
@@ -102,7 +103,6 @@ const simularTiro = async (tipo) => {
   <div class="simulador">
     <h3>Panel de Control (Simulador)</h3>
     <p>Usa estos botones para simular lo que la cámara enviaría.</p>
-
     <div class="botones">
       <button @click="simularTiro('FALLO')" :disabled="cargando" class="btn-rojo">Fallar (No tocar bola)</button>
       <button @click="simularTiro('LEGAL')" :disabled="cargando" class="btn-gris">Tiro Legal (Sin embolsar)</button>
