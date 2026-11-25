@@ -19,6 +19,6 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(matchLiveHandler, "/ws/matches")
-                .setAllowedOrigins("http://localhost:5173", "http://localhost:80", "http://localhost");
+                .setAllowedOrigins("http://localhost:5173", "https://tudominio.com");
     }
 }

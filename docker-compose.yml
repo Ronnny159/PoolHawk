@@ -17,8 +17,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: '1.0'
+          cpus: '0.5'
+          memory: 512M
     logging:
       driver: "json-file"
       options:
@@ -44,8 +44,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: '1.0'
+          cpus: '0.5'
+          memory: 512M
     logging:
       driver: "json-file"
       options:
@@ -66,8 +66,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
           cpus: '0.5'
+          memory: 512M
     logging:
       driver: "json-file"
       options:
@@ -75,6 +75,7 @@ services:
         max-file: "3"
     networks:
       - frontend-net
+      - backend-net
 
 volumes:
   poolhawk_data:
@@ -82,5 +83,6 @@ volumes:
 networks:
   backend-net:
     driver: bridge
+    internal: true
   frontend-net:
     driver: bridge

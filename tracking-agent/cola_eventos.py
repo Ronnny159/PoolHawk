@@ -1,4 +1,4 @@
-﻿"""
+"""
 Cola local de eventos pendientes (H-04 de la auditoría del cliente REST).
 
 Guarda en disco cada tiro confirmado ANTES de enviarlo, con su ``eventId`` y su payload ya
@@ -138,10 +138,16 @@ class ColaEventos:
             self._pendientes = {i["payload"]["eventId"]: i for i in datos.get("pendientes", [])}
             self._rechazados = list(datos.get("rechazados", []))
             self._bloqueo = datos.get("bloqueo")
-        except (OSError, ValueError, KeyError, TypeError) as e:
-            # Un archivo corrupto no debe impedir arrancar; se conserva una copia para revisar.
-            os.replace(self.ruta, self.ruta + ".corrupto")
-            raise ValueError(f"Cola de eventos ilegible; se movió a {self.ruta}.corrupto") from e
+        except (json.JSONDecodeError, IOError) as e:
+            import logging
+            logging.warning("Archivo de cola ilegible (%s); se renombra a .corrupto", e)
+            try:
+                os.replace(self.ruta, self.ruta + ".corrupto")
+            except OSError:
+                pass
+            self._pendientes = {}
+            self._rechazados = []
+            self._bloqueo = None
 
     def _guardar(self) -> None:
         if not self.ruta:
@@ -149,6 +155,7 @@ class ColaEventos:
         datos = {"pendientes": self.pendientes(), "rechazados": self._rechazados,
                  "bloqueo": self._bloqueo}
         carpeta = os.path.dirname(os.path.abspath(self.ruta))
+        os.makedirs(carpeta, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=carpeta, suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
