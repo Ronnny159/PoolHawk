@@ -1,4 +1,4 @@
-﻿package com.poolhawk.api.service;
+package com.poolhawk.api.service;
 
 import com.poolhawk.api.dto.CrearPartidaRequest;
 import com.poolhawk.api.dto.TiroEventRequest;

@@ -1,4 +1,4 @@
-﻿package com.poolhawk.api.controller;
+package com.poolhawk.api.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
