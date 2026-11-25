@@ -42,15 +42,16 @@ const simularTiro = async (tipo) => {
       eventId,
       jugadorId: jugadorId,
       duracionSegundos: 5,
-      versionEsperada: props.partida.cantidadTiros
+      versionEsperada: props.partida.cantidadTiros,
+      primeraBolaTocada: null,
+      bolasEmbolsadas: [],
+      troneras: []
     }
 
     if (tipo === 'FALLO') {
-      payload.primeraBolaTocada = null
-      payload.bolasEmbolsadas = []
+      // payload ya tiene null primeraBola, [] bolas, [] troneras
     } else if (tipo === 'LEGAL') {
       payload.primeraBolaTocada = bolaRandom
-      payload.bolasEmbolsadas = []
     } else if (tipo === 'EMBOLSÓ') {
       payload.primeraBolaTocada = bolaRandom
       payload.bolasEmbolsadas = [bolaRandom]

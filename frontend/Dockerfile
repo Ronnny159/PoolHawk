@@ -12,6 +12,6 @@ RUN addgroup -g 1000 appuser && adduser -D -u 1000 -G appuser appuser
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 RUN chown -R appuser:appuser /usr/share/nginx/html /var/cache/nginx /var/log/nginx /etc/nginx/conf.d
-EXPOSE 80
+EXPOSE 8080
 USER appuser
 CMD ["nginx", "-g", "daemon off;"]

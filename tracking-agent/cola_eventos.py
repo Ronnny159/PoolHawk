@@ -25,6 +25,11 @@ import threading
 from typing import Any, Dict, List, Optional
 
 
+class ErrorColaCorrupta(Exception):
+    """La cola persistente estaba corrupta y requiere revisión manual."""
+    pass
+
+
 class ColaEventos:
     """Persistencia mínima de eventos pendientes y rechazados.
 
@@ -39,11 +44,14 @@ class ColaEventos:
         self._pendientes: Dict[str, Dict[str, Any]] = {}
         self._rechazados: List[Dict[str, Any]] = []
         self._bloqueo: Optional[Dict[str, str]] = None
+        self._bloqueada: Optional[str] = None
         self._cargar()
 
     # ------------------------------------------------------------------ consulta
     def pendientes(self) -> List[Dict[str, Any]]:
         """Copia de los eventos aún no confirmados por el backend, en orden de llegada."""
+        if self._bloqueada is not None:
+            raise ErrorColaCorrupta(self._bloqueada)
         with self._lock:
             return list(self._pendientes.values())
 

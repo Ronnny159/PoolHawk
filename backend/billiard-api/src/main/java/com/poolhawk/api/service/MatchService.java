@@ -215,6 +215,10 @@ public class MatchService {
             partidasEnMemoria.remove(partidaId);
             log.error("Fallo al registrar tiro en partida {}. Caché invalidada.", partidaId, e);
             throw e;
+        } catch (Exception e) {
+            partidasEnMemoria.remove(partidaId);
+            log.error("Error inesperado al registrar tiro en partida {}.", partidaId, e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno al registrar tiro: " + e.getMessage());
         }
     }
 
