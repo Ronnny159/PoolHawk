@@ -25,7 +25,7 @@ public class PartidaEntity {
     private Long version;
 
     // AGREGADO: @OrderColumn para garantizar el orden A1, B1, A2, B2
-    @OneToMany(mappedBy = "partida", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "partida", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderColumn(name = "orden")
     private List<JugadorEntity> jugadores;
 

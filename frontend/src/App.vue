@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import CreateMatchForm from './components/CreateMatchForm.vue'
 import ScoreBoard from './components/ScoreBoard.vue'
@@ -9,24 +9,19 @@ import LoginView from './components/LoginView.vue'
 import CorrectionModal from './components/CorrectionModal.vue'
 import { AUTH_REQUERIDA } from './api/endpoints'
 import { obtenerPartida } from './api/matches'
-
 const tokenGuardado = localStorage.getItem('token')
 const token = ref(tokenGuardado && tokenGuardado.length > 20 ? tokenGuardado : null)
 if (!token.value) localStorage.removeItem('token')
-
 const partidaActual = ref(null)
 const formatoPartida = ref('INDIVIDUAL')
 const mostrarCorreccion = ref(false)
 const vistaLobby = ref('CREAR')
-
 let socket = null
 let reconnectTimeout = null
-
 const iniciarSesion = (nuevoToken) => {
   token.value = nuevoToken
   localStorage.setItem('token', nuevoToken)
 }
-
 // FUNCION AUXILIAR PARA DETECTAR EL FORMATO
 const detectarFormato = (partida) => {
   // Si el backend lo envia, perfecto
@@ -39,23 +34,19 @@ const detectarFormato = (partida) => {
   // Si no, es INDIVIDUAL (1v1 o Todos vs Todos)
   return 'INDIVIDUAL'
 }
-
 const iniciarPartida = (nuevaPartida) => {
   partidaActual.value = nuevaPartida
   formatoPartida.value = detectarFormato(nuevaPartida)
 }
-
 const recargarPartida = async () => {
   if (!partidaActual.value) return
   const datos = await obtenerPartida(partidaActual.value.id)
   partidaActual.value = { ...datos }
 }
-
 const cargarPartidaDelHistorial = (partida) => {
   partidaActual.value = { ...partida }
   formatoPartida.value = detectarFormato(partida)
 }
-
 const cerrarSesion = () => {
   localStorage.removeItem('token')
   token.value = null
@@ -63,38 +54,33 @@ const cerrarSesion = () => {
   mostrarCorreccion.value = false
   window.location.reload()
 }
-
 const volverAlLobby = () => {
   partidaActual.value = null
   mostrarCorreccion.value = false
   vistaLobby.value = 'CREAR'
 }
-
 const conectarWebSocket = () => {
   if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
-
+  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+  const wsBase = apiBase.replace(/^http/, 'ws').replace(/\/api\/v1$/, '');
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsHost = window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host;
+  const wsHost = wsBase ? new URL(wsBase).host : (window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host);
   socket = new WebSocket(`${wsProtocol}//${wsHost}/ws/matches`)
-
-  socket.onopen = () => console.log('🟢 Conectado al WebSocket de PoolHawk')
-
   socket.onmessage = (event) => {
     try {
       const partidaActualizada = JSON.parse(event.data)
       if (partidaActual.value && partidaActual.value.id === partidaActualizada.id) {
-        console.log('⚡ Marcador actualizado en vivo')
+        console.log(' Marcador actualizado en vivo')
         partidaActual.value = { ...partidaActualizada }
-        // Actualizamos también el formato por si acaso
+        // Actualizamos tambiÃ©n el formato por si acaso
         formatoPartida.value = detectarFormato(partidaActualizada)
       }
     } catch (e) {
       console.error('Error parseando mensaje WebSocket', e)
     }
   }
-
   socket.onclose = () => {
-    console.log('🔴 WebSocket desconectado. Reconectando...')
+    console.log(' WebSocket desconectado. Reconectando...')
     socket = null
     if (!reconnectTimeout) {
       reconnectTimeout = setTimeout(() => {
@@ -103,45 +89,36 @@ const conectarWebSocket = () => {
       }, 3000)
     }
   }
-
   socket.onerror = (error) => console.error('Error en WebSocket:', error)
 }
-
 onMounted(() => {
   conectarWebSocket()
 })
-
 onUnmounted(() => {
   if (reconnectTimeout) clearTimeout(reconnectTimeout)
   if (socket) socket.close()
 })
 </script>
-
 <template>
   <div class="app-container">
     <ToastContainer />
-
     <header>
-      <h1>🦅 PoolHawk</h1>
-      <p class="subtitle">Sistema de Rastreo y Marcado Automático</p>
-      <button v-if="token || !AUTH_REQUERIDA" @click="cerrarSesion" class="btn-logout">Cerrar sesión</button>
+      <h1> PoolHawk</h1>
+      <p class="subtitle">Sistema de Rastreo y Marcado AutomÃ¡tico</p>
+      <button v-if="token || !AUTH_REQUERIDA" @click="cerrarSesion" class="btn-logout">Cerrar sesiÃ³n</button>
     </header>
-
     <main>
       <LoginView v-if="AUTH_REQUERIDA && !token" @ingreso="iniciarSesion" />
-
       <template v-else-if="!partidaActual">
         <div class="lobby-nav">
-          <button :class="{ active: vistaLobby === 'CREAR' }" @click="vistaLobby = 'CREAR'">🎱 Nueva Partida</button>
-          <button :class="{ active: vistaLobby === 'HISTORIAL' }" @click="vistaLobby = 'HISTORIAL'">📜 Historial</button>
+          <button :class="{ active: vistaLobby === 'CREAR' }" @click="vistaLobby = 'CREAR'">ðŸŽ± Nueva Partida</button>
+          <button :class="{ active: vistaLobby === 'HISTORIAL' }" @click="vistaLobby = 'HISTORIAL'">ðŸ“œ Historial</button>
         </div>
-
         <CreateMatchForm v-if="vistaLobby === 'CREAR'" @partidaIniciada="iniciarPartida" />
         <MatchHistory v-if="vistaLobby === 'HISTORIAL'" @partidaSeleccionada="cargarPartidaDelHistorial" />
       </template>
-
       <template v-else>
-        <button @click="volverAlLobby" class="btn-salir">← Volver al Lobby</button>
+        <button @click="volverAlLobby" class="btn-salir">â† Volver al Lobby</button>
         
         <ScoreBoard 
           :key="JSON.stringify(partidaActual.puntajes) + partidaActual.jugadorActual" 
@@ -151,7 +128,7 @@ onUnmounted(() => {
         
         <ShotSimulator :partida="partidaActual" />
         
-        <button @click="mostrarCorreccion = true" class="btn-corregir">✏️ Corregir último tiro</button>
+        <button @click="mostrarCorreccion = true" class="btn-corregir">âœï¸ Corregir Ãºltimo tiro</button>
         
         <CorrectionModal
           v-if="mostrarCorreccion"
@@ -163,7 +140,6 @@ onUnmounted(() => {
     </main>
   </div>
 </template>
-
 <style>
 /* ... Los mismos estilos que ya tienes ... */
 body { margin: 0; background-color: #121212; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
