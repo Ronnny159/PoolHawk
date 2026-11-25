@@ -159,7 +159,7 @@ public class MatchService {
         // 3. Validación de turno (solo si NO es un reintento idempotente)
         Jugador jugadorActual = partida.jugadorActual();
         if (!jugadorActual.id().equals(request.jugadorId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No es el turno de este jugador.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "No es el turno de este jugador.");
         }
 
         TiroEvent evento = construirEventoValidado(partida, request, jugadorActual);

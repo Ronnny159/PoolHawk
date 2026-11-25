@@ -2,8 +2,6 @@ package com.poolhawk.api.service;
 
 import com.poolhawk.api.entity.PartidaEntity;
 import com.poolhawk.api.repository.PartidaRepository;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -11,29 +9,19 @@ import java.util.Optional;
 
 /**
  * Almacen de partidas en la base de datos.
- * Utiliza EntityManager.merge() para actualizaciones seguras con @Version.
+ * Usa save() de Spring Data JPA para actualizaciones seguras con @Version.
  */
 @Component
 public class MatchStorage {
 
     private final PartidaRepository partidaRepository;
 
-    @PersistenceContext
-    private EntityManager entityManager;
-
     public MatchStorage(PartidaRepository partidaRepository) {
         this.partidaRepository = partidaRepository;
     }
 
-    /**
-     * Guarda una partida y fuerza la sincronización con la BD dentro de la
-     * transacción actual. El flush es importante para que los conflictos de
-     * @Version se detecten dentro del bloque try/catch del servicio y puedan
-     * convertirse en HTTP 409 antes de que el método transaccional retorne.
-     */
     public void guardar(PartidaEntity partida) {
-        entityManager.merge(partida);
-        entityManager.flush();
+        partidaRepository.saveAndFlush(partida);
     }
 
     public Optional<PartidaEntity> buscar(String id) {

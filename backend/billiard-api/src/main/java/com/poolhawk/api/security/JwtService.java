@@ -22,16 +22,16 @@ public class JwtService {
 
     public String generateToken(String username) {
         return Jwts.builder()
-                .setSubject(username)
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .subject(username)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(secretKey)
                 .compact();
     }
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parserBuilder().setSigningKey(secretKey).build().parseClaimsJws(token);
+            Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(token);
             return true;
         } catch (Exception e) {
             return false;
@@ -39,6 +39,6 @@ public class JwtService {
     }
 
     public String extractUsername(String token) {
-        return Jwts.parserBuilder().setSigningKey(secretKey).build().parseClaimsJws(token).getBody().getSubject();
+        return Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(token).getPayload().getSubject();
     }
 }

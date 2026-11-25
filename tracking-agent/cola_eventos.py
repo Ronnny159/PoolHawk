@@ -1,18 +1,18 @@
 ﻿"""
-Cola local de eventos pendientes (H-04 de la auditorÃ­a del cliente REST).
+Cola local de eventos pendientes (H-04 de la auditoría del cliente REST).
 
 Guarda en disco cada tiro confirmado ANTES de enviarlo, con su ``eventId`` y su payload ya
-completo (jugador y versiÃ³n incluidos). Si el agente se reinicia o se pierde la respuesta,
-el mismo evento se reenvÃ­a con la misma identidad y el backend (idempotente) no lo duplica.
+completo (jugador y versión incluidos). Si el agente se reinicia o se pierde la respuesta,
+el mismo evento se reenvía con la misma identidad y el backend (idempotente) no lo duplica.
 
-El archivo es JSON y se reescribe de forma atÃ³mica (archivo temporal + ``os.replace``): una
-escritura interrumpida deja intacta la versiÃ³n anterior. Es seguro entre hilos (H-11), porque
-el agente envÃ­a tiros desde el hilo principal mientras otro hilo reintenta los pendientes.
+El archivo es JSON y se reescribe de forma atómica (archivo temporal + ``os.replace``): una
+escritura interrumpida deja intacta la versión anterior. Es seguro entre hilos (H-11), porque
+el agente envía tiros desde el hilo principal mientras otro hilo reintenta los pendientes.
 No contiene tokens ni credenciales.
 
-Bloqueo (H-03 de la auditorÃ­a de ``2088938``): los eventos de una partida son una SECUENCIA
-sobre un mismo estado, asÃ­ que cuando un evento agota sus reintentos la cola completa se
-BLOQUEA: no se descarta el evento ni se siguen enviando los posteriores (llevarÃ­an una
+Bloqueo (H-03 de la auditoría de ``2088938``): los eventos de una partida son una SECUENCIA
+sobre un mismo estado, así que cuando un evento agota sus reintentos la cola completa se
+BLOQUEA: no se descarta el evento ni se siguen enviando los posteriores (llevarían una
 ``versionEsperada`` obsoleta). Hay que reconciliar con el backend y luego :meth:`reanudar` el
 evento o :meth:`rechazar` (descartar) manualmente.
 """
@@ -26,11 +26,11 @@ from typing import Any, Dict, List, Optional
 
 
 class ColaEventos:
-    """Persistencia mÃ­nima de eventos pendientes y rechazados.
+    """Persistencia mínima de eventos pendientes y rechazados.
 
     Args:
         ruta: archivo JSON donde se guarda el estado. ``None`` mantiene la cola solo en
-            memoria (Ãºtil en pruebas o si no se necesita recuperaciÃ³n tras reinicio).
+            memoria (útil en pruebas o si no se necesita recuperación tras reinicio).
     """
 
     def __init__(self, ruta: Optional[str] = None):
@@ -43,18 +43,18 @@ class ColaEventos:
 
     # ------------------------------------------------------------------ consulta
     def pendientes(self) -> List[Dict[str, Any]]:
-        """Copia de los eventos aÃºn no confirmados por el backend, en orden de llegada."""
+        """Copia de los eventos aún no confirmados por el backend, en orden de llegada."""
         with self._lock:
             return list(self._pendientes.values())
 
     @property
     def bloqueo(self) -> Optional[Dict[str, str]]:
-        """``{"eventId", "motivo"}`` del evento que bloquea la cola, o ``None`` si estÃ¡ libre."""
+        """``{"eventId", "motivo"}`` del evento que bloquea la cola, o ``None`` si está libre."""
         with self._lock:
             return dict(self._bloqueo) if self._bloqueo else None
 
     def bloquear(self, event_id: str, motivo: str) -> None:
-        """Bloquea la cola por un evento que agotÃ³ sus reintentos (no lo descarta)."""
+        """Bloquea la cola por un evento que agotó sus reintentos (no lo descarta)."""
         with self._lock:
             if self._bloqueo is None and event_id in self._pendientes:
                 self._bloqueo = {"eventId": event_id, "motivo": motivo}
@@ -63,7 +63,7 @@ class ColaEventos:
     def reanudar(self) -> Optional[str]:
         """Desbloquea la cola y reinicia el contador de intentos del evento bloqueante.
 
-        Debe llamarse solo despuÃ©s de reconciliar el estado con el backend.
+        Debe llamarse solo después de reconciliar el estado con el backend.
 
         Returns:
             El ``eventId`` que bloqueaba, o ``None`` si la cola no estaba bloqueada.
@@ -88,7 +88,7 @@ class ColaEventos:
         with self._lock:
             return list(self._rechazados)
 
-    # ------------------------------------------------------------------ mutaciÃ³n
+    # ------------------------------------------------------------------ mutación
     def agregar(self, match_id: str, payload: Dict[str, Any]) -> None:
         """Registra un evento pendiente. Si el ``eventId`` ya existe, no lo duplica."""
         event_id = payload["eventId"]
@@ -98,14 +98,14 @@ class ColaEventos:
                 self._guardar()
 
     def resolver(self, event_id: str) -> None:
-        """El backend confirmÃ³ el evento: se elimina de la cola."""
+        """El backend confirmó el evento: se elimina de la cola."""
         with self._lock:
             if self._pendientes.pop(event_id, None) is not None:
                 self._liberar_si_bloqueaba(event_id)
                 self._guardar()
 
     def registrar_intento(self, event_id: str) -> int:
-        """Cuenta un intento de envÃ­o fallido y devuelve el total acumulado (0 si no existe)."""
+        """Cuenta un intento de envío fallido y devuelve el total acumulado (0 si no existe)."""
         with self._lock:
             item = self._pendientes.get(event_id)
             if item is None:
@@ -115,7 +115,7 @@ class ColaEventos:
             return item["intentos"]
 
     def rechazar(self, event_id: str, motivo: str) -> None:
-        """El backend rechazÃ³ el evento: sale de pendientes para no reintentarse en bucle."""
+        """El backend rechazó el evento: sale de pendientes para no reintentarse en bucle."""
         with self._lock:
             item = self._pendientes.pop(event_id, None)
             if item is not None:
@@ -141,7 +141,7 @@ class ColaEventos:
         except (OSError, ValueError, KeyError, TypeError) as e:
             # Un archivo corrupto no debe impedir arrancar; se conserva una copia para revisar.
             os.replace(self.ruta, self.ruta + ".corrupto")
-            raise ValueError(f"Cola de eventos ilegible; se moviÃ³ a {self.ruta}.corrupto") from e
+            raise ValueError(f"Cola de eventos ilegible; se movió a {self.ruta}.corrupto") from e
 
     def _guardar(self) -> None:
         if not self.ruta:
