@@ -33,7 +33,7 @@ CAMERA_PROFILES = {
         "descripcion": "CamoStudio - Webcam virtual"
     },
     "droidcam_url": {
-        "source": "http://192.168.1.100:4747/video",
+        "source": "http://192.168.40.89:4747/video",
         "backend": None,
         "descripcion": "DroidCam vía URL HTTP"
     },

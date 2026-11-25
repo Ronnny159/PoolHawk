@@ -15,6 +15,7 @@ export const AUTH_REQUERIDA = true
 export const ENDPOINTS = {
   login: '/auth/login',
   corregirTiro: (matchId) => `/matches/${matchId}/events/last`,
+  uploadVideo: '/analysis/upload',
 }
 
 // Metodo HTTP de la correccion ('put', 'patch' o 'post')
