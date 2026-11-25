@@ -1,41 +1,41 @@
 package com.poolhawk.api.security;
 
+import com.poolhawk.api.entity.UsuarioEntity;
+import com.poolhawk.api.repository.UsuarioRepository;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Collection;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
 
-    private final PasswordEncoder passwordEncoder;
-    private final Map<String, String> usuarios = new HashMap<>();
+    private final UsuarioRepository usuarioRepository;
 
-    public CustomUserDetailsService(PasswordEncoder passwordEncoder) {
-        this.passwordEncoder = passwordEncoder;
-        // Usuarios deben cargarse desde BD o script de inicialización.
-        // No se hardcodean credenciales aquí.
+    public CustomUserDetailsService(UsuarioRepository usuarioRepository) {
+        this.usuarioRepository = usuarioRepository;
     }
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        String hash = usuarios.get(username);
-        if (hash == null) {
-            throw new UsernameNotFoundException("Usuario no encontrado: " + username);
-        }
-        return User.builder()
-                .username(username)
-                .password(hash)
-                .roles("ARBITRO")
-                .build();
-    }
+        UsuarioEntity usuario = usuarioRepository.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado: " + username));
 
-    public void registrarUsuario(String username, String rawPassword) {
-        usuarios.put(username, passwordEncoder.encode(rawPassword));
+        if (!usuario.isEnabled()) {
+            throw new UsernameNotFoundException("Usuario deshabilitado: " + username);
+        }
+
+        Collection<GrantedAuthority> authorities = usuario.getRoles().stream()
+                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                .collect(Collectors.toList());
+
+        return new User(usuario.getUsername(), usuario.getPasswordHash(), authorities);
     }
 }

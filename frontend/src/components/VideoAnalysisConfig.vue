@@ -15,8 +15,10 @@
           accept="video/mp4,video/webm,video/avi"
           @change="handleFileUpload"
           ref="fileInput"
+          id="video-file-input"
+          style="display: none"
         />
-        <label class="file-label">
+        <label class="file-label" for="video-file-input">
           <span v-if="selectedFile">{{ selectedFile.name }}</span>
           <span v-else>Seleccionar video...</span>
         </label>
@@ -76,9 +78,9 @@ const handleFileUpload = (event) => {
     return
   }
 
-  const maxBytes = 100 * 1024 * 1024 // 100 MB
+  const maxBytes = 500 * 1024 * 1024 // 500 MB
   if (file.size > maxBytes) {
-    uploadError.value = 'El archivo excede los 100 MB permitidos'
+    uploadError.value = 'El archivo excede los 500 MB permitidos'
     toast.error(uploadError.value)
     selectedFile.value = null
     return

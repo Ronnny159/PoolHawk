@@ -1,7 +1,7 @@
 import http from './http'
 import { ENDPOINTS } from './endpoints'
 
-const MAX_FILE_SIZE_MB = 100
+const MAX_FILE_SIZE_MB = 500
 
 /**
  * Sube un archivo de video al backend para análisis.
@@ -17,14 +17,14 @@ export async function uploadVideo(file, onProgress = null) {
     throw new Error('Tipo de archivo no válido. Usa .mp4, .webm o .avi')
   }
 
-  // Validación de tamaño (100 MB)
+  // Validación de tamaño (500 MB)
   const maxBytes = MAX_FILE_SIZE_MB * 1024 * 1024
   if (file.size > maxBytes) {
     throw new Error(`El archivo excede los ${MAX_FILE_SIZE_MB} MB permitidos`)
   }
 
   const formData = new FormData()
-  formData.append('video', file)
+  formData.append('file', file)
 
   const config = {
     headers: {

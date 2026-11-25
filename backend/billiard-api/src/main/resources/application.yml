@@ -1,4 +1,4 @@
-﻿spring:
+spring:
   application:
     name: poolhawk-api
   
@@ -28,6 +28,10 @@ server:
       charset: UTF-8
       enabled: true
       force: true
+    multipart:
+      enabled: true
+      max-file-size: 500MB
+      max-request-size: 500MB
 
 # NUEVO: ConfiguraciÃ³n JWT (mÃ­nimo 32 caracteres para HS256)
 jwt:

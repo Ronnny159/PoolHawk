@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import CreateMatchForm from './components/CreateMatchForm.vue'
 import ScoreBoard from './components/ScoreBoard.vue'
@@ -7,6 +7,7 @@ import MatchHistory from './components/MatchHistory.vue'
 import ToastContainer from './components/ToastContainer.vue'
 import LoginView from './components/LoginView.vue'
 import CorrectionModal from './components/CorrectionModal.vue'
+import VideoAnalysisConfig from './components/VideoAnalysisConfig.vue'
 import { AUTH_REQUERIDA } from './api/endpoints'
 import { obtenerPartida } from './api/matches'
 const tokenGuardado = localStorage.getItem('token')
@@ -111,11 +112,13 @@ onUnmounted(() => {
       <LoginView v-if="AUTH_REQUERIDA && !token" @ingreso="iniciarSesion" />
       <template v-else-if="!partidaActual">
         <div class="lobby-nav">
-          <button :class="{ active: vistaLobby === 'CREAR' }" @click="vistaLobby = 'CREAR'">ðŸŽ± Nueva Partida</button>
-          <button :class="{ active: vistaLobby === 'HISTORIAL' }" @click="vistaLobby = 'HISTORIAL'">ðŸ“œ Historial</button>
+          <button :class="{ active: vistaLobby === 'CREAR' }" @click="vistaLobby = 'CREAR'">🎱 Nueva Partida</button>
+          <button :class="{ active: vistaLobby === 'HISTORIAL' }" @click="vistaLobby = 'HISTORIAL'">📜 Historial</button>
+          <button :class="{ active: vistaLobby === 'CONFIG' }" @click="vistaLobby = 'CONFIG'">⚙️ Configuración</button>
         </div>
         <CreateMatchForm v-if="vistaLobby === 'CREAR'" @partidaIniciada="iniciarPartida" />
         <MatchHistory v-if="vistaLobby === 'HISTORIAL'" @partidaSeleccionada="cargarPartidaDelHistorial" />
+        <VideoAnalysisConfig v-if="vistaLobby === 'CONFIG'" />
       </template>
       <template v-else>
         <button @click="volverAlLobby" class="btn-salir">â† Volver al Lobby</button>

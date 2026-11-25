@@ -126,6 +126,7 @@ Desktop.ini
 # ────────────── DATOS / STORAGE LOCAL ──────────────
 data/
 logs/
+uploads/
 *.log
 *.db
 *.sqlite
