@@ -15,10 +15,10 @@ public class PartidaEntity {
     private String ganadorId;
     private String formato;
 
-    @Column(name = "estado_partida_json", columnDefinition = "TEXT", length = 10000)
+    @Column(name = "estado_partida_json", columnDefinition = "TEXT")
     private String estadoPartidaJson;
 
-    @Column(name = "estado_mesa_json", columnDefinition = "TEXT", length = 10000)
+    @Column(name = "estado_mesa_json", columnDefinition = "TEXT")
     private String estadoMesaJson;
 
     @Version

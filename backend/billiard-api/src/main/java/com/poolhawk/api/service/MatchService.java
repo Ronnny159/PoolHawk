@@ -49,8 +49,8 @@ public class MatchService {
     private final ObjectMapper jsonMapper;
     private final ApplicationEventPublisher eventPublisher;
 
-    // ELIMINADO: locksPorPartida. JPA @Version gestiona la concurrencia.
     private final Map<String, Partida> partidasEnMemoria = new ConcurrentHashMap<>();
+    private final Map<String, Object> locksPorPartida = new ConcurrentHashMap<>();
 
     public MatchService(MatchStorage storage, PartidaMapper responseMapper,
                         MatchPersistenceMapper persistenceMapper, MatchFactory matchFactory,
@@ -129,6 +129,8 @@ public class MatchService {
         if (request.eventId() == null || request.eventId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El eventId es obligatorio.");
         }
+        Object lock = locksPorPartida.computeIfAbsent(partidaId, k -> new Object());
+        synchronized (lock) {
 
         // Registrar invalidación ANTES de mutar (cubre fallos en commit)
         registrarInvalidacionEnRollback(partidaId);
@@ -171,11 +173,13 @@ public class MatchService {
             partida.aplicarTiro(evento, resultado);
             if (resultado.esVictoria()) {
                 partida.finalizar(evento.jugador());
+                locksPorPartida.remove(partidaId);
             } else if (resultado.esDerrota()) {
                 Jugador oponente = partida.getEquipoA().contiene(evento.jugador()) 
                     ? partida.getEquipoB().getJugadores().get(0) 
                     : partida.getEquipoA().getJugadores().get(0);
                 partida.finalizar(oponente);
+                locksPorPartida.remove(partidaId);
             }
 
             // 5. Persistencia
@@ -207,6 +211,7 @@ public class MatchService {
             partidasEnMemoria.remove(partidaId);
             log.error("Fallo al registrar tiro en partida {}. Caché invalidada.", partidaId, e);
             throw e;
+        }
         }
     }
 
