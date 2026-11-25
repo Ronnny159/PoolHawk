@@ -1,5 +1,4 @@
 services:
-  # 1. El motor de la Base de Datos
   postgres:
     image: postgres:16-alpine
     container_name: poolhawk-db
@@ -8,8 +7,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?Define POSTGRES_USER en el archivo .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en el archivo .env}
       POSTGRES_DB: ${POSTGRES_DB:?Define POSTGRES_DB en el archivo .env}
-    ports:
-      - "5433:5432"
     volumes:
       - poolhawk_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,19 +14,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend-net
 
-  # 2. Interfaz visual para ver la base de datos
-  adminer:
-    image: adminer:latest
-    container_name: poolhawk-adminer
-    restart: always
-    ports:
-      - "8081:8080"
-    depends_on:
-      - postgres
-
-  # 3. Backend (Spring Boot)
-      # 3. Backend (Spring Boot)
   backend:
     build: ./backend
     container_name: poolhawk-backend
@@ -39,13 +36,25 @@ services:
         condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/poolhawk_db
-      SPRING_DATASOURCE_USERNAME: poolhawk_user
-      SPRING_DATASOURCE_PASSWORD: poolhawk_password
-      JWT_SECRET: "SuperSecretoPoolHawk2026_cambialo_por_algo_de_32_o_mas_caracteres"
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en el archivo .env}
     ports:
       - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend-net
+      - frontend-net
 
-  # 4. Frontend (Vue + Nginx)
   frontend:
     build: ./frontend
     container_name: poolhawk-frontend
@@ -54,6 +63,24 @@ services:
       - backend
     ports:
       - "5173:80"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - frontend-net
 
 volumes:
   poolhawk_data:
+
+networks:
+  backend-net:
+    driver: bridge
+  frontend-net:
+    driver: bridge

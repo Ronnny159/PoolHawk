@@ -1,4 +1,4 @@
-"""
+﻿"""
 Detección de bolas de billar en un fotograma (Fase 3 de la auditoría, H-04 y H-08).
 
 Separa la localización de círculos de la visualización y de la clasificación. Los
@@ -58,7 +58,6 @@ class ConfigDetector:
             max_radius=max(2, round(self.max_radius * k)),
         )
 
-
 class BallDetector:
     """Localiza círculos candidatos a bola mediante la transformada de Hough."""
 
@@ -100,3 +99,4 @@ class BallDetector:
             Deteccion(int(round(c[0])) + ox, int(round(c[1])) + oy, int(round(c[2])))
             for c in circulos[0]
         ]
+

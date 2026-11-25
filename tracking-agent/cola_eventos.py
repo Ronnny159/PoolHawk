@@ -1,4 +1,4 @@
-"""
+﻿"""
 Cola local de eventos pendientes (H-04 de la auditoría del cliente REST).
 
 Guarda en disco cada tiro confirmado ANTES de enviarlo, con su ``eventId`` y su payload ya
@@ -158,3 +158,6 @@ class ColaEventos:
             if os.path.exists(tmp):
                 os.remove(tmp)
             raise
+
+
+

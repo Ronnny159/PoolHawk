@@ -1,5 +1,6 @@
 package com.poolhawk.api.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.poolhawk.api.dto.CrearPartidaRequest;
 import com.poolhawk.api.dto.TiroEventRequest;
 import com.poolhawk.api.entity.PartidaEntity;
@@ -18,7 +19,6 @@ import com.poolhawk.domain.table.TroneraNombre;
 import com.poolhawk.rules.ReglasBillar;
 import com.poolhawk.rules.ReglasConfig;
 import com.poolhawk.rules.ReglasFactory;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -56,7 +56,8 @@ public class MatchService {
     private final ObjectMapper jsonMapper;
     private final ApplicationEventPublisher eventPublisher;
 
-    // SIN locksPorPartida. JPA @Version gestiona la concurrencia.
+    // Cache de solo lectura para mejorar rendimiento en consultas GET.
+    // La concurrencia de escritura se gestiona de forma segura con JPA @Version (Optimistic Locking).
     private final Map<String, Partida> partidasEnMemoria = new ConcurrentHashMap<>();
 
     public MatchService(MatchStorage storage, PartidaMapper responseMapper,
@@ -103,7 +104,9 @@ public class MatchService {
     @Transactional(readOnly = true)
     public Partida buscar(String id) {
         Partida cacheada = partidasEnMemoria.get(id);
-        if (cacheada != null) return cacheada;
+        if (cacheada != null) {
+            return cacheada;
+        }
         
         PartidaEntity entity = storage.buscar(id)
             .orElseThrow(() -> new PartidaNoEncontradaException(id));
@@ -129,19 +132,20 @@ public class MatchService {
 
     @Transactional
     public ResultadoTiro registrarTiro(String partidaId, TiroEventRequest request) {
+        // 0. Validación estricta de entrada
         if (request.eventId() == null || request.eventId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El eventId es obligatorio.");
         }
 
         registrarInvalidacionEnRollback(partidaId);
         
-        // Cargar snapshot fresco desde BD para esta transacción
+        // 1. Cargar snapshot fresco desde BD para esta transacción (Fuente de la verdad)
         PartidaEntity entityCargada = storage.buscar(partidaId)
             .orElseThrow(() -> new PartidaNoEncontradaException(partidaId));
         long versionCargada = entityCargada.getVersion();
         Partida partida = persistenceMapper.toDomain(entityCargada);
 
-        // 1. Idempotencia transparente
+        // 2. Idempotencia transparente
         Optional<ResultadoTiro> resultadoOriginal = partida.getEstado().buscarResultadoPorEvento(request.eventId());
         if (resultadoOriginal.isPresent()) {
             TiroEvent tiroOriginal = partida.getEstado().getHistorial().stream()
@@ -153,7 +157,7 @@ public class MatchService {
             return resultadoOriginal.get();
         }
 
-        // 2. Validación de versión esperada
+        // 3. Validación de versión esperada (Optimistic Locking a nivel de aplicación)
         if (request.versionEsperada() != null
                 && request.versionEsperada().intValue() != partida.getEstado().cantidadTiros()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, 
@@ -161,19 +165,19 @@ public class MatchService {
                 ", versión actual en BD: " + partida.getEstado().cantidadTiros());
         }
 
-        // 3. Validación de turno
+        // 4. Validación de turno (Auditoría: evitar que un jugador tire por otro)
         Jugador jugadorActual = partida.jugadorActual();
         if (!jugadorActual.id().equals(request.jugadorId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No es el turno de este jugador.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "No es el turno de este jugador.");
         }
 
-        // 4. Construcción y evaluación
+        // 5. Construcción y evaluación del evento
         TiroEvent evento = construirEventoValidado(partida, request, jugadorActual);
         ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
         ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
 
         try {
-            // 5. Mutación del estado
+            // 6. Mutación del estado en memoria
             partida.aplicarTiro(evento, resultado);
             if (resultado.esVictoria()) {
                 partida.finalizar(evento.jugador());
@@ -184,25 +188,26 @@ public class MatchService {
                 partida.finalizar(oponente);
             }
 
-            // 6. Persistencia con la versión cargada al inicio
+            // 7. Persistencia en BD (Aquí es donde JPA @Version detecta conflictos de concurrencia)
             PartidaEntity entityNueva = persistenceMapper.toEntity(partida);
             entityNueva.setVersion(versionCargada);
             storage.guardar(entityNueva);
 
-            // 7. Invalidar caché tras commit
+            // 8. Invalidar caché tras commit exitoso
             invalidarCacheTrasCommit(partidaId);
 
-            // 8. Publicar evento WebSocket (el listener lo emite AFTER_COMMIT)
+            // 9. Publicar evento WebSocket (el listener lo emite AFTER_COMMIT)
             try {
                 String json = jsonMapper.writeValueAsString(responseMapper.toResponse(partida));
                 eventPublisher.publishEvent(new PartidaActualizadaEvent(partidaId, json));
             } catch (Exception e) {
-                log.warn("Error serializando partida {} para WebSocket", partidaId);
+                log.warn("Error serializando partida {} para WebSocket", partidaId, e);
             }
 
             return resultado;
 
         } catch (OptimisticLockingFailureException e) {
+            // Conflicto de concurrencia detectado por JPA: otro hilo/instancia modificó la partida
             partidasEnMemoria.remove(partidaId);
             log.warn("Conflicto de versión en partida {}. Caché invalidada.", partidaId);
             throw new ResponseStatusException(HttpStatus.CONFLICT, "La partida fue modificada por otro proceso. Intente de nuevo.");
@@ -282,18 +287,18 @@ public class MatchService {
             Set<Integer> unicas = new HashSet<>();
             for (Integer n : request.bolasEmbolsadas()) {
                 if (n == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bola nula.");
-                if (!unicas.add(n)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bola duplicada.");
+                if (!unicas.add(n)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bola duplicada en el request.");
                 Bola b = partida.getMesa().buscarBola(n).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bola inexistente."));
-                if (!b.enMesa()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bola ya embolsada.");
+                if (!b.enMesa()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bola ya embolsada previamente.");
                 embolsadas.add(b);
             }
         }
 
         List<TroneraNombre> troneras = new ArrayList<>();
         if (request.troneras() != null) {
-            if (request.troneras().size() != embolsadas.size()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Troneras no coinciden.");
+            if (request.troneras().size() != embolsadas.size()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La cantidad de troneras no coincide con las bolas embolsadas.");
             for (String nombre : request.troneras()) {
-                if (nombre == null || nombre.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tronera nula.");
+                if (nombre == null || nombre.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nombre de tronera nulo o vacío.");
                 try { 
                     troneras.add(TroneraNombre.valueOf(nombre.toUpperCase(Locale.ROOT))); 
                 } catch (IllegalArgumentException e) { 
@@ -301,7 +306,7 @@ public class MatchService {
                 }
             }
         } else if (!embolsadas.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Faltan troneras.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Faltan especificar las troneras para las bolas embolsadas.");
         }
 
         Duration duracion = request.duracionSegundos() != null ? Duration.ofSeconds(request.duracionSegundos()) : Duration.ofSeconds(5);
