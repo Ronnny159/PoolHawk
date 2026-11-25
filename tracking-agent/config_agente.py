@@ -22,6 +22,37 @@ Los radios y distancias de ``detector`` se expresan en píxeles de la resolució
 from __future__ import annotations
 
 import json
+import cv2
+import sys
+
+# Perfiles de cámara predefinidos
+CAMERA_PROFILES = {
+    "camostudio": {
+        "source": 1,
+        "backend": cv2.CAP_DSHOW,
+        "descripcion": "CamoStudio - Webcam virtual"
+    },
+    "droidcam_url": {
+        "source": "http://192.168.1.100:4747/video",
+        "backend": None,
+        "descripcion": "DroidCam vía URL HTTP"
+    },
+    "droidcam_index": {
+        "source": 2,
+        "backend": cv2.CAP_DSHOW,
+        "descripcion": "DroidCam como índice numérico"
+    },
+    "webcam_default": {
+        "source": 0,
+        "backend": cv2.CAP_DSHOW,
+        "descripcion": "Webcam integrada por defecto"
+    }
+}
+
+ACTIVE_CAMERA_PROFILE = "camostudio"
+
+camera_source = CAMERA_PROFILES[ACTIVE_CAMERA_PROFILE]["source"]
+camera_backend = CAMERA_PROFILES[ACTIVE_CAMERA_PROFILE]["backend"]
 from dataclasses import dataclass, field, fields, replace
 from typing import Dict, Optional, Tuple
 

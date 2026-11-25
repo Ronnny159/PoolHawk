@@ -165,7 +165,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help="Desbloquea la cola tras reconciliar con el backend y sale")
     parser.add_argument("--descartar-evento", default=None, metavar="EVENT_ID",
                         help="Descarta un evento pendiente (p. ej. el que bloquea la cola) y sale")
-    parser.add_argument("--source", default="0", help="Índice de cámara, ruta de vídeo o URL (por defecto 0)")
+    parser.add_argument("--profile", type=str, default=None, help="Perfil de cámara predefinido")
+    parser.add_argument("--source", type=str, default=None, help="Índice de cámara, ruta de vídeo o URL")
+    parser.add_argument("--backend", type=str, default=None, help="Backend de cámara")
     parser.add_argument("--roi", type=_parsear_roi, default=None, help="Región de la mesa: x,y,ancho,alto")
     parser.add_argument("--no-gui", action="store_true", help="No abrir ventana (modo headless)")
     parser.add_argument("--max-frames", type=int, default=0, help="Procesar solo N fotogramas (0 = todos)")
@@ -176,7 +178,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         return atendido
 
     try:
-        cap = abrir_fuente(args.source)
+        backend_str = args.backend if args.backend else "CAP_DSHOW"
+        backend_code = getattr(cv2, backend_str, cv2.CAP_DSHOW)
+        cap = abrir_fuente(args.source, backend=backend_code)
     except RuntimeError as e:
         print(f"❌ {e}", file=sys.stderr)
         return 1
