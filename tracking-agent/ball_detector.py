@@ -1,10 +1,10 @@
-"""
-Detección de bolas de billar en un fotograma (Fase 3 de la auditoría, H-04 y H-08).
+﻿"""
+DetecciÃ³n de bolas de billar en un fotograma (Fase 3 de la auditorÃ­a, H-04 y H-08).
 
-Separa la localización de círculos de la visualización y de la clasificación. Los
-parámetros de ``HoughCircles`` ya no están fijos: viven en :class:`ConfigDetector`, se
-pueden escalar según la resolución de la cámara y se puede limitar la búsqueda a la
-región de la mesa para reducir falsos positivos.
+Separa la localizaciÃ³n de cÃ­rculos de la visualizaciÃ³n y de la clasificaciÃ³n. Los
+parÃ¡metros de ``HoughCircles`` ya no estÃ¡n fijos: viven en :class:`ConfigDetector`, se
+pueden escalar segÃºn la resoluciÃ³n de la cÃ¡mara y se puede limitar la bÃºsqueda a la
+regiÃ³n de la mesa para reducir falsos positivos.
 """
 from __future__ import annotations
 
@@ -14,12 +14,12 @@ from typing import List, Optional, Tuple
 import cv2
 import numpy as np
 
-RESOLUCION_REFERENCIA = 640  # ancho para el que están pensados los radios por defecto
+RESOLUCION_REFERENCIA = 640  # ancho para el que estÃ¡n pensados los radios por defecto
 
 
 @dataclass(frozen=True)
 class Deteccion:
-    """Círculo detectado, en coordenadas del fotograma completo."""
+    """CÃ­rculo detectado, en coordenadas del fotograma completo."""
 
     x: int
     y: int
@@ -28,13 +28,13 @@ class Deteccion:
 
 @dataclass(frozen=True)
 class ConfigDetector:
-    """Parámetros del detector. Todos deben calibrarse con la mesa real.
+    """ParÃ¡metros del detector. Todos deben calibrarse con la mesa real.
 
     Attributes:
-        dp, min_dist, param1, param2: parámetros de ``cv2.HoughCircles``.
-        min_radius, max_radius: radio en píxeles (dependen de la distancia a la mesa).
-        blur: tamaño (impar) del filtro de mediana previo.
-        roi_mesa: región ``(x, y, ancho, alto)`` donde buscar; ``None`` = todo el cuadro.
+        dp, min_dist, param1, param2: parÃ¡metros de ``cv2.HoughCircles``.
+        min_radius, max_radius: radio en pÃ­xeles (dependen de la distancia a la mesa).
+        blur: tamaÃ±o (impar) del filtro de mediana previo.
+        roi_mesa: regiÃ³n ``(x, y, ancho, alto)`` donde buscar; ``None`` = todo el cuadro.
     """
 
     dp: float = 1.2
@@ -53,24 +53,26 @@ class ConfigDetector:
         k = ancho_frame / RESOLUCION_REFERENCIA
         return replace(
             self,
+            dp=max(1.0, round(self.dp * k, 2)),
             min_dist=max(1, round(self.min_dist * k)),
+            param1=max(1, round(self.param1 * k)),
+            param2=max(1, round(self.param2 * k)),
             min_radius=max(1, round(self.min_radius * k)),
             max_radius=max(2, round(self.max_radius * k)),
         )
 
-
 class BallDetector:
-    """Localiza círculos candidatos a bola mediante la transformada de Hough."""
+    """Localiza cÃ­rculos candidatos a bola mediante la transformada de Hough."""
 
     def __init__(self, config: Optional[ConfigDetector] = None):
         self.config = config or ConfigDetector()
 
     def detectar(self, frame: Optional[np.ndarray]) -> List[Deteccion]:
-        """Detecta círculos en un fotograma BGR.
+        """Detecta cÃ­rculos en un fotograma BGR.
 
         Returns:
-            Lista de :class:`Deteccion` en coordenadas del fotograma original (vacía si
-            el cuadro es inválido o no hay círculos).
+            Lista de :class:`Deteccion` en coordenadas del fotograma original (vacÃ­a si
+            el cuadro es invÃ¡lido o no hay cÃ­rculos).
         """
         if frame is None or frame.ndim != 3 or frame.size == 0:
             return []
@@ -100,3 +102,4 @@ class BallDetector:
             Deteccion(int(round(c[0])) + ox, int(round(c[1])) + oy, int(round(c[2])))
             for c in circulos[0]
         ]
+

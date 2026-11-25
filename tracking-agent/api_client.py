@@ -1,6 +1,6 @@
-"""
+﻿"""
 Cliente REST de PoolHawk.
-Convierte un :class:`~shot_analyzer.TiroObservado` en un `TiroEventRequest` y lo envía a
+Convierte un :class:`~shot_analyzer.TiroObservado` en un `TiroEventRequest` y lo envÃ­a a
 `POST /api/v1/matches/{id}/events`. El backend sigue siendo la autoridad sobre las reglas
 y el turno: este cliente solo PROPONE eventos.
 """
@@ -19,22 +19,22 @@ from shot_analyzer import TiroObservado
 log = logging.getLogger("poolhawk.api")
 
 class ErrorApi(Exception):
-    """Error base del cliente. `status` es el código HTTP si lo hubo."""
+    """Error base del cliente. `status` es el cÃ³digo HTTP si lo hubo."""
     def __init__(self, mensaje: str, status: Optional[int] = None):
         super().__init__(mensaje)
         self.status = status
 
 class ErrorRed(ErrorApi):
-    """La API no respondió (conexión, timeout o 5xx) tras todos los reintentos."""
+    """La API no respondiÃ³ (conexiÃ³n, timeout o 5xx) tras todos los reintentos."""
 
 class ErrorConflicto(ErrorApi):
-    """HTTP 409: el estado de la partida cambió respecto a `versionEsperada`."""
+    """HTTP 409: el estado de la partida cambiÃ³ respecto a `versionEsperada`."""
 
 class ErrorEstadoNoDisponible(ErrorApi):
-    """No se pudo consultar la partida: el tiro NO se encoló (no hay jugador ni versión fiables)."""
+    """No se pudo consultar la partida: el tiro NO se encolÃ³ (no hay jugador ni versiÃ³n fiables)."""
 
 class ErrorColaBloqueada(ErrorApi):
-    """La cola está bloqueada por un evento que agotó sus reintentos; requiere intervención."""
+    """La cola estÃ¡ bloqueada por un evento que agotÃ³ sus reintentos; requiere intervenciÃ³n."""
 
 class ErrorRespuesta(ErrorApi):
     """Respuesta exitosa pero con cuerpo o estructura que el cliente no puede interpretar."""
@@ -54,29 +54,29 @@ def parsear_partida(datos: Any) -> EstadoPartida:
     
     jugador_id = datos.get("jugadorActualId")
     if not isinstance(jugador_id, str) or not jugador_id.strip():
-        raise ErrorRespuesta("La API no devolvió 'jugadorActualId'; actualiza el backend")
+        raise ErrorRespuesta("La API no devolviÃ³ 'jugadorActualId'; actualiza el backend")
     
     version = datos.get("cantidadTiros")
     if isinstance(version, bool) or not isinstance(version, int) or version < 0:
-        raise ErrorRespuesta("La API no devolvió un 'cantidadTiros' válido")
+        raise ErrorRespuesta("La API no devolviÃ³ un 'cantidadTiros' vÃ¡lido")
     
     partida_id = datos.get("id")
     if not isinstance(partida_id, str) or not partida_id:
-        raise ErrorRespuesta("La API no devolvió el 'id' de la partida")
+        raise ErrorRespuesta("La API no devolviÃ³ el 'id' de la partida")
     
     fase = datos.get("fase")
     return EstadoPartida(partida_id, jugador_id, version, fase if isinstance(fase, str) else None)
 
 class PoolHawkApiClient:
-    """Cliente mínimo, idempotente y tolerante a fallos para registrar tiros."""
+    """Cliente mÃ­nimo, idempotente y tolerante a fallos para registrar tiros."""
     def __init__(self, base_url: str, token: Optional[str] = None, max_reintentos: int = 4,
-                 espera: float = 1.0, timeout: float = 10.0, max_intentos_evento: int = 50,
+                 espera: float = 1.0, timeout: float = 10.0, max_intentos_evento: int = 10,
                  cola: Optional[ColaEventos] = None, sesion: Optional[requests.Session] = None):
         if not isinstance(base_url, str) or not base_url.strip():
             raise ValueError("base_url es obligatoria")
         partes = urlparse(base_url)
         if partes.scheme not in ("http", "https") or not partes.netloc:
-            raise ValueError("base_url debe ser una URL http:// o https:// válida")
+            raise ValueError("base_url debe ser una URL http:// o https:// vÃ¡lida")
         if isinstance(max_reintentos, bool) or not isinstance(max_reintentos, int) or max_reintentos < 1:
             raise ValueError("max_reintentos debe ser un entero >= 1")
         if espera < 0:
@@ -110,7 +110,7 @@ class PoolHawkApiClient:
                 if r.status_code < 500:
                     return self._validar_estado(metodo, ruta, r)
                 ultimo = requests.HTTPError(f"HTTP {r.status_code}")
-            log.warning("%s %s falló (intento %d/%d): %s", metodo, ruta, intento, total, type(ultimo).__name__)
+            log.warning("%s %s fallÃ³ (intento %d/%d): %s", metodo, ruta, intento, total, type(ultimo).__name__)
             if intento < total:
                 time.sleep(self.espera)
         raise ErrorRed(f"La API no responde tras {total} intentos") from ultimo
@@ -122,16 +122,16 @@ class PoolHawkApiClient:
         detalle = (r.text or "")[:200]
         if r.status_code == 409:
             raise ErrorConflicto(f"Conflicto de estado en {metodo} {ruta}: {detalle}", 409)
-        raise ErrorApi(f"La API rechazó {metodo} {ruta} ({r.status_code}): {detalle}", r.status_code)
+        raise ErrorApi(f"La API rechazÃ³ {metodo} {ruta} ({r.status_code}): {detalle}", r.status_code)
 
     @staticmethod
     def _json(r: requests.Response) -> Any:
         if r.status_code == 204 or not (r.text or "").strip():
-            raise ErrorRespuesta(f"La API respondió {r.status_code} sin cuerpo JSON", r.status_code)
+            raise ErrorRespuesta(f"La API respondiÃ³ {r.status_code} sin cuerpo JSON", r.status_code)
         try:
             return r.json()
         except ValueError as e:
-            raise ErrorRespuesta("La API respondió un cuerpo que no es JSON válido", r.status_code) from e
+            raise ErrorRespuesta("La API respondiÃ³ un cuerpo que no es JSON vÃ¡lido", r.status_code) from e
 
     def obtener_estado(self, match_id: str) -> EstadoPartida:
         return parsear_partida(self._json(self._pedir("GET", f"/api/v1/matches/{match_id}")))
@@ -159,13 +159,13 @@ class PoolHawkApiClient:
                 "con el backend y reanuda (--reanudar-cola) o descarta ese evento (--descartar-evento)")
         
         # H-03 CORREGIDO: Bloquear solo si hay un evento pendiente con un eventId DIFERENTE.
-        # Si el eventId es el mismo, es un reintento legítimo del mismo evento y debe permitirse.
+        # Si el eventId es el mismo, es un reintento legÃ­timo del mismo evento y debe permitirse.
         pendientes_mismo_match = [i for i in self.cola.pendientes() if i["matchId"] == match_id]
         if pendientes_mismo_match:
             for pendiente in pendientes_mismo_match:
                 if pendiente["payload"]["eventId"] != tiro.event_id:
                     raise ErrorColaBloqueada(
-                        f"Hay un tiro pendiente de confirmación para la partida {match_id} con otro eventId. "
+                        f"Hay un tiro pendiente de confirmaciÃ³n para la partida {match_id} con otro eventId. "
                         "Espere a que se resuelva antes de inferir nuevos eventos."
                     )
 
@@ -178,7 +178,7 @@ class PoolHawkApiClient:
             estado = self.obtener_estado(match_id)
         except ErrorApi as e:
             raise ErrorEstadoNoDisponible(
-                f"No se pudo consultar la partida ({e}); el tiro no se encoló y requiere revisión manual", e.status) from e
+                f"No se pudo consultar la partida ({e}); el tiro no se encolÃ³ y requiere revisiÃ³n manual", e.status) from e
         
         payload = self.construir_payload(tiro, estado.jugador_actual_id, estado.version)
         self.cola.agregar(match_id, payload)
