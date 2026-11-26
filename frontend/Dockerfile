@@ -1,5 +1,5 @@
 # ---------- Etapa 1: build de Vue ----------
-FROM node:22-alpine AS build
+FROM node:20-alpine AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -8,10 +8,15 @@ RUN npm run build
 
 # ---------- Etapa 2: servir con Nginx ----------
 FROM nginx:alpine
-RUN addgroup -g 1000 appuser && adduser -D -u 1000 -G appuser appuser
+
+# Configurar permisos para el usuario nginx (ya existe en alpine: uid 101)
+# Necesita escribir en /var/cache/nginx, /var/run y leer /usr/share/nginx/html
+RUN touch /var/run/nginx.pid && \
+    chown -R nginx:nginx /var/cache/nginx /var/run/nginx.pid /usr/share/nginx/html /etc/nginx/conf.d
+
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
-RUN chown -R appuser:appuser /usr/share/nginx/html /var/cache/nginx /var/log/nginx /etc/nginx/conf.d
+
+# El usuario nginx (no root) ya tiene permisos gracias al RUN anterior
 EXPOSE 8080
-USER appuser
 CMD ["nginx", "-g", "daemon off;"]

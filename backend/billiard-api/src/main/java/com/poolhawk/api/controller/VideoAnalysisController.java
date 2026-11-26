@@ -149,7 +149,7 @@ public class VideoAnalysisController {
         long rangeLength = end - start + 1;
         PathResource pathResource = (PathResource) resource;
         
-        try (var inputStream = Files.newInputStream(pathResource.getPath())) {
+        try (var inputStream = Files.newInputStream(pathResource.getFile().toPath())) {
             inputStream.skip(start);
             byte[] buffer = new byte[(int) rangeLength];
             int read = inputStream.readNBytes(buffer, 0, (int) rangeLength);
