@@ -11,3 +11,12 @@ spring:
     open-in-view: false
   flyway:
     enabled: false
+
+jwt:
+  secret: "test-secret-that-is-at-least-32-characters-long-for-hs256"
+  expiration: 86400000
+
+# Deshabilitar DataInitializer en tests
+admin:
+  initial:
+    password: "TestPassword123!"

@@ -2,6 +2,7 @@ package com.poolhawk.api.config;
 
 import com.poolhawk.api.entity.UsuarioEntity;
 import com.poolhawk.api.repository.UsuarioRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,6 +18,9 @@ public class DataInitializer {
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
 
+    @Value("${admin.initial.password:}")
+    private String adminInitialPassword;
+
     public DataInitializer(UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
@@ -24,7 +28,12 @@ public class DataInitializer {
 
     @EventListener(ApplicationReadyEvent.class)
     public void inicializar() {
-        String adminPassword = System.getenv("ADMIN_INITIAL_PASSWORD");
+        String adminPassword = adminInitialPassword;
+        // Fallback to environment variable for production
+        if ((adminPassword == null || adminPassword.isBlank()) && System.getenv("ADMIN_INITIAL_PASSWORD") != null) {
+            adminPassword = System.getenv("ADMIN_INITIAL_PASSWORD");
+        }
+
         if (adminPassword == null || adminPassword.isBlank()) {
             throw new IllegalStateException(
                     "Variable de entorno ADMIN_INITIAL_PASSWORD no configurada. " +

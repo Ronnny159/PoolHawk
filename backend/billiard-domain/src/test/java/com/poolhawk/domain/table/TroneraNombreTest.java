@@ -63,9 +63,9 @@ class TroneraNombreTest {
     class Propiedades {
 
         @Test
-        @DisplayName("El enum tiene exactamente 6 valores")
-        void seisValores() {
-            assertEquals(6, TroneraNombre.values().length);
+        @DisplayName("El enum tiene exactamente 7 valores (6 estándar + DESCONOCIDA)")
+        void sieteValores() {
+            assertEquals(7, TroneraNombre.values().length);
         }
 
         @ParameterizedTest

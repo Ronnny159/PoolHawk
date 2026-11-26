@@ -90,10 +90,18 @@ def test_jugadores_con_el_mismo_nombre_usan_el_id_correcto():
 
 
 def test_sin_jugador_actual_id_falla_de_forma_controlada():
+    # Si falta jugadorActualId, debe caer a jugadorActual (string)
     datos = partida()
     del datos["jugadorActualId"]
+    estado = cliente(SesionFalsa(get=Resp(200, datos))).obtener_estado("m1")
+    assert estado.jugador_actual_id == "Luis"
+    
+    # Si falta AMBOS, debe fallar
+    datos2 = partida()
+    del datos2["jugadorActualId"]
+    del datos2["jugadorActual"]
     with pytest.raises(ErrorRespuesta):
-        cliente(SesionFalsa(get=Resp(200, datos))).obtener_estado("m1")
+        cliente(SesionFalsa(get=Resp(200, datos2))).obtener_estado("m1")
 
 
 # ---------------------------------------------------------------- H-03 versión del estado

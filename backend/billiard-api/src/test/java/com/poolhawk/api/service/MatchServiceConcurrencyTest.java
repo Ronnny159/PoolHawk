@@ -6,6 +6,7 @@ import com.poolhawk.api.entity.PartidaEntity;
 import com.poolhawk.api.exception.PartidaNoEncontradaException;
 import com.poolhawk.domain.match.FormatoJuego;
 import com.poolhawk.domain.match.TipoModalidad;
+import com.poolhawk.domain.player.Jugador;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,21 +30,29 @@ public class MatchServiceConcurrencyTest {
 
     private String partidaId;
     private String jugador1Id;
+    private String jugador2Id;
 
     @BeforeEach
     public void setUp() {
-        jugador1Id = UUID.randomUUID().toString();
-        String jugador2Id = UUID.randomUUID().toString();
+        // Usar nombres para los jugadores, no IDs
+        String nombreJugador1 = "Jugador 1";
+        String nombreJugador2 = "Jugador 2";
 
         CrearPartidaRequest request = new CrearPartidaRequest(
             TipoModalidad.BOLA_8,
             FormatoJuego.INDIVIDUAL,
-            List.of(jugador1Id, jugador2Id),
-            1.2, 2.4
+            List.of(nombreJugador1, nombreJugador2),
+            254.0, 127.0  // Mesa 9 pies en cm
         );
 
         var partida = matchService.crear(request);
         this.partidaId = partida.getId();
+        
+        // Obtener los IDs REALES de los jugadores creados en la partida
+        Jugador j1 = partida.getEquipoA().getJugadores().get(0);
+        Jugador j2 = partida.getEquipoB().getJugadores().get(0);
+        this.jugador1Id = j1.id();
+        this.jugador2Id = j2.id();
     }
 
     @Test
@@ -64,8 +73,8 @@ public class MatchServiceConcurrencyTest {
 
                     TiroEventRequest tiroRequest = new TiroEventRequest(
                         "event-" + threadId + "-" + UUID.randomUUID(),
-                        jugador1Id,
-                        8,
+                        jugador1Id,  // El primer jugador es el que tiene el turno inicial
+                        1,  // Primera bola tocada: bola 1 (sólida), válida como primer contacto en Bola 8
                         List.of(1),
                         List.of("TOP_LEFT"),
                         5,
@@ -74,14 +83,18 @@ public class MatchServiceConcurrencyTest {
 
                     matchService.registrarTiro(partidaId, tiroRequest);
                     successCount.incrementAndGet();
+                    System.out.println("Thread " + threadId + " SUCCESS");
 
                 } catch (ResponseStatusException e) {
+                    System.out.println("Thread " + threadId + " ResponseStatusException: " + e.getStatusCode() + " - " + e.getReason());
                     if (e.getStatusCode().value() == 409) {
                         conflictCount.incrementAndGet();
                     } else {
-                        fail("Unexpected status: " + e.getStatusCode());
+                        fail("Unexpected status: " + e.getStatusCode() + " - " + e.getReason());
                     }
                 } catch (Exception e) {
+                    System.out.println("Thread " + threadId + " Exception: " + e.getClass().getName() + " - " + e.getMessage());
+                    e.printStackTrace();
                     fail("Unexpected exception: " + e.getMessage());
                 } finally {
                     doneLatch.countDown();

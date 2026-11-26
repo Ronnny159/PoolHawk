@@ -220,7 +220,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         cap = camera.cap
     except Exception as e:
         print(f"❌ Fallo al inicializar CameraSource: {e}", file=sys.stderr)
-        import sys
         sys.exit(1)
 
     ancho = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640

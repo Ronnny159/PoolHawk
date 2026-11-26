@@ -1,4 +1,4 @@
-﻿"""
+"""
 Cliente REST de PoolHawk.
 Convierte un :class:`~shot_analyzer.TiroObservado` en un `TiroEventRequest` y lo envía a
 `POST /api/v1/matches/{id}/events`. El backend sigue siendo la autoridad sobre las reglas
@@ -95,6 +95,14 @@ class PoolHawkApiClient:
         partes = urlparse(base_url)
         if partes.scheme not in ("http", "https") or not partes.netloc:
             raise ValueError("base_url debe ser una URL http:// o https:// válida")
+        if isinstance(max_reintentos, bool) or not isinstance(max_reintentos, int) or max_reintentos <= 0:
+            raise ValueError("max_reintentos debe ser un entero positivo")
+        if isinstance(espera, bool) or not isinstance(espera, (int, float)) or espera < 0:
+            raise ValueError("espera debe ser un número no negativo")
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0:
+            raise ValueError("timeout debe ser un número positivo")
+        if isinstance(max_intentos_evento, bool) or not isinstance(max_intentos_evento, int) or max_intentos_evento <= 0:
+            raise ValueError("max_intentos_evento debe ser un entero positivo")
             
         self.max_intentos_evento = max_intentos_evento
         self._lock = threading.RLock()
