@@ -1,16 +1,16 @@
 spring:
   application:
     name: poolhawk-api
-  
+   
   datasource:
-    url: jdbc:postgresql://localhost:5433/poolhawk_db
-    username: ${DB_USER}
-    password: ${DB_PASSWORD} # Ahora usa variable de entorno
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/poolhawk_db}
+    username: ${SPRING_DATASOURCE_USERNAME:poolhawk_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:poolhawk_password}
     driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     show-sql: false
     properties:
       hibernate:
@@ -33,7 +33,7 @@ server:
       max-file-size: 500MB
       max-request-size: 500MB
 
-# NUEVO: ConfiguraciÃ³n JWT (mÃ­nimo 32 caracteres para HS256)
+# NUEVO: Configuración JWT (mínimo 32 caracteres para HS256)
 jwt:
   secret: ${JWT_SECRET}
   expiration: 86400000 # 24 horas en milisegundos

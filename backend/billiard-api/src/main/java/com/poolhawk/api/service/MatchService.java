@@ -2,6 +2,7 @@ package com.poolhawk.api.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.poolhawk.api.dto.CrearPartidaRequest;
+import com.poolhawk.api.dto.CrearPartidaRapidaRequest;
 import com.poolhawk.api.dto.TiroEventRequest;
 import com.poolhawk.api.entity.PartidaEntity;
 import com.poolhawk.api.event.PartidaActualizadaEvent;
@@ -99,6 +100,23 @@ public class MatchService {
         publicarEnCacheTrasCommit(id, partida);
         
         return partida;
+    }
+
+    @Transactional
+    public Partida crearRapidaParaVideo(String jugador1, String jugador2) {
+        if (jugador1 == null || jugador1.isBlank() || jugador2 == null || jugador2.isBlank()) {
+            throw new IllegalArgumentException("Ambos nombres son obligatorios.");
+        }
+        
+        CrearPartidaRequest request = new CrearPartidaRequest(
+            com.poolhawk.domain.match.TipoModalidad.POR_PUNTOS,
+            com.poolhawk.domain.match.FormatoJuego.INDIVIDUAL,
+            List.of(jugador1.trim(), jugador2.trim()),
+            254.0, // mesa 9 pies (Double)
+            127.0  // mesa 9 pies (Double)
+        );
+        
+        return crear(request);
     }
 
     @Transactional(readOnly = true)
@@ -310,7 +328,11 @@ public class MatchService {
                 }
             }
         } else if (!embolsadas.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Faltan especificar las troneras para las bolas embolsadas.");
+            // Si no se especifican troneras pero hay bolas embolsadas (análisis de video sin calibración)
+            // Asignar tronera DESCONOCIDA a cada bola
+            for (int i = 0; i < embolsadas.size(); i++) {
+                troneras.add(TroneraNombre.DESCONOCIDA);
+            }
         }
 
         Duration duracion = request.duracionSegundos() != null ? Duration.ofSeconds(request.duracionSegundos()) : Duration.ofSeconds(5);

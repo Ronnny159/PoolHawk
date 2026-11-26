@@ -190,16 +190,19 @@ class ShotAnalyzer:
             if t.numero is None:
                 self._motivos.append(f"Bola id{t.id} desapareció sin número identificado")
             elif tronera is None:
-                self._motivos.append(
-                    f"Bola #{t.numero} desapareció lejos de toda tronera (posible oclusión)")
+                if not self.troneras:
+                    # Sin troneras calibradas: asumimos que la bola se embolsó
+                    self._embolsadas.append((t.numero, "DESCONOCIDA"))
+                    self._confianzas.append(_confianza(t))
+                else:
+                    self._motivos.append(
+                        f"Bola #{t.numero} desapareció lejos de toda tronera (posible oclusión)")
             else:
                 self._embolsadas.append((t.numero, tronera))
                 self._confianzas.append(_confianza(t))
 
     def _cerrar(self) -> TiroObservado:
         motivos = list(self._motivos)
-        if not self.troneras:
-            motivos.append("Sin troneras calibradas: no se pueden inferir embolsados")
         if not self._blanca_se_movio:
             motivos.append("No se observó movimiento de la bola blanca")
         primera, motivos_contacto = self._evaluar_primer_contacto()

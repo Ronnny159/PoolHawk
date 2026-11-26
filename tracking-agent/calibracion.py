@@ -15,7 +15,7 @@ import numpy as np
 from ball_classifier import Observacion, clasificar_bola, recortar_roi, configurar_umbrales
 from ball_detector import BallDetector, ConfigDetector, Deteccion
 from ball_tracker import asignacion_optima
-from camera_source import abrir_fuente, leer_frames
+from camera_source import CameraSource, leer_frames
 from config_agente import ErrorConfig, guardar_calibracion, ConfigAgente
 
 ORDEN_TRONERAS = ["TOP_LEFT", "TOP_RIGHT", "MIDDLE_LEFT", "MIDDLE_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"]
@@ -121,7 +121,9 @@ def evaluar_detecciones(detectado: Sequence[Sequence[Entrada]], esperado: Sequen
 def evaluar_fuente(fuente: str, ruta_esperado: str, config: ConfigDetector, tolerancia: float = 0.0) -> Dict[str, float]:
     with open(ruta_esperado, encoding="utf-8") as f:
         anotado = {int(k): v for k, v in json.load(f)["frames"].items()}
-    cap = abrir_fuente(fuente)
+    camera = CameraSource(fuente)
+    camera.abrir()
+    cap = camera.cap
     ancho = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
     detector = BallDetector(config.escalada(ancho))
     detectado, esperado = [], []
@@ -134,17 +136,19 @@ def evaluar_fuente(fuente: str, ruta_esperado: str, config: ConfigDetector, tole
             if indice >= max(anotado, default=0):
                 break
     finally:
-        cap.release()
+        camera.cerrar()
     return evaluar_detecciones(detectado, esperado, tolerancia)
 
 def _frame_de(fuente: str, indice: int = 0) -> np.ndarray:
-    cap = abrir_fuente(fuente)
+    camera = CameraSource(fuente)
+    camera.abrir()
+    cap = camera.cap
     try:
         for i, frame in enumerate(leer_frames(cap, 0)):
             if i >= indice:
                 return frame
     finally:
-        cap.release()
+        camera.cerrar()
     raise RuntimeError(f"La fuente tiene menos de {indice + 1} fotogramas")
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -197,7 +201,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             else:
                 print(f"--roi {x},{y},{w},{h}")
         elif args.cmd == "diagnostico":
-            cap = abrir_fuente(args.source)
+            cap = CameraSource(args.source).abrir()
             ancho = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
             alto = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480
             try:

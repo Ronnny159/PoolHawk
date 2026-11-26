@@ -188,20 +188,26 @@ def matriz_opencv() -> list[dict]:
             try:
                 cap = cv2.VideoCapture(indice, backend_code)
                 if cap.isOpened():
-                    ancho = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    alto = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    cap.release()
-                    entrada = {
-                        "indice": indice,
-                        "backend": backend_nombre,
-                        "resolucion": f"{ancho}x{alto}",
-                    }
-                    resultados.append(entrada)
-                    linea(
-                        OK,
-                        f"Cámara índice {indice} con backend {backend_nombre} -> {ancho}x{alto}",
-                    )
-                    break  # Si funciona con un backend, no probar otros para este índice
+                    # CRÍTICO: Validar que realmente entrega frames
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        ancho = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        alto = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        cap.release()
+                        entrada = {
+                            "indice": indice,
+                            "backend": backend_nombre,
+                            "resolucion": f"{ancho}x{alto}",
+                        }
+                        resultados.append(entrada)
+                        linea(
+                            OK,
+                            f"Cámara índice {indice} con backend {backend_nombre} -> {ancho}x{alto}",
+                        )
+                        break  # Si funciona con un backend, no probar otros para este índice
+                    else:
+                        print(f"   ⚠️  Índice {indice} / {backend_nombre}: isOpened()=True pero NO entrega frames")
+                        cap.release()
                 else:
                     cap.release()
             except Exception as e:

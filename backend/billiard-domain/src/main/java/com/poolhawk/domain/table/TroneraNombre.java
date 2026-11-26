@@ -40,7 +40,10 @@ public enum TroneraNombre {
     BOTTOM_LEFT("Inferior izquierda"),
 
     /** Esquina inferior derecha. */
-    BOTTOM_RIGHT("Inferior derecha");
+    BOTTOM_RIGHT("Inferior derecha"),
+
+    /** Tronera desconocida (para análisis de video sin calibración de troneras). */
+    DESCONOCIDA("Desconocida");
 
     private final String nombreVisible;
 

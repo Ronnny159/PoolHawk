@@ -1,5 +1,6 @@
 package com.poolhawk.api.controller;
 
+import com.poolhawk.api.dto.CrearPartidaRapidaRequest;
 import com.poolhawk.api.dto.CrearPartidaRequest;
 import com.poolhawk.api.dto.PartidaResponse;
 import com.poolhawk.api.mapper.PartidaMapper;
@@ -37,6 +38,18 @@ public class MatchController {
     @PostMapping
     public ResponseEntity<PartidaResponse> crear(@Valid @RequestBody CrearPartidaRequest request) {
         Partida partida = matchService.crear(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(partida));
+    }
+
+    /**
+     * Crea una partida rápida (Por Puntos, 1vs1) para análisis de video.
+     * 
+     * @param request nombres de los 2 jugadores
+     * @return la partida creada con HTTP 201
+     */
+    @PostMapping("/quick")
+    public ResponseEntity<PartidaResponse> crearRapida(@Valid @RequestBody CrearPartidaRapidaRequest request) {
+        Partida partida = matchService.crearRapidaParaVideo(request.jugador1(), request.jugador2());
         return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(partida));
     }
 

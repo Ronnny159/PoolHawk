@@ -12,6 +12,17 @@ export const crearPartida = async (datos) => {
 }
 
 /**
+ * Crea una partida rápida (Por Puntos, 1vs1) para análisis de video.
+ * 
+ * @param {Object} datos - { jugador1: string, jugador2: string }
+ * @returns {Promise} Promesa con la partida creada.
+ */
+export const crearPartidaRapida = async (datos) => {
+  const response = await http.post('/matches/quick', datos)
+  return response.data
+}
+
+/**
  * Obtiene el estado actual de una partida por su ID.
  * 
  * @param {string} matchId - UUID de la partida.
