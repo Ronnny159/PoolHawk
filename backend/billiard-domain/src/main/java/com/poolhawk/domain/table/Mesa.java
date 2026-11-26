@@ -146,6 +146,24 @@ public class Mesa {
         throw new IllegalArgumentException("No existe una bola con el número " + numero + " en la mesa");
     }
 
+    /**
+     * Restaura una bola embolsada de vuelta a la mesa.
+     * Usado para corrección de tiros.
+     *
+     * @param numero número de la bola a restaurar
+     */
+    public void restaurarBola(int numero) {
+        for (int i = 0; i < bolas.size(); i++) {
+            Bola bola = bolas.get(i);
+            if (bola.numero() == numero) {
+                if (bola.enMesa()) return; // Ya está en mesa
+                bolas.set(i, bola.restaurar());
+                return;
+            }
+        }
+        throw new IllegalArgumentException("No existe una bola con el número " + numero + " en la mesa");
+    }
+
     public Optional<Bola> buscarBola(int numero) {
         return bolas.stream().filter(b -> b.numero() == numero).findFirst();
     }

@@ -94,6 +94,15 @@ public record Bola(int numero, TipoBola tipo, Coordenada posicion, boolean enMes
     }
 
     /**
+     * Restaura esta bola a la mesa (en juego).
+     *
+     * @return nueva bola marcada como en juego
+     */
+    public Bola restaurar() {
+        return new Bola(this.numero, this.tipo, this.posicion, true);
+    }
+
+    /**
      * Verifica si esta bola es la blanca (bola de tacada).
      *
      * @return {@code true} si es la blanca

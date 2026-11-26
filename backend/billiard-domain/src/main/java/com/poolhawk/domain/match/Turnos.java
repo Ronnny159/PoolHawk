@@ -118,6 +118,32 @@ public class Turnos<T> {
     }
 
     /**
+     * Alias de {@link #indiceActual()} para compatibilidad con corrección de tiros.
+     *
+     * @return índice 0-based
+     */
+    public int posicionActual() {
+        return indiceActual;
+    }
+
+    /**
+     * Establece la posición actual en el orden de turnos.
+     * Usado para restaurar el estado previo al corregir un tiro.
+     *
+     * @param posicion índice 0-based
+     * @throws IllegalArgumentException si la posición está fuera de rango
+     */
+    public void establecerPosicion(int posicion) {
+        if (posicion < 0 || posicion >= orden.size()) {
+            throw new IllegalArgumentException(
+                "La posición debe estar entre 0 y " + (orden.size() - 1) +
+                ". Valor recibido: " + posicion
+            );
+        }
+        this.indiceActual = posicion;
+    }
+
+    /**
      * Avanza al siguiente participante en la rotación circular.
      */
     public void avanzar() {

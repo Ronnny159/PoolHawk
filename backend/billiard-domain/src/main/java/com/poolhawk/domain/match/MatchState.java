@@ -35,6 +35,14 @@ public class MatchState {
 
     private Jugador ganador;
 
+    // Para corrección de tiros: estado previo al último tiro
+    private int turnoPrevio;
+    private FasePartida fasePrevia;
+    private Map<Jugador, Integer> puntajesPrevios;
+    private Map<Jugador, Grupo> gruposPrevios;
+    private Map<Integer, Bola> bolasPrevias;
+    private Jugador ganadorPrev;
+
     public MatchState(String partidaId, TipoModalidad modalidad,
                       Equipo equipoA, Equipo equipoB,
                       Turnos<Jugador> turnos, Mesa mesa, Instant fechaInicio) {
@@ -63,6 +71,13 @@ public class MatchState {
         this.historial = new ArrayList<>();
         this.resultadosPorEvento = new HashMap<>();
         this.ganador = null;
+
+        this.turnoPrevio = -1;
+        this.fasePrevia = null;
+        this.puntajesPrevios = null;
+        this.gruposPrevios = null;
+        this.bolasPrevias = null;
+        this.ganadorPrev = null;
 
         for (Jugador j : turnos.jugadores()) {
             puntajes.put(j, 0);
@@ -208,6 +223,48 @@ public class MatchState {
      * @param evento   evento validado del tiro
      * @param resultado veredicto devuelto por el motor de reglas
      */
+    private void guardarEstadoPrevio() {
+        this.turnoPrevio = turnos.posicionActual();
+        this.fasePrevia = this.fase;
+        this.puntajesPrevios = new HashMap<>(this.puntajes);
+        this.gruposPrevios = new HashMap<>(this.gruposAsignados);
+        this.bolasPrevias = new HashMap<>();
+        for (int i = 0; i <= 15; i++) {
+            final int index = i; // effectively final for lambda
+            mesa.buscarBola(index).ifPresent(b -> bolasPrevias.put(index, b));
+        }
+        this.ganadorPrev = this.ganador;
+    }
+
+    public void restaurarEstadoPrevio() {
+        if (turnoPrevio < 0) {
+            throw new IllegalStateException("No hay estado previo para restaurar");
+        }
+        turnos.establecerPosicion(turnoPrevio);
+        this.fase = this.fasePrevia;
+        this.puntajes.clear();
+        this.puntajes.putAll(this.puntajesPrevios);
+        this.gruposAsignados.clear();
+        this.gruposAsignados.putAll(this.gruposPrevios);
+        // Restaurar bolas en mesa
+        for (int i = 0; i <= 15; i++) {
+            Bola bola = mesa.buscarBola(i).orElse(null);
+            Bola bolaPrevia = this.bolasPrevias.get(i);
+            if (bola != null && bolaPrevia != null) {
+                if (bolaPrevia.enMesa() && !bola.enMesa()) {
+                    mesa.restaurarBola(i);
+                } else if (!bolaPrevia.enMesa() && bola.enMesa()) {
+                    mesa.embolsarBola(i);
+                }
+            }
+        }
+        this.ganador = this.ganadorPrev;
+        // Eliminar el último evento del historial
+        if (!historial.isEmpty()) {
+            historial.remove(historial.size() - 1);
+        }
+    }
+
     public void aplicarTiro(TiroEvent evento, ResultadoTiro resultado) {
         Objects.requireNonNull(evento, "El evento no puede ser nulo");
         Objects.requireNonNull(resultado, "El resultado no puede ser nulo");
@@ -215,6 +272,9 @@ public class MatchState {
         if (fase != FasePartida.EN_CURSO) {
             throw new IllegalStateException("Solo se aplican tiros en EN_CURSO.");
         }
+
+        // Guardar estado previo para posible corrección
+        guardarEstadoPrevio();
 
         registrarTiro(evento);
 
