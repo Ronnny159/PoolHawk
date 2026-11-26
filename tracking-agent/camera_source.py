@@ -37,7 +37,7 @@ class CameraSource:
         self.fuente = fuente
 
         # Si es una URL (DroidCam, RTSP, archivo remoto), no usar backend numérico
-        if isinstance(fuente, str) and (fuente.startswith("http://") or fuente.startswith("rtsp://")):
+        if isinstance(fuente, str) and (fuente.startswith("http://") or fuente.startswith("https://") or fuente.startswith("rtsp://") or fuente.startswith("rtsps://")):
             self.cap = cv2.VideoCapture(fuente)
             logger.info("Abriendo stream remoto: %s", fuente)
         elif isinstance(fuente, str) and os.path.exists(fuente):
@@ -80,6 +80,19 @@ class CameraSource:
                     f"   3. Permisos de cámara en el sistema operativo\n"
                     f"   4. Si usas DroidCam, usa la URL HTTP: --source 'http://IP:4747/video'"
                 )
+
+        # Verificar que se pueda leer al menos un frame válido
+        ok, frame = self.cap.read()
+        if not ok or frame is None:
+            self.cap.release()
+            raise RuntimeError(
+                f"La cámara {fuente} se abrió pero no entrega frames válidos.\n"
+                f"💡 Posibles causas:\n"
+                f"   - La cámara está en uso por otra aplicación\n"
+                f"   - Permisos de cámara denegados\n"
+                f"   - Driver de cámara incompatible\n"
+                f"   - Para streams HTTP/RTSP: verifica la URL y conectividad"
+            )
 
     @classmethod
     def _get_backend_name(cls, backend: int) -> str:
@@ -124,26 +137,12 @@ class CameraSource:
 
 
 def abrir_fuente(fuente: Union[int, str], backend: int = cv2.CAP_ANY) -> cv2.VideoCapture:
-    if isinstance(fuente, str):
-        if os.path.exists(fuente):
-            pass
-        elif fuente.strip().isdigit():
-            fuente = int(fuente.strip())
-    if isinstance(fuente, str) and not fuente.strip().isdigit() and not fuente.startswith("http"):
-        backend = cv2.CAP_ANY
-
-    cap = cv2.VideoCapture(fuente, backend)
-    if not cap.isOpened():
-        cap.release()
-        nombre = _get_backend_name(backend)
-        raise RuntimeError(
-            f"No se pudo abrir la fuente de video: {fuente!r} con backend {nombre}. "
-            "Si estás en Windows, intenta configurar 'camera_backend: CAP_DSHOW' en config_agente.py "
-            "o verifica que la cámara esté conectada."
-        )
-    nombre = _get_backend_name(backend)
-    print(f"Cámara abierta exitosamente en la fuente {fuente!r} usando el backend {nombre}")
-    return cap
+    """
+    Función de compatibilidad hacia atrás.
+    Usa CameraSource internamente y devuelve el cv2.VideoCapture.
+    """
+    camera = CameraSource(fuente=fuente, backend=backend)
+    return camera.cap
 
 
 def leer_frames(cap: cv2.VideoCapture, max_frames: int = 0) -> Iterator[np.ndarray]:

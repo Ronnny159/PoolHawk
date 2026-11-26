@@ -98,12 +98,20 @@ class ColaEventos:
 
     # ------------------------------------------------------------------ mutación
     def agregar(self, match_id: str, payload: Dict[str, Any]) -> None:
-        """Registra un evento pendiente. Si el ``eventId`` ya existe, no lo duplica."""
+        """Registra un evento pendiente. Si el ``eventId`` ya existe, verifica consistencia."""
         event_id = payload["eventId"]
         with self._lock:
-            if event_id not in self._pendientes:
+            existente = self._pendientes.get(event_id)
+            if existente is None:
                 self._pendientes[event_id] = {"matchId": match_id, "payload": payload, "intentos": 0}
                 self._guardar()
+            else:
+                # Verificar que el payload sea consistente
+                if existente["payload"] != payload or existente["matchId"] != match_id:
+                    raise ErrorColaCorrupta(
+                        f"eventId duplicado con payload distinto: {event_id}. "
+                        f"Existente: matchId={existente['matchId']}, Nuevo: matchId={match_id}"
+                    )
 
     def resolver(self, event_id: str) -> None:
         """El backend confirmó el evento: se elimina de la cola."""
@@ -143,6 +151,10 @@ class ColaEventos:
         try:
             with open(self.ruta, encoding="utf-8") as f:
                 datos = json.load(f)
+            
+            # Validación estructural de la cola
+            self._validar_estructura(datos)
+            
             self._pendientes = {i["payload"]["eventId"]: i for i in datos.get("pendientes", [])}
             self._rechazados = list(datos.get("rechazados", []))
             self._bloqueo = datos.get("bloqueo")
@@ -157,6 +169,52 @@ class ColaEventos:
             self._rechazados = []
             self._bloqueo = None
             raise ErrorColaCorrupta(f"Archivo de cola corrupto: {self.ruta}") from e
+
+    def _validar_estructura(self, datos: Dict[str, Any]) -> None:
+        """Valida que el JSON tenga la estructura esperada."""
+        if not isinstance(datos, dict):
+            raise ErrorColaCorrupta("La raíz del JSON debe ser un objeto")
+        
+        # Validar pendientes
+        pendientes = datos.get("pendientes", [])
+        if not isinstance(pendientes, list):
+            raise ErrorColaCorrupta("'pendientes' debe ser una lista")
+        
+        for i, item in enumerate(pendientes):
+            if not isinstance(item, dict):
+                raise ErrorColaCorrupta(f"pendientes[{i}] debe ser un objeto")
+            if "payload" not in item:
+                raise ErrorColaCorrupta(f"pendientes[{i}] falta campo 'payload'")
+            if "matchId" not in item or not isinstance(item["matchId"], str):
+                raise ErrorColaCorrupta(f"pendientes[{i}] falta campo 'matchId' string")
+            payload = item["payload"]
+            if not isinstance(payload, dict):
+                raise ErrorColaCorrupta(f"pendientes[{i}].payload debe ser un objeto")
+            if "eventId" not in payload or not isinstance(payload["eventId"], str):
+                raise ErrorColaCorrupta(f"pendientes[{i}].payload.eventId debe ser string")
+        
+        # Validar rechazados
+        rechazados = datos.get("rechazados", [])
+        if not isinstance(rechazados, list):
+            raise ErrorColaCorrupta("'rechazados' debe ser una lista")
+        
+        for i, item in enumerate(rechazados):
+            if not isinstance(item, dict):
+                raise ErrorColaCorrupta(f"rechazados[{i}] debe ser un objeto")
+            if "payload" not in item:
+                raise ErrorColaCorrupta(f"rechazados[{i}] falta campo 'payload'")
+            if "matchId" not in item or not isinstance(item["matchId"], str):
+                raise ErrorColaCorrupta(f"rechazados[{i}] falta campo 'matchId' string")
+        
+        # Validar bloqueo si existe
+        bloqueo = datos.get("bloqueo")
+        if bloqueo is not None:
+            if not isinstance(bloqueo, dict):
+                raise ErrorColaCorrupta("'bloqueo' debe ser un objeto o null")
+            if "eventId" not in bloqueo or not isinstance(bloqueo["eventId"], str):
+                raise ErrorColaCorrupta("bloqueo.eventId debe ser string")
+            if "motivo" not in bloqueo or not isinstance(bloqueo["motivo"], str):
+                raise ErrorColaCorrupta("bloqueo.motivo debe ser string")
 
     def _guardar(self) -> None:
         if not self.ruta:

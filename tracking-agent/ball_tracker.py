@@ -13,12 +13,16 @@ identidad) y distingue entre bolas quietas, en movimiento y desaparecidas.
 Una bola desaparecida más de ``max_perdidas`` fotogramas se reporta en
 ``ultimas_perdidas`` con su última posición conocida. Eso es solo EVIDENCIA para el
 ``ShotAnalyzer`` (Fase 5): el tracker no decide que una bola fue embolsada.
+
+Predicción temporal: Filtro de Kalman (posición + velocidad) con matriz de covarianza.
 """
 from __future__ import annotations
 
 from collections import Counter, deque
 from dataclasses import dataclass, field
 from typing import Deque, Dict, List, Optional, Tuple
+
+import numpy as np
 
 from ball_classifier import Observacion
 from ball_detector import Deteccion
@@ -32,6 +36,12 @@ CRECIMIENTO_BUSQUEDA = 0.1  # el radio de búsqueda crece un 10 % por fotograma 
 MAX_FACTOR_BUSQUEDA = 2.0   # ...hasta duplicarse
 COSTE_SIN_ASOCIAR = 1.6  # coste de dejar una pista sin detección; un par más caro se rechaza
 _PROHIBIDO = 1e9       # coste de un emparejamiento fuera de alcance
+
+# Parámetros del Filtro de Kalman (constante de proceso y medición)
+# Estado: [x, y, vx, vy]
+KALMAN_Q = np.diag([0.01, 0.01, 1.0, 1.0])  # Ruido de proceso (aceleración) - más permisivo en velocidad
+KALMAN_R = np.diag([4.0, 4.0])               # Ruido de medición (detección)
+KALMAN_P0 = np.diag([10.0, 10.0, 100.0, 100.0])  # Covarianza inicial - más incertidumbre en velocidad
 
 
 def asignacion_optima(costos: List[List[float]]) -> List[Tuple[int, int]]:
@@ -103,6 +113,10 @@ class Track:
     en_movimiento: bool = False
     votos: Counter = field(default_factory=Counter)
     trayectoria: Deque[Tuple[float, float]] = field(default_factory=lambda: deque(maxlen=60))
+    
+    # Filtro de Kalman: estado [x, y, vx, vy], covarianza 4x4
+    _kalman_x: Optional[np.ndarray] = field(default=None, repr=False)
+    _kalman_P: Optional[np.ndarray] = field(default=None, repr=False)
 
     @property
     def numero(self) -> Optional[int]:
@@ -117,6 +131,58 @@ class Track:
     def visible(self) -> bool:
         """Verdadero si fue detectada en el último fotograma."""
         return self.frames_perdida == 0
+    
+    def _kalman_predict(self, dt: float = 1.0) -> Tuple[float, float]:
+        """Predice la próxima posición usando el filtro de Kalman.
+        
+        Returns:
+            (x_pred, y_pred): Posición predicha
+        """
+        if self._kalman_x is None or self._kalman_P is None:
+            return self.x, self.y
+        
+        # Matriz de transición de estado
+        F = np.array([
+            [1, 0, dt, 0],
+            [0, 1, 0, dt],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]
+        ], dtype=float)
+        
+        # Predicción de estado
+        x_pred = F @ self._kalman_x
+        
+        # Predicción de covarianza: P = F @ P @ F.T + Q
+        P_pred = F @ self._kalman_P @ F.T + KALMAN_Q
+        
+        return float(x_pred[0]), float(x_pred[1])
+    
+    def _kalman_update(self, z: np.ndarray) -> None:
+        """Actualiza el filtro de Kalman con una medición z = [x, y]."""
+        if self._kalman_x is None or self._kalman_P is None:
+            return
+        
+        # Matriz de observación H = [I_2x2 | 0_2x2]
+        H = np.array([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0]
+        ], dtype=float)
+        
+        # Innovación: y = z - H @ x
+        y = z - (H @ self._kalman_x)
+        
+        # Covarianza de innovación: S = H @ P @ H.T + R
+        S = H @ self._kalman_P @ H.T + KALMAN_R
+        
+        # Ganancia de Kalman: K = P @ H.T @ S^-1
+        K = self._kalman_P @ H.T @ np.linalg.inv(S)
+        
+        # Actualización de estado: x = x + K @ y
+        self._kalman_x = self._kalman_x + K @ y
+        
+        # Actualización de covarianza: P = (I - K @ H) @ P
+        I = np.eye(4)
+        self._kalman_P = (I - K @ H) @ self._kalman_P
 
 
 class BallTracker:
@@ -197,6 +263,9 @@ class BallTracker:
             t = self._tracks[ti]
             t.frames_perdida += 1
             t.en_movimiento = False
+            # Kalman predict para frames perdidos (mantiene el estado actualizado)
+            if t._kalman_x is not None and t._kalman_P is not None:
+                t._kalman_predict(dt=1.0)  # Actualiza solo el estado interno
             if t.frames_perdida > self.max_perdidas:
                 self.ultimas_perdidas.append(t)
                 del self._tracks[ti]
@@ -211,10 +280,21 @@ class BallTracker:
         la diferencia relativa de radio y una penalización si la clasificación confiable de
         la detección contradice el número ya establecido de la pista. Devuelve un valor
         prohibitivo si la detección está fuera del radio de búsqueda.
+
+        Usa Kalman solo para predicción durante oclusión (frames_perdida > 0).
         """
         factor = min(MAX_FACTOR_BUSQUEDA, 1.0 + CRECIMIENTO_BUSQUEDA * t.frames_perdida)
         alcance = self.max_distancia * factor
-        d = ((det.x - (t.x + t.vx)) ** 2 + (det.y - (t.y + t.vy)) ** 2) ** 0.5
+        
+        # Usar Kalman solo si la pista está oculta (frames_perdida > 0)
+        if t.frames_perdida > 0 and t._kalman_x is not None and t._kalman_P is not None:
+            dt = t.frames_perdida + 1
+            pred_x, pred_y = t._kalman_predict(dt)
+        else:
+            # Predicción simple para tracks activos
+            pred_x, pred_y = t.x + t.vx, t.y + t.vy
+        
+        d = ((det.x - pred_x) ** 2 + (det.y - pred_y) ** 2) ** 0.5
         if d > alcance:
             return _PROHIBIDO
         coste = d / alcance
@@ -230,6 +310,11 @@ class BallTracker:
         t = Track(id=self._siguiente_id, x=det.x, y=det.y, r=det.r)
         t.trayectoria.append((det.x, det.y))
         self._registrar_voto(t, obs)
+        
+        # Inicializar filtro de Kalman
+        t._kalman_x = np.array([det.x, det.y, 0.0, 0.0], dtype=float)
+        t._kalman_P = KALMAN_P0.copy()
+        
         self._tracks[t.id] = t
         self._siguiente_id += 1
         return t.id
@@ -237,6 +322,12 @@ class BallTracker:
     def _actualizar_pista(
         self, t: Track, det: Deteccion, obs: Optional[Observacion]
     ) -> None:
+        # Kalman update con la medición (solo para mantener el filtro al día)
+        z = np.array([det.x, det.y], dtype=float)
+        t._kalman_update(z)
+        
+        # Usar posición CRUDA para detección de movimiento y lógica de juego
+        # Kalman solo se usa para predicción durante oclusión
         nvx, nvy = det.x - t.x, det.y - t.y
         a = self.suavizado
         t.vx = a * nvx + (1 - a) * t.vx

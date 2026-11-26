@@ -55,6 +55,7 @@ env/
 htmlcov/
 .tox/
 .nox/
+pytest-of-*/
 
 # ────────────── NODE / VUE ──────────────
 node_modules/

@@ -184,7 +184,10 @@ const iniciarSubida = async () => {
     })
 
     videoSubido.value = true
-    videoPath.value = response.filePath
+    // response.filePath ahora es URL relativa (/api/v1/analysis/video/xxx.mp4)
+    // Construir URL absoluta para el agente de visión
+    const baseUrl = 'http://localhost:8080'
+    videoPath.value = baseUrl + response.filePath
     videoFilename.value = response.filename
     
     toast.success('Video subido. Ahora ingresa los nombres de los jugadores.')
