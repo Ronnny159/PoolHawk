@@ -1,4 +1,0 @@
-{"ts": "2026-11-26T14:50:55+00:00", "estado": "OBSERVADO", "eventId": "e5", "matchId": "m1", "primeraBolaTocada": 2, "bolasEmbolsadas": [5], "troneras": ["TOP_LEFT"], "duracionSegundos": 3, "confianza": 1.0, "frameInicio": 0, "frameFin": 0, "motivos": [], "detalle": null}
-{"ts": "2026-11-26T14:50:55+00:00", "estado": "PENDIENTE", "eventId": "e5", "matchId": "m1", "detalle": "La API no responde tras 1 intentos"}
-{"ts": "2026-11-26T14:50:55+00:00", "estado": "REINTENTO", "eventId": "e5", "matchId": "m1", "detalle": "intento 1/50: La API no responde tras 1 intentos"}
-{"ts": "2026-11-26T14:50:55+00:00", "estado": "ENVIADO", "eventId": "e5", "matchId": "m1", "detalle": "confirmado en un reintento"}
