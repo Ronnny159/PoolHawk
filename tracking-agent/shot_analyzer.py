@@ -191,9 +191,8 @@ class ShotAnalyzer:
                 self._motivos.append(f"Bola id{t.id} desapareció sin número identificado")
             elif tronera is None:
                 if not self.troneras:
-                    # Sin troneras calibradas: asumimos que la bola se embolsó
-                    self._embolsadas.append((t.numero, "DESCONOCIDA"))
-                    self._confianzas.append(_confianza(t))
+                    # Sin troneras calibradas: no podemos confirmar embolsado
+                    self._motivos.append("Sin troneras calibradas para confirmar embolsado")
                 else:
                     self._motivos.append(
                         f"Bola #{t.numero} desapareció lejos de toda tronera (posible oclusión)")

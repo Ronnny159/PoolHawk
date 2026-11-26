@@ -6,7 +6,10 @@ import pytest
 tomllib = pytest.importorskip("tomllib")  # Python >= 3.11 (el CI usa 3.12)
 
 RAIZ = os.path.join(os.path.dirname(__file__), "..")
-NO_DISTRIBUIDOS = {"simulador"}  # script independiente, no un módulo del agente
+NO_DISTRIBUIDOS = {
+    "simulador",  # script independiente, no un módulo del agente
+    "prueba_droidcam_pura", "test_cameras", "auditoria_camara_completa", "prueba_camara_pura"
+}
 
 
 def _declarados():

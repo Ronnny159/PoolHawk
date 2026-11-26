@@ -1,0 +1,14 @@
+{
+  "pendientes": [],
+  "rechazados": [
+    {
+      "matchId": "m1",
+      "payload": {
+        "eventId": "e1"
+      },
+      "intentos": 0,
+      "motivo": "descartado manualmente"
+    }
+  ],
+  "bloqueo": null
+}

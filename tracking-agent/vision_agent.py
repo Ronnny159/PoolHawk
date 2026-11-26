@@ -220,7 +220,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         cap = camera.cap
     except Exception as e:
         print(f"❌ Fallo al inicializar CameraSource: {e}", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
     ancho = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
     alto = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480
@@ -309,6 +309,12 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if es_video_archivo:
         print("✅ Análisis de video completado.")
+        # Para video, también verificar si quedan pendientes después del flush final
+        if reintentador is not None and cierre is not None and cierre["pendientes"] > 0:
+            print(f"⚠️  Quedan {cierre['pendientes']} evento(s) pendientes en {args.cola}; se reenviarán "
+                  "al próximo arranque (o usa --descartar-evento / --reanudar-cola si la cola está bloqueada).",
+                  file=sys.stderr)
+            return 4
         return 0
 
     if cierre is not None and (not cierre["terminado"] or cierre["pendientes"]):

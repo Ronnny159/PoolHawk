@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="config-avanzada">
     <h3>⚙️ Configuraciones Avanzadas</h3>
 
@@ -124,7 +124,7 @@
 import { ref } from 'vue'
 import { toast } from '../utils/toast'
 import { uploadVideo } from '../api/videoAnalysis'
-import { crearPartidaRapida } from '../api/matches'
+import { crearPartidaRapida as apiCrearPartidaRapida } from '../api/matches'
 
 // Estado del flujo
 const step = ref(1) // 1: upload, 2: players, 3: done
@@ -215,7 +215,7 @@ const crearPartidaRapida = async () => {
   crearError.value = null
 
   try {
-    const response = await crearPartidaRapida({
+    const response = await apiCrearPartidaRapida({
       jugador1: jugador1.value.trim(),
       jugador2: jugador2.value.trim()
     })

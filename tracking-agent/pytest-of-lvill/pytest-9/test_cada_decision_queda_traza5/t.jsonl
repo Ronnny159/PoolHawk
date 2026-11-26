@@ -1,0 +1,2 @@
+{"ts": "2026-11-26T14:47:40+00:00", "estado": "OBSERVADO", "eventId": "evt-1", "matchId": "m1", "primeraBolaTocada": 2, "bolasEmbolsadas": [5], "troneras": ["TOP_LEFT"], "duracionSegundos": 3, "confianza": 0.87, "frameInicio": 10, "frameFin": 42, "motivos": [], "detalle": null}
+{"ts": "2026-11-26T14:47:40+00:00", "estado": "SIN_API", "eventId": "evt-1", "matchId": "m1", "detalle": null}

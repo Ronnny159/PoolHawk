@@ -156,6 +156,7 @@ class ColaEventos:
             self._pendientes = {}
             self._rechazados = []
             self._bloqueo = None
+            raise ErrorColaCorrupta(f"Archivo de cola corrupto: {self.ruta}") from e
 
     def _guardar(self) -> None:
         if not self.ruta:

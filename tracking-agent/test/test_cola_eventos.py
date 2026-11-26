@@ -33,9 +33,11 @@ def test_resolver_y_rechazar_actualizan_el_archivo(tmp_path):
     assert datos["pendientes"] == [] and datos["rechazados"][0]["motivo"] == "400"
 
 
+from cola_eventos import ErrorColaCorrupta
+
 def test_archivo_corrupto_se_aparta_y_avisa(tmp_path):
     ruta = tmp_path / "c.json"
     ruta.write_text("{ no es json", encoding="utf-8")
-    with pytest.raises(ValueError):
+    with pytest.raises(ErrorColaCorrupta):
         ColaEventos(str(ruta))
     assert (tmp_path / "c.json.corrupto").exists()

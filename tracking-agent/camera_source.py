@@ -44,6 +44,12 @@ class CameraSource:
             # Archivo de video local
             self.cap = cv2.VideoCapture(fuente)
             logger.info("Abriendo archivo de video: %s", fuente)
+        elif isinstance(fuente, str) and (fuente.endswith(".avi") or fuente.endswith(".mp4") or fuente.endswith(".webm") or fuente.endswith(".mkv") or fuente.endswith(".mov")):
+            # Archivo de video que no existe - error específico
+            raise RuntimeError(
+                f"No se encontró el archivo de video: {fuente}\n"
+                f"💡 Verifica que la ruta sea correcta y el archivo exista."
+            )
         else:
             # Índice numérico de cámara
             if isinstance(fuente, str) and fuente.strip().isdigit():
