@@ -67,6 +67,7 @@ class ShotAnalyzer:
         fps: float = 15.0,
         ventana_contacto_s: float = 0.15,
         factor_contacto: float = 2.5,
+        max_frames_sin_deteccion: int = 150,  # ~10s a 15fps: cierra tiro si no hay detecciones
     ):
         self.ventana_contacto_s = ventana_contacto_s
         self.factor_contacto = factor_contacto
@@ -74,7 +75,9 @@ class ShotAnalyzer:
         self.radio_tronera = radio_tronera
         self.frames_quietud = frames_quietud
         self.fps = fps
+        self.max_frames_sin_deteccion = max_frames_sin_deteccion
         self._frame = 0
+        self._frames_sin_deteccion = 0
         self._reiniciar()
 
     @property
@@ -90,20 +93,39 @@ class ShotAnalyzer:
         """
         self._frame += 1
         visibles = [t for t in tracker.tracks if t.visible]
+        hay_detecciones = len(visibles) > 0
 
         if self._inicio is None:
             if any(t.en_movimiento for t in visibles):
                 self._inicio = self._frame
+                self._frames_sin_deteccion = 0
             else:
                 return None
+
+        # Contar frames sin detecciones (todas las bolas perdidas/embolsadas)
+        if hay_detecciones:
+            self._frames_sin_deteccion = 0
+        else:
+            self._frames_sin_deteccion += 1
 
         self._observar_movimiento(visibles)
         self._registrar_perdidas(tracker.ultimas_perdidas)
 
+        # Cerrar por quietud normal
         if tracker.todas_quietas(self.frames_quietud) and not tracker.hay_pendientes:
             tiro = self._cerrar()
             self._reiniciar()
             return tiro
+
+        # Cerrar por timeout: sin detecciones por mucho tiempo
+        if self._frames_sin_deteccion >= self.max_frames_sin_deteccion:
+            self._motivos.append(
+                f"Tiro cerrado por timeout: {self._frames_sin_deteccion} frames sin detecciones "
+                f"({self._frames_sin_deteccion / self.fps:.1f}s). Todas las bolas asumidas embolsadas/ocultas.")
+            tiro = self._cerrar()
+            self._reiniciar()
+            return tiro
+
         return None
 
     # ------------------------------------------------------------------ internos
@@ -184,6 +206,45 @@ class ShotAnalyzer:
                 mejor, dist_mejor = nombre, d
         return mejor
 
+    def _trayectoria_valida_hacia_tronera(self, t: Track, tronera: str) -> bool:
+        """Valida que la trayectoria de la bola apunta hacia la tronera en sus últimos frames.
+
+        Args:
+            t: Track de la bola perdida
+            tronera: Nombre de la tronera candidata
+
+        Returns:
+            True si la dirección del movimiento coincide con la dirección hacia la tronera.
+        """
+        if len(t.trayectoria) < 2:
+            # Sin trayectoria suficiente, no podemos validar
+            return False
+
+        px, py = self.troneras[tronera]
+        # Usar los últimos 3-5 puntos de la trayectoria
+        puntos = list(t.trayectoria)[-5:]
+        if len(puntos) < 2:
+            return False
+
+        # Vector promedio de movimiento
+        dx = puntos[-1][0] - puntos[0][0]
+        dy = puntos[-1][1] - puntos[0][1]
+
+        # Vector hacia la tronera desde la posición inicial del tramo
+        a_tronera_x = px - puntos[0][0]
+        a_tronera_y = py - puntos[0][1]
+
+        # Producto escalar normalizado (coseno del ángulo)
+        mov_norm = math.hypot(dx, dy)
+        tron_norm = math.hypot(a_tronera_x, a_tronera_y)
+
+        if mov_norm < 5 or tron_norm < 5:
+            return False  # Movimiento o distancia muy pequeños
+
+        coseno = (dx * a_tronera_x + dy * a_tronera_y) / (mov_norm * tron_norm)
+        # coseno > 0.5 significa ángulo < 60 grados (apunta hacia la tronera)
+        return coseno > 0.5
+
     def _registrar_perdidas(self, perdidas: List[Track]) -> None:
         for t in perdidas:
             tronera = self._tronera_cercana(t)
@@ -197,8 +258,14 @@ class ShotAnalyzer:
                     self._motivos.append(
                         f"Bola #{t.numero} desapareció lejos de toda tronera (posible oclusión)")
             else:
-                self._embolsadas.append((t.numero, tronera))
-                self._confianzas.append(_confianza(t))
+                # Validar trayectoria: la bola debe haber estado moviéndose HACIA la tronera
+                if self._trayectoria_valida_hacia_tronera(t, tronera):
+                    self._embolsadas.append((t.numero, tronera))
+                    self._confianzas.append(_confianza(t))
+                else:
+                    self._motivos.append(
+                        f"Bola #{t.numero} desapareció cerca de {tronera} pero su trayectoria "
+                        "no apuntaba hacia ella (posible oclusión, no embolsado)")
 
     def _cerrar(self) -> TiroObservado:
         motivos = list(self._motivos)

@@ -4,6 +4,8 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -14,28 +16,40 @@ import java.util.Date;
 @Service
 public class JwtService {
 
-    @Value("${jwt.secret}")
+    private static final Logger log = LoggerFactory.getLogger(JwtService.class);
+
+    @Value("${jwt.secret:}")
     private String secret;
 
-    @Value("${jwt.expiration}")
+    @Value("${jwt.expiration:86400000}")
     private long expiration;
 
+    private SecretKey signingKey;
+    private boolean initialized = false;
+
     @PostConstruct
-    public void validateSecret() {
-        if (secret == null
-                || secret.equals("change-me-to-a-very-long-random-secret-at-least-32-chars")
-                || secret.length() < 32) {
-            throw new IllegalStateException(
-                "JWT_SECRET no está configurado o es inseguro. "
-                + "Debe ser una cadena aleatoria de al menos 32 caracteres en el archivo .env");
+    public void initialize() {
+        if (secret == null || secret.isBlank() || secret.length() < 32) {
+            log.error("JWT_SECRET no está configurado o es inseguro (mínimo 32 caracteres). " +
+                    "El login fallará hasta que se configure correctamente en .env o application.yml");
+            return;
         }
+        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.initialized = true;
+        log.info("JWT Service inicializado correctamente");
     }
 
     private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        if (!initialized) {
+            throw new IllegalStateException("JWT Service no inicializado: JWT_SECRET no configurado");
+        }
+        return signingKey;
     }
 
     public String generateToken(String username) {
+        if (!initialized) {
+            throw new IllegalStateException("JWT Service no inicializado: JWT_SECRET no configurado");
+        }
         return Jwts.builder()
                 .subject(username)
                 .issuedAt(new Date())
@@ -45,6 +59,9 @@ public class JwtService {
     }
 
     public boolean validateToken(String token) {
+        if (!initialized) {
+            return false;
+        }
         try {
             Jwts.parser().verifyWith(getSigningKey()).build().parseSignedClaims(token);
             return true;
@@ -54,6 +71,9 @@ public class JwtService {
     }
 
     public String extractUsername(String token) {
+        if (!initialized) {
+            throw new IllegalStateException("JWT Service no inicializado: JWT_SECRET no configurado");
+        }
         Claims claims = Jwts.parser().verifyWith(getSigningKey()).build().parseSignedClaims(token).getPayload();
         return claims.getSubject();
     }

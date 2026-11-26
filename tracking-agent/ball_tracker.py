@@ -221,9 +221,22 @@ class BallTracker:
         return any(t.frames_perdida > 0 for t in self._tracks.values())
 
     def todas_quietas(self, frames: int = 10) -> bool:
-        """Verdadero si todas las bolas visibles llevan ``frames`` fotogramas sin moverse."""
+        """Verdadero si todas las bolas visibles llevan ``frames`` fotogramas sin moverse.
+
+        Si no hay bolas visibles:
+        - Si hay pendientes (bolas ocultas): False (esperar resolución)
+        - Si no hay tracks en absoluto: False (mesa vacía, no se sabe si aparecerán)
+        - Si hay tracks pero todos resueltos (ninguna pendiente): True (todas embolsadas)
+        """
         visibles = [t for t in self._tracks.values() if t.visible]
-        return bool(visibles) and all(t.frames_quieta >= frames for t in visibles)
+        if not visibles:
+            # Sin bolas visibles
+            if not self._tracks:
+                # Mesa totalmente vacía (sin tracks): no se considera quieta
+                return False
+            # Hay tracks pero todas ocultas: True solo si no hay pendientes
+            return not self.hay_pendientes
+        return all(t.frames_quieta >= frames for t in visibles)
 
     def actualizar(
         self, entradas: List[Tuple[Deteccion, Optional[Observacion]]]
