@@ -1,11 +1,11 @@
 spring:
   application:
     name: poolhawk-api
-   
+    
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/poolhawk_db}
     username: ${SPRING_DATASOURCE_USERNAME:poolhawk_user}
-    password: ${SPRING_DATASOURCE_PASSWORD:poolhawk_password}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -15,6 +15,7 @@ spring:
     properties:
       hibernate:
         format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
 
   # NUEVO: Evita que Jackson explote (Error 500) si el JSON trae campos extra
   jackson:
@@ -34,6 +35,7 @@ server:
       max-request-size: 500MB
 
 # NUEVO: Configuración JWT (mínimo 32 caracteres para HS256)
+# Valor por defecto vacío para que Spring no falle al resolver; JwtService maneja validación
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:}
   expiration: 86400000 # 24 horas en milisegundos

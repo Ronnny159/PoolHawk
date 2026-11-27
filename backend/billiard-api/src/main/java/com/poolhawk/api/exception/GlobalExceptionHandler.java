@@ -3,17 +3,21 @@ package com.poolhawk.api.exception;
 import com.poolhawk.api.dto.ErrorResponse;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -23,6 +27,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(PartidaNoEncontradaException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(
             PartidaNoEncontradaException ex, HttpServletRequest request) {
+        log.warn("Partida no encontrada: {} - URI: {}", ex.getMessage(), request.getRequestURI());
         ErrorResponse error = new ErrorResponse(
             Instant.now(),
             HttpStatus.NOT_FOUND.value(),
@@ -37,8 +42,8 @@ public class GlobalExceptionHandler {
             MethodArgumentNotValidException ex, HttpServletRequest request) {
         String message = ex.getBindingResult().getFieldErrors().stream()
             .map(e -> e.getField() + ": " + e.getDefaultMessage())
-            .findFirst()
-            .orElse("Error de validacion");
+            .collect(Collectors.joining("; "));
+        log.warn("Error de validación en {}: {}", request.getRequestURI(), message);
         ErrorResponse error = new ErrorResponse(
             Instant.now(),
             HttpStatus.BAD_REQUEST.value(),
@@ -48,9 +53,40 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(error);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolation(
+            ConstraintViolationException ex, HttpServletRequest request) {
+        String message = ex.getConstraintViolations().stream()
+            .map(ConstraintViolation::getMessage)
+            .collect(Collectors.joining("; "));
+        log.warn("Violación de constraint en {}: {}", request.getRequestURI(), message);
+        ErrorResponse error = new ErrorResponse(
+            Instant.now(),
+            HttpStatus.BAD_REQUEST.value(),
+            "Bad Request",
+            message,
+            request.getRequestURI());
+        return ResponseEntity.badRequest().body(error);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex, HttpServletRequest request) {
+        String message = "Error deserializando el request: " + ex.getMostSpecificCause().getMessage();
+        log.warn("Error de deserialización en {}: {}", request.getRequestURI(), message);
+        ErrorResponse error = new ErrorResponse(
+            Instant.now(),
+            HttpStatus.BAD_REQUEST.value(),
+            "Bad Request",
+            message,
+            request.getRequestURI());
+        return ResponseEntity.badRequest().body(error);
+    }
+
+    @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
     public ResponseEntity<ErrorResponse> handleIllegalArgument(
-            IllegalArgumentException ex, HttpServletRequest request) {
+            RuntimeException ex, HttpServletRequest request) {
+        log.warn("Error de estado/argumento ilegal en {}: {}", request.getRequestURI(), ex.getMessage());
         ErrorResponse error = new ErrorResponse(
             Instant.now(),
             HttpStatus.BAD_REQUEST.value(),
@@ -63,6 +99,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ErrorResponse> handleResponseStatus(
             ResponseStatusException ex, HttpServletRequest request) {
+        log.warn("ResponseStatusException en {}: status={}, reason={}", 
+                request.getRequestURI(), ex.getStatusCode(), ex.getReason());
         ErrorResponse error = new ErrorResponse(
             Instant.now(),
             ex.getStatusCode().value(),
@@ -89,12 +127,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
-        log.error("Error no controlado en {}", request.getRequestURI(), ex);
+        log.error("Error no controlado en {}: {}", request.getRequestURI(), ex.getMessage(), ex);
         ErrorResponse error = new ErrorResponse(
             Instant.now(),
             HttpStatus.INTERNAL_SERVER_ERROR.value(),
             "Internal Server Error",
-            "Ocurrió un error inesperado en el servidor.",
+            "Ocurrió un error inesperado en el servidor: " + ex.getMessage(),
             request.getRequestURI());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }

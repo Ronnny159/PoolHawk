@@ -210,8 +210,14 @@ public class MatchService {
     public ResultadoTiro registrarTiro(String partidaId, TiroEventRequest request) {
         // 0. Validación estricta de entrada
         if (request.eventId() == null || request.eventId().isBlank()) {
+            log.warn("Validación fallida en registrarTiro [partidaId={}]: El eventId es obligatorio", partidaId);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El eventId es obligatorio.");
         }
+
+        log.info("Registrando tiro: partidaId={}, eventId={}, jugadorId={}, primeraBolaTocada={}, bolasEmbolsadas={}, troneras={}, duracionSegundos={}, versionEsperada={}",
+                partidaId, request.eventId(), request.jugadorId(), 
+                request.primeraBolaTocada(), request.bolasEmbolsadas(), 
+                request.troneras(), request.duracionSegundos(), request.versionEsperada());
 
         registrarInvalidacionEnRollback(partidaId);
         
@@ -228,14 +234,19 @@ public class MatchService {
                 .filter(e -> e.id().equals(request.eventId())).findFirst()
                 .orElseThrow(() -> new IllegalStateException("Inconsistencia de idempotencia."));
             if (!mismoPayload(request, tiroOriginal)) {
+                log.warn("Validación fallida en registrarTiro [partidaId={}]: eventId {} ya usado con payload diferente", 
+                        partidaId, request.eventId());
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El eventId ya fue utilizado con otro payload.");
             }
+            log.info("Tiro idempotente detectado, devolviendo resultado original: eventId={}", request.eventId());
             return resultadoOriginal.get();
         }
 
         // 3. Validación de versión esperada (Optimistic Locking a nivel de aplicación)
         if (request.versionEsperada() != null
                 && request.versionEsperada().intValue() != partida.getEstado().cantidadTiros()) {
+            log.warn("Validación fallida en registrarTiro [partidaId={}]: Conflicto de versión. Esperada: {}, Actual: {}", 
+                    partidaId, request.versionEsperada(), partida.getEstado().cantidadTiros());
             throw new ResponseStatusException(HttpStatus.CONFLICT, 
                 "Estado desactualizado. Versión esperada: " + request.versionEsperada() + 
                 ", versión actual en BD: " + partida.getEstado().cantidadTiros());
@@ -244,11 +255,27 @@ public class MatchService {
         // 4. Validación de turno (Auditoría: evitar que un jugador tire por otro)
         Jugador jugadorActual = partida.jugadorActual();
         if (!jugadorActual.id().equals(request.jugadorId())) {
+            log.warn("Validación fallida en registrarTiro [partidaId={}]: No es turno del jugador {}. Turno actual: {}", 
+                    partidaId, request.jugadorId(), jugadorActual.id());
             throw new ResponseStatusException(HttpStatus.CONFLICT, "No es el turno de este jugador.");
         }
 
         // 5. Construcción y evaluación del evento
-        TiroEvent evento = construirEventoValidado(partida, request, jugadorActual);
+        TiroEvent evento;
+        try {
+            evento = construirEventoValidado(partida, request, jugadorActual);
+            log.debug("Evento construido exitosamente: eventId={}, primeraBola={}, embolsadas={}, troneras={}", 
+                    evento.id(), evento.primeraBolaTocada() != null ? evento.primeraBolaTocada().numero() : null,
+                    evento.bolasEmbolsadas().stream().map(Bola::numero).toList(),
+                    evento.troneras());
+        } catch (ResponseStatusException e) {
+            log.warn("Validación fallida al construir evento [partidaId={}]: {}", partidaId, e.getReason());
+            throw e;
+        } catch (Exception e) {
+            log.error("Error inesperado al construir evento [partidaId={}]: {}", partidaId, e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error construyendo el evento: " + e.getMessage());
+        }
+
         ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
         ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), evento);
 
@@ -406,6 +433,9 @@ public class MatchService {
      */
     @Transactional
     public ResultadoTiro corregirUltimoTiro(String partidaId, TiroEventRequest request) {
+        log.info("Corrigiendo último tiro: partidaId={}, eventId={}, jugadorId={}", 
+                partidaId, request.eventId(), request.jugadorId());
+        
         registrarInvalidacionEnRollback(partidaId);
         
         // 1. Cargar snapshot fresco desde BD
@@ -416,20 +446,25 @@ public class MatchService {
         
         // 2. Verificar que hay al menos un tiro para corregir
         if (partida.getEstado().getHistorial().isEmpty()) {
+            log.warn("Corrección fallida [partidaId={}]: No hay tiros registrados para corregir", partidaId);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No hay tiros registrados para corregir.");
         }
         
         // 3. Obtener el último evento y su resultado
         TiroEvent ultimoEvento = partida.getEstado().getHistorial().get(partida.getEstado().getHistorial().size() - 1);
         String ultimoEventId = ultimoEvento.id();
+        log.debug("Último evento a corregir: eventId={}, jugador={}", ultimoEventId, ultimoEvento.jugador().id());
         
         // 4. Verificar que el eventoId del request coincide con "CORRECCION:" pattern
         if (!request.eventId().startsWith("CORRECCION:")) {
+            log.warn("Corrección fallida [partidaId={}]: EventId inválido '{}', debe empezar con 'CORRECCION:'", 
+                    partidaId, request.eventId());
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "EventId de corrección inválido.");
         }
         
         // 5. Restaurar el estado previo al último tiro
         partida.getEstado().restaurarEstadoPrevio();
+        log.debug("Estado previo restaurado para partida {}", partidaId);
         
         // 6. Eliminar el resultado del último evento (para permitir re-registro con nuevo eventId)
         partida.getEstado().removerResultadoPorEvento(ultimoEventId);
@@ -437,6 +472,8 @@ public class MatchService {
         // 7. Validar versión esperada
         if (request.versionEsperada() != null
                 && request.versionEsperada().intValue() != partida.getEstado().cantidadTiros()) {
+            log.warn("Corrección fallida [partidaId={}]: Conflicto de versión. Esperada: {}, Actual: {}", 
+                    partidaId, request.versionEsperada(), partida.getEstado().cantidadTiros());
             throw new ResponseStatusException(HttpStatus.CONFLICT, 
                 "Estado desactualizado. Versión esperada: " + request.versionEsperada() + 
                 ", versión actual en BD: " + partida.getEstado().cantidadTiros());
@@ -445,11 +482,28 @@ public class MatchService {
         // 8. Validar turno (debe ser el mismo jugador que tiró originalmente)
         Jugador jugadorActual = partida.jugadorActual();
         if (!jugadorActual.id().equals(request.jugadorId())) {
+            log.warn("Corrección fallida [partidaId={}]: No es turno del jugador {}. Turno actual: {}", 
+                    partidaId, request.jugadorId(), jugadorActual.id());
             throw new ResponseStatusException(HttpStatus.CONFLICT, "No es el turno de este jugador para la corrección.");
         }
         
         // 9. Construir y evaluar el evento corregido
-        TiroEvent eventoCorregido = construirEventoValidado(partida, request, jugadorActual);
+        TiroEvent eventoCorregido;
+        try {
+            eventoCorregido = construirEventoValidado(partida, request, jugadorActual);
+            log.debug("Evento corregido construido: eventId={}, primeraBola={}, embolsadas={}, troneras={}", 
+                    eventoCorregido.id(), 
+                    eventoCorregido.primeraBolaTocada() != null ? eventoCorregido.primeraBolaTocada().numero() : null,
+                    eventoCorregido.bolasEmbolsadas().stream().map(Bola::numero).toList(),
+                    eventoCorregido.troneras());
+        } catch (ResponseStatusException e) {
+            log.warn("Validación fallida al construir evento corregido [partidaId={}]: {}", partidaId, e.getReason());
+            throw e;
+        } catch (Exception e) {
+            log.error("Error inesperado al construir evento corregido [partidaId={}]: {}", partidaId, e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Error construyendo el evento corregido: " + e.getMessage());
+        }
+        
         ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
         ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), eventoCorregido);
         
@@ -480,6 +534,8 @@ public class MatchService {
                 log.warn("Error serializando partida {} para WebSocket", partidaId, e);
             }
             
+            log.info("Corrección exitosa en partida {}: eventId={}, resultado={}", 
+                    partidaId, request.eventId(), resultado.descripcion());
             return resultado;
             
         } catch (OptimisticLockingFailureException e) {

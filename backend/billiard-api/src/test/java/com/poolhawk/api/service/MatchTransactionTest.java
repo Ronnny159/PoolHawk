@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @SpringBootTest
@@ -32,7 +33,7 @@ class MatchTransactionTest {
     private MatchLiveHandler liveHandler;
 
     @Test
-    @DisplayName("Commit exitoso: el listener AFTER_COMMIT emite el broadcast")
+    @DisplayName("Commit exitoso: el listener AFTER_COMMIT emite el broadcast al match específico")
     void commitExitosoEmiteBroadcast() {
         CrearPartidaRequest request = new CrearPartidaRequest(
             TipoModalidad.BOLA_8, FormatoJuego.INDIVIDUAL, List.of("Ana", "Beto"), 254.0, 127.0);
@@ -47,7 +48,7 @@ class MatchTransactionTest {
         TestTransaction.flagForCommit();
         TestTransaction.end();
 
-        verify(liveHandler, times(1)).broadcast(anyString());
+        verify(liveHandler, times(1)).broadcastToMatch(eq(partidaId), anyString());
     }
 
     @Test
@@ -66,6 +67,7 @@ class MatchTransactionTest {
         TestTransaction.flagForRollback();
         TestTransaction.end();
 
+        verify(liveHandler, never()).broadcastToMatch(anyString(), anyString());
         verify(liveHandler, never()).broadcast(anyString());
     }
 }

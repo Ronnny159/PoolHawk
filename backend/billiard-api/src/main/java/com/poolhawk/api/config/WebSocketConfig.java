@@ -23,6 +23,9 @@ public class WebSocketConfig implements WebSocketConfigurer {
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(matchLiveHandler, "/ws/matches")
                 .addInterceptors(jwtHandshakeInterceptor)
-                .setAllowedOrigins("http://localhost:5173", "https://tudominio.com");
+                // Permitir conexiones desde el frontend (Vite dev server, nginx, Docker)
+                .setAllowedOrigins("http://localhost:5173", "http://localhost:80", "http://localhost", "https://tudominio.com")
+                // Permitir conexiones desde cualquier origen en desarrollo (quitar en producción si se requiere)
+                .setAllowedOriginPatterns("*");
     }
 }

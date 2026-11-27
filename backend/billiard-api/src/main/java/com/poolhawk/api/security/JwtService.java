@@ -77,4 +77,23 @@ public class JwtService {
         Claims claims = Jwts.parser().verifyWith(getSigningKey()).build().parseSignedClaims(token).getPayload();
         return claims.getSubject();
     }
+
+    /**
+     * Obtiene el username desde el token (alias para compatibilidad).
+     */
+    public String getUsernameFromToken(String token) {
+        return extractUsername(token);
+    }
+
+    /**
+     * Extrae el matchId del token si está presente como claim personalizado.
+     * Retorna null si no está presente.
+     */
+    public String getMatchIdFromToken(String token) {
+        if (!initialized) {
+            throw new IllegalStateException("JWT Service no inicializado: JWT_SECRET no configurado");
+        }
+        Claims claims = Jwts.parser().verifyWith(getSigningKey()).build().parseSignedClaims(token).getPayload();
+        return claims.get("matchId", String.class);
+    }
 }

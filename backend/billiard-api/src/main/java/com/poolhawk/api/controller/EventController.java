@@ -5,6 +5,8 @@ import com.poolhawk.api.dto.TiroEventRequest;
 import com.poolhawk.api.service.MatchService;
 import com.poolhawk.domain.event.ResultadoTiro;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,6 +29,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/matches/{matchId}/events")
 public class EventController {
 
+    private static final Logger log = LoggerFactory.getLogger(EventController.class);
+
     private final MatchService matchService;
 
     public EventController(MatchService matchService) {
@@ -44,6 +48,7 @@ public class EventController {
     public ResponseEntity<ResultadoTiroResponse> registrarTiro(
             @PathVariable String matchId,
             @Valid @RequestBody TiroEventRequest request) {
+        log.info("POST /api/v1/matches/{}/events - Registrando tiro: eventId={}", matchId, request.eventId());
         ResultadoTiro resultado = matchService.registrarTiro(matchId, request);
         return ResponseEntity.ok(toResponse(resultado));
     }
@@ -59,20 +64,16 @@ public class EventController {
     public ResponseEntity<ResultadoTiroResponse> corregirUltimoTiro(
             @PathVariable String matchId,
             @Valid @RequestBody TiroEventRequest request) {
-        // Forzamos el eventId a "CORRECCION:" + timestamp para que sea único
-        // pero el service debe manejar esto como una corrección del último evento
-        String eventIdCorreccion = "CORRECCION:" + System.currentTimeMillis();
-        TiroEventRequest correccionRequest = new TiroEventRequest(
-            eventIdCorreccion,
-            request.jugadorId(),
-            request.primeraBolaTocada(),
-            request.bolasEmbolsadas(),
-            request.troneras(),
-            request.duracionSegundos(),
-            request.versionEsperada()
-        );
-        ResultadoTiro resultado = matchService.registrarTiro(matchId, correccionRequest);
-        return ResponseEntity.ok(toResponse(resultado));
+        log.info("PUT /api/v1/matches/{}/events/last - Corrigiendo último tiro: jugadorId={}", 
+                matchId, request.jugadorId());
+        try {
+            // Llamar al método específico de corrección del service
+            ResultadoTiro resultado = matchService.corregirUltimoTiro(matchId, request);
+            return ResponseEntity.ok(toResponse(resultado));
+        } catch (Exception e) {
+            log.error("Error corrigiendo último tiro en partida {}: {}", matchId, e.getMessage(), e);
+            throw e;
+        }
     }
 
     private ResultadoTiroResponse toResponse(ResultadoTiro r) {

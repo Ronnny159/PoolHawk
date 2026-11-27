@@ -10,6 +10,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 /**
  * Listener que emite la actualización de la partida por WebSocket
  * SOLO después de que la transacción haya confirmado correctamente.
+ * Envía el mensaje solo a las sesiones conectadas a esa partida específica.
  */
 @Component
 public class MatchEventListener {
@@ -25,7 +26,8 @@ public class MatchEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPartidaActualizada(PartidaActualizadaEvent event) {
         try {
-            liveHandler.broadcast(event.json());
+            // Enviar solo a las sesiones de esta partida específica
+            liveHandler.broadcastToMatch(event.partidaId(), event.json());
         } catch (Exception e) {
             log.warn("Error emitiendo WebSocket para partida {}", event.partidaId(), e);
         }
