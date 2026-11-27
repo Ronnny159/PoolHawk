@@ -1,31 +1,56 @@
-*(El Diagrama de Componentes - Punto 11 de Patricia).*
-
-# Diagrama de Componentes
+# Diagrama de componentes de PoolHawk
 
 ```mermaid
-flowchart LR
-    subgraph Cliente
-        Front[App Web Vue 3]
+flowchart TB
+    subgraph Cliente["Cliente"]
+      UI["Frontend Vue 3 / Vite"]
+      UIAPI["Axios / módulos API"]
+      UI <--> UIAPI
     end
 
-    subgraph Servidor API
-        API[Spring Boot API]
-        Rules[Motor de Reglas]
-        Domain[Dominio Puro]
-        
-        API --> Rules
-        API --> Domain
-        Rules --> Domain
+    subgraph Backend["Backend Spring Boot"]
+      REST["Controladores REST"]
+      APP["Servicios de aplicación"]
+      DOMAIN["billiard-domain"]
+      RULES["billiard-rules"]
+      PERSIST["JPA / MatchStorage / Mappers"]
+      SEC["JWT / Security"]
+      WS["WebSocket / eventos"]
+      REST --> APP
+      APP --> DOMAIN
+      APP --> RULES
+      RULES --> DOMAIN
+      APP --> PERSIST
+      REST --> SEC
+      APP --> WS
     end
 
-    subgraph Infraestructura
-        DB[(PostgreSQL)]
+    subgraph Infra["Infraestructura"]
+      DB[("PostgreSQL")]
+      FILES[("uploads/videos — almacenamiento local")]
     end
 
-    subgraph Captura
-        Py[Agente Python OpenCV]
+    subgraph Vision["Agente de visión"]
+      SOURCE["CameraSource"]
+      DET["BallDetector"]
+      CLS["BallClassifier"]
+      TRACK["BallTracker"]
+      SHOT["ShotAnalyzer"]
+      CLIENT["PoolHawkApiClient"]
+      QUEUE["ColaEventos / traza"]
+      SOURCE --> DET --> CLS --> TRACK --> SHOT --> CLIENT
+      CLIENT <--> QUEUE
     end
 
-    Front -- REST/JSON --> API
-    Py -- REST/JSON --> API
-    API -- JPA/JDBC --> DB
+    UIAPI <-->|HTTP REST| REST
+    UI <-->|WebSocket| WS
+    PERSIST <-->|JPA| DB
+    REST --> FILES
+    CLIENT <-->|HTTP REST| REST
+```
+
+## Alcance del diagrama
+- La arquitectura refleja componentes presentes en el repositorio.
+- El agente es un proceso Python independiente; no forma parte del proceso Spring.
+- La carpeta de videos se muestra como almacenamiento local porque el controlador usa `uploads/videos`. En el Docker Compose del corte no se configuró un volumen persistente para esa carpeta.
+- El diagrama no implica que la conexión de cámara del frontend esté implementada: el indicador de conexión en `VideoAnalysisConfig.vue` es simulado en este corte.
