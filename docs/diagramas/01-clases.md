@@ -1,66 +1,90 @@
-# Diagrama de Clases
+# Diagrama de clases del dominio y servicios
+
+> Vista conceptual basada en las clases identificadas en el commit de referencia. No sustituye un UML completo generado desde todos los atributos y métodos del código.
 
 ```mermaid
 classDiagram
-    class Coordenada {
-        +double x
-        +double y
-        +distanciaA(Coordenada) double
-    }
-    class Bola {
-        +int numero
-        +TipoBola tipo
-        +Coordenada posicion
-        +boolean enMesa
-    }
-    class Mesa {
-        +List~Bola~ bolas
-        +List~Tronera~ troneras
-        +agregarBola(Bola)
-    }
-    class Jugador {
-        +String id
-        +String nombre
-    }
-    class Equipo {
-        +List~Jugador~ jugadores
-    }
     class Partida {
-        +String id
-        +TipoModalidad modalidad
-        +Equipo equipoA
-        +Equipo equipoB
-        +MatchState estado
+      +String id
+      +TipoModalidad modalidad
+      +MatchState estado
+      +Equipo equipoA
+      +Equipo equipoB
+      +Mesa mesa
+      +aplicarTiro(evento, resultado)
+      +finalizar(jugador)
     }
     class MatchState {
-        +Map puntajes
-        +Turnos turnos
+      +Map puntajes
+      +Turnos turnos
+      +int cantidadTiros
+      +buscarResultadoPorEvento(eventId)
+    }
+    class Jugador {
+      +String id
+      +String nombre
+    }
+    class Equipo {
+      +List~Jugador~ jugadores
+    }
+    class Mesa {
+      +List~Bola~ bolas
+      +List~Tronera~ troneras
+    }
+    class Bola {
+      +int numero
+      +TipoBola tipo
+      +Coordenada posicion
+      +boolean enMesa
+    }
+    class TiroEvent {
+      +String id
+      +Jugador jugador
+      +Bola primeraBolaTocada
     }
     class ReglasBillar {
-        <<interface>>
-        +evaluar(MatchState, TiroEvent) ResultadoTiro
+      <<interface>>
+      +evaluar(MatchState, TiroEvent) ResultadoTiro
     }
     class AbstractReglasBillar {
-        <<abstract>>
-        #evaluarTiroLegal(MatchState, TiroEvent)* ResultadoTiro
+      <<abstract>>
     }
-    class ReglasBola8 {
-        #evaluarTiroLegal(MatchState, TiroEvent) ResultadoTiro
-    }
-    class ReglasPorPuntos {
-        #evaluarTiroLegal(MatchState, TiroEvent) ResultadoTiro
-    }
+    class ReglasBola8
+    class ReglasPorPuntos
     class ReglasFactory {
-        +crear(TipoModalidad) ReglasBillar
+      +crear(TipoModalidad, ReglasConfig) ReglasBillar
+    }
+    class MatchService {
+      +crear(request) Partida
+      +buscar(id) Partida
+      +registrarTiro(id, request) ResultadoTiro
+    }
+    class MatchFactory
+    class MatchStorage
+    class MatchPersistenceMapper
+    class PartidaEntity {
+      +version
     }
 
     Partida *-- MatchState
     Partida *-- Equipo
-    MatchState *-- Turnos
+    Partida *-- Mesa
+    Equipo *-- Jugador
     Mesa *-- Bola
     Bola *-- Coordenada
-    Equipo *-- Jugador
     ReglasBillar <|.. AbstractReglasBillar
     AbstractReglasBillar <|-- ReglasBola8
     AbstractReglasBillar <|-- ReglasPorPuntos
     ReglasFactory ..> ReglasBillar
+    MatchService --> MatchFactory
+    MatchService --> MatchStorage
+    MatchService --> MatchPersistenceMapper
+    MatchService ..> ReglasFactory
+    MatchPersistenceMapper ..> PartidaEntity
+    MatchStorage ..> PartidaEntity
+```
+
+## Observaciones
+- El dominio incluye también `FormatoJuego`, `TipoModalidad`, `FasePartida`, `ConfiguracionJuego`, `Grupo`, `Turnos`, `TroneraNombre`, `ResultadoTiro` y `FaltaMotivo`.
+- En infraestructura existen entidades JPA como `PartidaEntity`, `JugadorEntity` y `UsuarioEntity`.
+- El diagrama resume responsabilidades y relaciones de alto nivel; verificar cardinalidades, atributos y firmas antes de usarlo como diagrama final de clases.
