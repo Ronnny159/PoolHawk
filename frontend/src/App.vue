@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import CreateMatchForm from './components/CreateMatchForm.vue'
 import ScoreBoard from './components/ScoreBoard.vue'
 import ShotSimulator from './components/ShotSimulator.vue'
@@ -10,78 +10,116 @@ import CorrectionModal from './components/CorrectionModal.vue'
 import VideoAnalysisConfig from './components/VideoAnalysisConfig.vue'
 import { AUTH_REQUERIDA } from './api/endpoints'
 import { obtenerPartida } from './api/matches'
+import { toast } from './utils/toast'
+
 const tokenGuardado = localStorage.getItem('token')
 const token = ref(tokenGuardado && tokenGuardado.length > 20 ? tokenGuardado : null)
 if (!token.value) localStorage.removeItem('token')
+
 const partidaActual = ref(null)
 const formatoPartida = ref('INDIVIDUAL')
 const mostrarCorreccion = ref(false)
 const vistaLobby = ref('CREAR')
+const cargandoPartida = ref(false)
+
 let socket = null
 let reconnectTimeout = null
+
 const iniciarSesion = (nuevoToken) => {
   token.value = nuevoToken
   localStorage.setItem('token', nuevoToken)
+  // Reconectar WebSocket con el nuevo token
+  conectarWebSocket()
 }
-// FUNCION AUXILIAR PARA DETECTAR EL FORMATO
+
 const detectarFormato = (partida) => {
-  // Si el backend lo envia, perfecto
   if (partida.formato) return partida.formato
-  // Si no, lo adivinamos por la cantidad de jugadores en los equipos
   if (partida.equipoA?.length === 2 && partida.equipoB?.length === 2) {
-    // Si ambos equipos tienen 2, es PAREJAS (2v2)
     return 'PAREJAS'
   }
-  // Si no, es INDIVIDUAL (1v1 o Todos vs Todos)
   return 'INDIVIDUAL'
 }
+
 const iniciarPartida = (nuevaPartida) => {
   partidaActual.value = nuevaPartida
   formatoPartida.value = detectarFormato(nuevaPartida)
+  // Reconectar WebSocket al cambiar de partida
+  conectarWebSocket()
 }
+
 const recargarPartida = async () => {
-  if (!partidaActual.value) return
-  const datos = await obtenerPartida(partidaActual.value.id)
-  partidaActual.value = { ...datos }
+  if (!partidaActual.value || cargandoPartida.value) return
+  cargandoPartida.value = true
+  try {
+    const datos = await obtenerPartida(partidaActual.value.id)
+    partidaActual.value = { ...datos }
+  } catch (error) {
+    console.error('Error recargando partida:', error)
+    toast.error('No se pudo recargar la partida')
+  } finally {
+    cargandoPartida.value = false
+  }
 }
+
 const cargarPartidaDelHistorial = (partida) => {
   partidaActual.value = { ...partida }
   formatoPartida.value = detectarFormato(partida)
+  conectarWebSocket()
 }
+
 const cerrarSesion = () => {
   localStorage.removeItem('token')
   token.value = null
   partidaActual.value = null
   mostrarCorreccion.value = false
+  if (socket) {
+    socket.close()
+    socket = null
+  }
   window.location.reload()
 }
+
 const volverAlLobby = () => {
   partidaActual.value = null
   mostrarCorreccion.value = false
   vistaLobby.value = 'CREAR'
+  if (socket) {
+    socket.close()
+    socket = null
+  }
 }
+
 const conectarWebSocket = () => {
-  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
-  const wsBase = apiBase.replace(/^http/, 'ws').replace(/\/api\/v1$/, '');
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsHost = wsBase ? new URL(wsBase).host : (window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host);
-  socket = new WebSocket(`${wsProtocol}//${wsHost}/ws/matches`)
+  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return
+  
+  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
+  const wsBase = apiBase.replace(/^http/, 'ws').replace(/\/api\/v1$/, '')
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsHost = wsBase ? new URL(wsBase).host : (window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host)
+  
+  // Incluir token en la URL del WebSocket para autenticación
+  let wsUrl = `${wsProtocol}//${wsHost}/ws/matches`
+  if (token.value) {
+    wsUrl += `?token=${encodeURIComponent(token.value)}`
+  }
+  
+  socket = new WebSocket(wsUrl)
+  
   socket.onmessage = (event) => {
     try {
       const partidaActualizada = JSON.parse(event.data)
       if (partidaActual.value && partidaActual.value.id === partidaActualizada.id) {
-        console.log(' Marcador actualizado en vivo')
+        console.log('📊 Marcador actualizado en vivo')
         partidaActual.value = { ...partidaActualizada }
-        // Actualizamos tambiÃ©n el formato por si acaso
         formatoPartida.value = detectarFormato(partidaActualizada)
       }
     } catch (e) {
       console.error('Error parseando mensaje WebSocket', e)
     }
   }
+  
   socket.onclose = () => {
-    console.log(' WebSocket desconectado. Reconectando...')
+    console.log('🔌 WebSocket desconectado. Reconectando en 3s...')
     socket = null
     if (!reconnectTimeout) {
       reconnectTimeout = setTimeout(() => {
@@ -90,23 +128,40 @@ const conectarWebSocket = () => {
       }, 3000)
     }
   }
-  socket.onerror = (error) => console.error('Error en WebSocket:', error)
+  
+  socket.onerror = (error) => {
+    console.error('Error en WebSocket:', error)
+  }
+  
+  socket.onopen = () => {
+    console.log('✅ WebSocket conectado')
+  }
 }
+
+// Observar cambios en el token para reconectar WebSocket
+watch(token, (nuevoToken) => {
+  if (nuevoToken) {
+    conectarWebSocket()
+  }
+})
+
 onMounted(() => {
   conectarWebSocket()
 })
+
 onUnmounted(() => {
   if (reconnectTimeout) clearTimeout(reconnectTimeout)
   if (socket) socket.close()
 })
 </script>
+
 <template>
   <div class="app-container">
     <ToastContainer />
     <header>
       <h1> PoolHawk</h1>
-      <p class="subtitle">Sistema de Rastreo y Marcado AutomÃ¡tico</p>
-      <button v-if="token || !AUTH_REQUERIDA" @click="cerrarSesion" class="btn-logout">Cerrar sesiÃ³n</button>
+      <p class="subtitle">Sistema de Rastreo y Marcado Automático</p>
+      <button v-if="token || !AUTH_REQUERIDA" @click="cerrarSesion" class="btn-logout">Cerrar sesión</button>
     </header>
     <main>
       <LoginView v-if="AUTH_REQUERIDA && !token" @ingreso="iniciarSesion" />
@@ -114,24 +169,31 @@ onUnmounted(() => {
         <div class="lobby-nav">
           <button :class="{ active: vistaLobby === 'CREAR' }" @click="vistaLobby = 'CREAR'">🎱 Nueva Partida</button>
           <button :class="{ active: vistaLobby === 'HISTORIAL' }" @click="vistaLobby = 'HISTORIAL'">📜 Historial</button>
-          <button :class="{ active: vistaLobby === 'CONFIG' }" @click="vistaLobby = 'CONFIG'">⚙️ Configuración</button>
+          <button :class="{ active: vistaLobby === 'CONFIG' }" @click="vistaLobby = 'CONFIG'">🎬 Análisis de Video</button>
         </div>
         <CreateMatchForm v-if="vistaLobby === 'CREAR'" @partidaIniciada="iniciarPartida" />
         <MatchHistory v-if="vistaLobby === 'HISTORIAL'" @partidaSeleccionada="cargarPartidaDelHistorial" />
         <VideoAnalysisConfig v-if="vistaLobby === 'CONFIG'" />
       </template>
       <template v-else>
-        <button @click="volverAlLobby" class="btn-salir">â† Volver al Lobby</button>
+        <button @click="volverAlLobby" class="btn-salir">← Volver al Lobby</button>
+        
+        <!-- Skeleton loader mientras carga la partida -->
+        <div v-if="cargandoPartida" class="skeleton-loader">
+          <div class="skeleton-header"></div>
+          <div class="skeleton-teams"></div>
+        </div>
         
         <ScoreBoard 
-          :key="JSON.stringify(partidaActual.puntajes) + partidaActual.jugadorActual" 
+          v-else
+          :key="partidaActual.id + '|' + partidaActual.jugadorActual + '|' + JSON.stringify(partidaActual.puntajes)"
           :partida="partidaActual" 
           :formato="formatoPartida" 
         />
         
         <ShotSimulator :partida="partidaActual" />
         
-        <button @click="mostrarCorreccion = true" class="btn-corregir">âœï¸ Corregir Ãºltimo tiro</button>
+        <button @click="mostrarCorreccion = true" class="btn-corregir">✏️ Corregir último tiro</button>
         
         <CorrectionModal
           v-if="mostrarCorreccion"
@@ -143,6 +205,7 @@ onUnmounted(() => {
     </main>
   </div>
 </template>
+
 <style>
 /* ... Los mismos estilos que ya tienes ... */
 body { margin: 0; background-color: #121212; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -160,4 +223,63 @@ header h1 { margin: 0; font-size: 3rem; }
 .lobby-nav button { padding: 0.8rem 2rem; background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: all 0.2s; }
 .lobby-nav button:hover { background: #334155; color: white; }
 .lobby-nav button.active { background: #22c55e; color: white; border-color: #22c55e; }
+
+/* Skeleton loader */
+.skeleton-loader {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+  background: #1e293b;
+  border: 4px solid #0f172a;
+  border-radius: 12px;
+  box-shadow: inset 0 0 30px rgba(0,0,0,0.8), 0 20px 40px rgba(0,0,0,0.6);
+}
+
+.skeleton-header {
+  height: 3rem;
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #334155;
+  padding-bottom: 1rem;
+}
+
+.skeleton-teams {
+  display: flex;
+  justify-content: space-around;
+  gap: 2rem;
+}
+
+.skeleton-team {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.skeleton-ball {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  margin: 1rem 0;
+}
+
+.skeleton-name {
+  height: 1.5rem;
+  width: 60%;
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 </style>

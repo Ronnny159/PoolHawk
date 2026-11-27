@@ -23,8 +23,12 @@ import com.poolhawk.rules.ReglasFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -43,6 +47,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -59,7 +64,13 @@ public class MatchService {
 
     // Cache de solo lectura para mejorar rendimiento en consultas GET.
     // La concurrencia de escritura se gestiona de forma segura con JPA @Version (Optimistic Locking).
-    private final Map<String, Partida> partidasEnMemoria = new ConcurrentHashMap<>();
+    // Estructura: partidaId -> CacheEntry (partida + timestamp de última acceso)
+    private final ConcurrentMap<String, CacheEntry> cache = new ConcurrentHashMap<>();
+
+    // TTL de 30 minutos para entradas de caché
+    private static final Duration CACHE_TTL = Duration.ofMinutes(30);
+    // Limpieza cada 10 minutos
+    private static final long CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 
     public MatchService(MatchStorage storage, PartidaMapper responseMapper,
                         MatchPersistenceMapper persistenceMapper, MatchFactory matchFactory,
@@ -70,6 +81,53 @@ public class MatchService {
         this.matchFactory = matchFactory;
         this.jsonMapper = jsonMapper;
         this.eventPublisher = eventPublisher;
+    }
+
+    /**
+     * Limpieza periódica de entradas expiradas del caché.
+     * Se ejecuta cada 10 minutos para eliminar partidas no accedidas en 30 minutos.
+     */
+    @Scheduled(fixedDelay = CLEANUP_INTERVAL_MS)
+    public void limpiarCacheExpirado() {
+        Instant ahora = Instant.now();
+        int eliminadas = 0;
+        
+        for (var entry : cache.entrySet()) {
+            if (Duration.between(entry.getValue().ultimoAcceso(), ahora).compareTo(CACHE_TTL) > 0) {
+                if (cache.remove(entry.getKey(), entry.getValue())) {
+                    eliminadas++;
+                }
+            }
+        }
+        
+        if (eliminadas > 0) {
+            log.debug("Limpieza de caché: {} entradas expiradas eliminadas", eliminadas);
+        }
+    }
+
+    // Clase interna para almacenar la partida y su timestamp de último acceso
+    private record CacheEntry(Partida partida, Instant ultimoAcceso) {
+        CacheEntry(Partida partida) {
+            this(partida, Instant.now());
+        }
+    }
+
+    private Partida obtenerDeCache(String id) {
+        CacheEntry entry = cache.get(id);
+        if (entry != null) {
+            // Actualizar timestamp de último acceso
+            cache.put(id, new CacheEntry(entry.partida(), Instant.now()));
+            return entry.partida();
+        }
+        return null;
+    }
+
+    private void ponerEnCache(String id, Partida partida) {
+        cache.put(id, new CacheEntry(partida));
+    }
+
+    private void removerDeCache(String id) {
+        cache.remove(id);
     }
 
     @Transactional
@@ -121,7 +179,7 @@ public class MatchService {
 
     @Transactional(readOnly = true)
     public Partida buscar(String id) {
-        Partida cacheada = partidasEnMemoria.get(id);
+        Partida cacheada = obtenerDeCache(id);
         if (cacheada != null) {
             return cacheada;
         }
@@ -129,7 +187,7 @@ public class MatchService {
         PartidaEntity entity = storage.buscar(id)
             .orElseThrow(() -> new PartidaNoEncontradaException(id));
         Partida reconstruida = persistenceMapper.toDomain(entity);
-        partidasEnMemoria.put(id, reconstruida);
+        ponerEnCache(id, reconstruida);
         return reconstruida;
     }
 
@@ -226,15 +284,15 @@ public class MatchService {
 
         } catch (OptimisticLockingFailureException e) {
             // Conflicto de concurrencia detectado por JPA: otro hilo/instancia modificó la partida
-            partidasEnMemoria.remove(partidaId);
+            removerDeCache(partidaId);
             log.warn("Conflicto de versión en partida {}. Caché invalidada.", partidaId);
             throw new ResponseStatusException(HttpStatus.CONFLICT, "La partida fue modificada por otro proceso. Intente de nuevo.");
         } catch (RuntimeException e) {
-            partidasEnMemoria.remove(partidaId);
+            removerDeCache(partidaId);
             log.error("Fallo al registrar tiro en partida {}. Caché invalidada.", partidaId, e);
             throw e;
         } catch (Exception e) {
-            partidasEnMemoria.remove(partidaId);
+            removerDeCache(partidaId);
             log.error("Error inesperado al registrar tiro en partida {}.", partidaId, e);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno al registrar tiro: " + e.getMessage());
         }
@@ -246,7 +304,7 @@ public class MatchService {
             @Override
             public void afterCompletion(int status) {
                 if (status != STATUS_COMMITTED) {
-                    partidasEnMemoria.remove(partidaId);
+                    removerDeCache(partidaId);
                     log.warn("Transacción no confirmada para partida {}. Caché invalidada.", partidaId);
                 }
             }
@@ -258,11 +316,11 @@ public class MatchService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    partidasEnMemoria.remove(partidaId);
+                    removerDeCache(partidaId);
                 }
             });
         } else {
-            partidasEnMemoria.remove(partidaId);
+            removerDeCache(partidaId);
         }
     }
 
@@ -271,11 +329,11 @@ public class MatchService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    partidasEnMemoria.put(partidaId, partida);
+                    ponerEnCache(partidaId, partida);
                 }
             });
         } else {
-            partidasEnMemoria.put(partidaId, partida);
+            ponerEnCache(partidaId, partida);
         }
     }
 
@@ -337,5 +395,105 @@ public class MatchService {
 
         Duration duracion = request.duracionSegundos() != null ? Duration.ofSeconds(request.duracionSegundos()) : Duration.ofSeconds(5);
         return new TiroEvent(request.eventId(), partida.getId(), jugadorActual, primeraTocada, embolsadas, troneras, Instant.now(), duracion);
+    }
+
+    /**
+     * Corrige el último tiro de la partida.
+     * 
+     * @param partidaId id de la partida
+     * @param request datos corregidos del tiro
+     * @return el veredicto recalculado
+     */
+    @Transactional
+    public ResultadoTiro corregirUltimoTiro(String partidaId, TiroEventRequest request) {
+        registrarInvalidacionEnRollback(partidaId);
+        
+        // 1. Cargar snapshot fresco desde BD
+        PartidaEntity entityCargada = storage.buscar(partidaId)
+            .orElseThrow(() -> new PartidaNoEncontradaException(partidaId));
+        long versionCargada = entityCargada.getVersion();
+        Partida partida = persistenceMapper.toDomain(entityCargada);
+        
+        // 2. Verificar que hay al menos un tiro para corregir
+        if (partida.getEstado().getHistorial().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No hay tiros registrados para corregir.");
+        }
+        
+        // 3. Obtener el último evento y su resultado
+        TiroEvent ultimoEvento = partida.getEstado().getHistorial().get(partida.getEstado().getHistorial().size() - 1);
+        String ultimoEventId = ultimoEvento.id();
+        
+        // 4. Verificar que el eventoId del request coincide con "CORRECCION:" pattern
+        if (!request.eventId().startsWith("CORRECCION:")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "EventId de corrección inválido.");
+        }
+        
+        // 5. Restaurar el estado previo al último tiro
+        partida.getEstado().restaurarEstadoPrevio();
+        
+        // 6. Eliminar el resultado del último evento (para permitir re-registro con nuevo eventId)
+        partida.getEstado().removerResultadoPorEvento(ultimoEventId);
+        
+        // 7. Validar versión esperada
+        if (request.versionEsperada() != null
+                && request.versionEsperada().intValue() != partida.getEstado().cantidadTiros()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, 
+                "Estado desactualizado. Versión esperada: " + request.versionEsperada() + 
+                ", versión actual en BD: " + partida.getEstado().cantidadTiros());
+        }
+        
+        // 8. Validar turno (debe ser el mismo jugador que tiró originalmente)
+        Jugador jugadorActual = partida.jugadorActual();
+        if (!jugadorActual.id().equals(request.jugadorId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "No es el turno de este jugador para la corrección.");
+        }
+        
+        // 9. Construir y evaluar el evento corregido
+        TiroEvent eventoCorregido = construirEventoValidado(partida, request, jugadorActual);
+        ReglasBillar reglas = ReglasFactory.crear(partida.getModalidad(), ReglasConfig.porDefecto());
+        ResultadoTiro resultado = reglas.evaluar(partida.getEstado(), eventoCorregido);
+        
+        try {
+            // 10. Aplicar el tiro corregido
+            partida.aplicarTiro(eventoCorregido, resultado);
+            if (resultado.esVictoria()) {
+                partida.finalizar(eventoCorregido.jugador());
+            } else if (resultado.esDerrota()) {
+                Jugador oponente = partida.getEquipoA().contiene(eventoCorregido.jugador()) 
+                    ? partida.getEquipoB().getJugadores().get(0) 
+                    : partida.getEquipoA().getJugadores().get(0);
+                partida.finalizar(oponente);
+            }
+            
+            // 11. Persistencia
+            PartidaEntity entityNueva = persistenceMapper.toEntity(partida);
+            entityNueva.setVersion(versionCargada);
+            storage.guardar(entityNueva);
+            
+            // 12. Invalidar caché y publicar WebSocket
+            invalidarCacheTrasCommit(partidaId);
+            
+            try {
+                String json = jsonMapper.writeValueAsString(responseMapper.toResponse(partida));
+                eventPublisher.publishEvent(new PartidaActualizadaEvent(partidaId, json));
+            } catch (Exception e) {
+                log.warn("Error serializando partida {} para WebSocket", partidaId, e);
+            }
+            
+            return resultado;
+            
+        } catch (OptimisticLockingFailureException e) {
+            removerDeCache(partidaId);
+            log.warn("Conflicto de versión en partida {}. Caché invalidada.", partidaId);
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La partida fue modificada por otro proceso. Intente de nuevo.");
+        } catch (RuntimeException e) {
+            removerDeCache(partidaId);
+            log.error("Fallo al corregir tiro en partida {}. Caché invalidada.", partidaId, e);
+            throw e;
+        } catch (Exception e) {
+            removerDeCache(partidaId);
+            log.error("Error inesperado al corregir tiro en partida {}.", partidaId, e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno al corregir tiro: " + e.getMessage());
+        }
     }
 }

@@ -123,6 +123,16 @@ public class MatchState {
     }
 
     /**
+     * Elimina el resultado asociado a un eventId (usado para corrección de tiros).
+     * Solo debe usarse internamente antes de volver a aplicar un tiro corregido.
+     *
+     * @param eventId id del evento a eliminar
+     */
+    public void removerResultadoPorEvento(String eventId) {
+        resultadosPorEvento.remove(eventId);
+    }
+
+    /**
      * Devuelve los números de las bolas que siguen sobre la mesa (incluida la blanca, id 0).
      * Útil para que la capa API verifique situaciones como "falta con blanca que vuelve".
      *

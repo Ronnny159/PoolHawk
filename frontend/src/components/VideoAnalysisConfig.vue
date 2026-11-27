@@ -1,9 +1,9 @@
 <template>
   <div class="config-avanzada">
-    <h3>⚙️ Configuraciones Avanzadas</h3>
+    <h3>🎬 Análisis de Video</h3>
 
     <div class="video-upload-section">
-      <h4>📹 Análisis de Video</h4>
+      <h4>📹 Subir y Analizar Video</h4>
       <p>
         Sube un video de una partida de billar para que el agente de visión
         analice automáticamente los tiros y las posiciones de las bolas.
@@ -94,7 +94,7 @@
         </div>
       </div>
 
-      <!-- Paso 3: Comando para el agente -->
+      <!-- Paso 3: Comando para el agente + selección de cámara -->
       <div v-else-if="partidaCreada" class="step-card success">
         <h4 class="step-title">✅ Partida Creada</h4>
         <p class="step-subtitle">Ejecuta este comando en tu terminal para analizar el video:</p>
@@ -110,6 +110,52 @@
           <p><strong>Video:</strong> {{ videoFilename }}</p>
           <p><strong>Jugadores:</strong> {{ jugador1 }} vs {{ jugador2 }}</p>
           <p><strong>Modalidad:</strong> Por Puntos (1 vs 1)</p>
+        </div>
+
+        <!-- Selección de cámara para live tracking -->
+        <div class="camera-section">
+          <h4 class="step-title">📷 Cámara en Vivo (Opcional)</h4>
+          <p class="step-subtitle">Si quieres seguir la partida en vivo con la cámara:</p>
+          
+          <div class="camera-options">
+            <button class="camera-btn" @click="seleccionarCamara('dispositivo')">
+              <span class="camera-icon">📷</span>
+              <span>Cámara del dispositivo</span>
+            </button>
+            <button class="camera-btn" @click="seleccionarCamara('droidcam')">
+              <span class="camera-icon">📱</span>
+              <span>DroidCam</span>
+            </button>
+            <button class="camera-btn" @click="seleccionarCamara('camostudio')">
+              <span class="camera-icon">🎥</span>
+              <span>Camo Studio</span>
+            </button>
+          </div>
+
+          <div v-if="camaraSeleccionada" class="camera-config">
+            <div class="camera-status" :class="{ conectada: camaraConectada }">
+              <span class="status-dot"></span>
+              <span>{{ camaraConectada ? 'Cámara conectada ✅' : 'Cámara desconectada ❌' }}</span>
+            </div>
+            
+            <div v-if="camaraSeleccionada === 'droidcam'" class="droidcam-input">
+              <label>URL de DroidCam (ej: http://192.168.1.50:4747/video):</label>
+              <input
+                v-model="droidcamUrl"
+                type="text"
+                placeholder="http://192.168.x.x:4747/video"
+                @keyup.enter="conectarCamara"
+              />
+            </div>
+            
+            <button class="btn-camara" @click="conectarCamara" :disabled="camaraConectada || conectandoCamara">
+              {{ conectandoCamara ? 'Conectando...' : camaraConectada ? 'Conectada' : 'Conectar Cámara' }}
+            </button>
+            
+            <div v-if="camaraError" class="upload-error">
+              ❌ {{ camaraError }}
+            </div>
+          </div>
         </div>
 
         <button class="btn-reset" @click="resetear">
@@ -146,6 +192,13 @@ const creandoPartida = ref(false)
 const crearError = ref(null)
 const partidaCreada = ref(false)
 const matchId = ref('')
+
+// Paso 3: Cámara
+const camaraSeleccionada = ref(null) // 'dispositivo', 'droidcam', 'camostudio'
+const camaraConectada = ref(false)
+const conectandoCamara = ref(false)
+const camaraError = ref(null)
+const droidcamUrl = ref('')
 
 const handleFileUpload = (event) => {
   const file = event.target.files[0]
@@ -240,6 +293,36 @@ const copiarComando = async () => {
   toast.success('¡Comando copiado al portapapeles!')
 }
 
+const seleccionarCamara = (tipo) => {
+  camaraSeleccionada.value = tipo
+  camaraConectada.value = false
+  camaraError.value = null
+  if (tipo === 'droidcam') {
+    droidcamUrl.value = ''
+  }
+}
+
+const conectarCamara = async () => {
+  if (!camaraSeleccionada.value) return
+  
+  conectandoCamara.value = true
+  camaraError.value = null
+  
+  try {
+    // Aquí se haría la llamada al backend para configurar la cámara
+    // Por ahora simulamos la conexión
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    
+    camaraConectada.value = true
+    conectandoCamara.value = false
+    toast.success('Cámara conectada correctamente')
+  } catch (error) {
+    camaraError.value = 'No se pudo conectar la cámara: ' + error.message
+    toast.error(camaraError.value)
+    conectandoCamara.value = false
+  }
+}
+
 const resetear = () => {
   step.value = 1
   videoSubido.value = false
@@ -249,8 +332,12 @@ const resetear = () => {
   matchId.value = ''
   jugador1.value = ''
   jugador2.value = ''
+  camaraSeleccionada.value = null
+  camaraConectada.value = false
+  droidcamUrl.value = ''
   uploadError.value = null
   crearError.value = null
+  camaraError.value = null
 }
 </script>
 
@@ -481,6 +568,130 @@ const resetear = () => {
 .video-info p {
   margin: 0.35rem 0;
   color: #ddd;
+}
+
+/* Cámara section */
+.camera-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #333;
+}
+
+.camera-options {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+
+.camera-btn {
+  flex: 1;
+  min-width: 140px;
+  padding: 1rem;
+  background: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 10px;
+  color: #ddd;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.camera-btn:hover {
+  border-color: #4ade80;
+  background: #333;
+}
+
+.camera-btn.selected {
+  border-color: #4ade80;
+  background: rgba(34, 197, 94, 0.15);
+}
+
+.camera-icon {
+  font-size: 1.5rem;
+}
+
+.camera-config {
+  background: #2a2a2a;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.camera-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.camera-status.conectada {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+}
+
+.camera-status:not(.conectada) {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ff4444;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.droidcam-input {
+  margin-bottom: 1rem;
+}
+
+.droidcam-input label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #aaa;
+  font-size: 0.85rem;
+}
+
+.droidcam-input input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  background: #333;
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: white;
+  font-size: 0.9rem;
+}
+
+.droidcam-input input:focus {
+  border-color: #4ade80;
+  outline: none;
+}
+
+.btn-camara {
+  width: 100%;
+  padding: 0.75rem;
+  background: #4ade80;
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-camara:hover:not(:disabled) {
+  background: #22c55e;
+}
+
+.btn-camara:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn-reset {

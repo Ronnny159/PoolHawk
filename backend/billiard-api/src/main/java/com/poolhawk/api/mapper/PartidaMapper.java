@@ -3,6 +3,7 @@ package com.poolhawk.api.mapper;
 import com.poolhawk.api.dto.JugadorResponse;
 import com.poolhawk.api.dto.PartidaResponse;
 import com.poolhawk.domain.match.Partida;
+import com.poolhawk.domain.match.Grupo;
 import com.poolhawk.domain.player.Jugador;
 import org.springframework.stereotype.Component;
 
@@ -12,7 +13,7 @@ import java.util.Map;
 
 /**
  * Mapea el agregado {@link Partida} a su DTO {@link PartidaResponse},
- * incluyendo el estado actual de la mesa ({@code bolasEnMesa}).
+ * incluyendo el estado actual de la mesa ({@code bolasEnMesa}) y grupos asignados.
  */
 @Component
 public class PartidaMapper {
@@ -39,7 +40,8 @@ public class PartidaMapper {
                 : null,
             partida.getEstado().cantidadTiros(),
             partida.getEstado().getFechaInicio(),
-            partida.getEstado().bolasEnMesa());
+            partida.getEstado().bolasEnMesa(),
+            mapearGruposAsignados(partida));
     }
 
     private List<JugadorResponse> mapearEquipo(List<Jugador> jugadores) {
@@ -54,6 +56,13 @@ public class PartidaMapper {
         Map<String, Integer> mapa = new LinkedHashMap<>();
         partida.getEstado().getPuntajes()
             .forEach((jugador, puntos) -> mapa.put(jugador.nombre(), puntos));
+        return mapa;
+    }
+
+    private Map<String, String> mapearGruposAsignados(Partida partida) {
+        Map<String, String> mapa = new LinkedHashMap<>();
+        partida.getEstado().getGruposAsignados()
+            .forEach((jugador, grupo) -> mapa.put(jugador.nombre(), grupo.name()));
         return mapa;
     }
 }

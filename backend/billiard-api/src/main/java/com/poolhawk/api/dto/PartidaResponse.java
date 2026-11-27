@@ -20,6 +20,7 @@ import java.util.Map;
  * @param cantidadTiros   cantidad de tiros registrados
  * @param fechaCreacion   fecha de creación
  * @param bolasEnMesa     números de bola que siguen sobre la mesa (incluye la blanca, id 0)
+ * @param gruposAsignados grupos asignados por jugador (LISAS, RAYADAS, SIN_ASIGNAR)
  */
 public record PartidaResponse(
         String id,
@@ -34,5 +35,6 @@ public record PartidaResponse(
         String ganador,
         int cantidadTiros,
         Instant fechaCreacion,
-        List<Integer> bolasEnMesa) {
+        List<Integer> bolasEnMesa,
+        Map<String, String> gruposAsignados) {
 }
