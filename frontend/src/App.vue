@@ -91,18 +91,32 @@ const volverAlLobby = () => {
 
 const conectarWebSocket = () => {
   if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return
-  
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
-  const wsBase = apiBase.replace(/^http/, 'ws').replace(/\/api\/v1$/, '')
+
+  // Construir la URL del WebSocket.
+  // - Si VITE_API_BASE_URL apunta a un backend externo (host distinto al de la página),
+  //   se usa ese host directamente.
+  // - En cualquier otro caso (frontend servido por nginx en :80 o Vite dev), se conecta
+  //   al MISMO host/puerto que sirve la página, para que nginx (location /ws/) o el proxy
+  //   de Vite reenvíen el handshake al backend. Esto evita problemas de CORS/origin.
+  const apiBase = import.meta.env.VITE_API_BASE_URL
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsHost = wsBase ? new URL(wsBase).host : (window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host)
-  
+
+  let wsHost
+  if (apiBase) {
+    const apiHost = new URL(apiBase, window.location.origin).host
+    // Solo usar el host del backend si es diferente al de la página (backend externo)
+    wsHost = (apiHost !== window.location.host) ? apiHost : window.location.host
+  } else {
+    wsHost = window.location.host
+  }
+
   // Incluir token en la URL del WebSocket para autenticación
   let wsUrl = `${wsProtocol}//${wsHost}/ws/matches`
   if (token.value) {
     wsUrl += `?token=${encodeURIComponent(token.value)}`
   }
-  
+
+  console.log('🔌 Conectando WebSocket a:', wsUrl)
   socket = new WebSocket(wsUrl)
   
   socket.onmessage = (event) => {
