@@ -20,24 +20,37 @@ const avisarResultado = (resultado, fueReintento) => {
   }
 }
 
+/**
+ * Determina la bola objetivo según el equipo del jugador actual.
+ * Convención: Equipo A → bola 1 (lisas 1-7), Equipo B → bola 9 (rayadas 9-15)
+ */
+const obtenerBolaObjetivo = () => {
+  const todosLosJugadores = [...props.partida.equipoA, ...props.partida.equipoB]
+  const jugadorActual = todosLosJugadores.find(j => j.id === props.partida.jugadorActualId)
+  
+  if (!jugadorActual) {
+    // Fallback: si no se encuentra, usar bola 1
+    console.warn('Jugador actual no encontrado en equipos, usando bola 1 por defecto')
+    return 1
+  }
+  
+  const esEquipoA = props.partida.equipoA.some(j => j.id === jugadorActual.id)
+  return esEquipoA ? 1 : 9
+}
+
 const simularTiro = async (tipo) => {
   cargando.value = true
 
   try {
-    // H-07: Usar jugadorActualId directamente en lugar de buscar por nombre
     const jugadorId = props.partida.jugadorActualId
     if (!jugadorId) throw new Error('Jugador actual no encontrado (falta jugadorActualId)')
 
-    // Lista de bolas disponibles (excluyendo la 8 para que no termine la partida)
-    const bolasDisponibles = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15]
-    // Elegimos una bola al azar para no repetir siempre la misma
-    const bolaRandom = bolasDisponibles[Math.floor(Math.random() * bolasDisponibles.length)]
-
+    const bolaObjetivo = obtenerBolaObjetivo()
+    
     // IMPORTANTE: eventId generado UNA SOLA VEZ por tiro. Todos los reintentos
     // del bucle comparten el mismo eventId (idempotencia transparente).
     const eventId = crypto.randomUUID()
 
-    // H-07: Enviar versionEsperada basada en la cantidad de tiros actual
     let payload = {
       eventId,
       jugadorId: jugadorId,
@@ -51,14 +64,14 @@ const simularTiro = async (tipo) => {
     if (tipo === 'FALLO') {
       // payload ya tiene null primeraBola, [] bolas, [] troneras
     } else if (tipo === 'LEGAL') {
-      payload.primeraBolaTocada = bolaRandom
+      payload.primeraBolaTocada = bolaObjetivo
     } else if (tipo === 'EMBOLSÓ') {
-      payload.primeraBolaTocada = bolaRandom
-      payload.bolasEmbolsadas = [bolaRandom]
+      payload.primeraBolaTocada = bolaObjetivo
+      payload.bolasEmbolsadas = [bolaObjetivo]
       payload.troneras = ['TOP_LEFT']
     }
 
-    console.log(`Simulando tiro para jugador ${jugadorId} con bola ${bolaRandom}`, payload)
+    console.log(`Simulando tiro para jugador ${jugadorId} con bola objetivo ${bolaObjetivo} (Equipo ${bolaObjetivo === 1 ? 'A (Lisas)' : 'B (Rayadas)'})`, payload)
 
     let exito = false
     let intentos = 0

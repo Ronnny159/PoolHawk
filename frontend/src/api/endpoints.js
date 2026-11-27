@@ -3,8 +3,8 @@
 //
 // - LOGIN: confirmado con AuthController (develop): POST /api/v1/auth/login
 //   con { username, password } -> { token }. Credenciales de demo en el README.
-// - CORRECCION: PROVISIONAL. El endpoint todavia no existe en develop; cuando
-//   exista, se ajusta aqui (ruta, metodo y cuerpo) y nada mas.
+// - CORRECCION: PUT /api/v1/matches/{matchId}/events/last
+//   Requiere eventId con prefijo "CORRECCION:" y versionEsperada.
 // ---------------------------------------------------------------------------
 
 // Si es true, la app pide login antes de mostrar el marcador.
@@ -28,16 +28,27 @@ export const CAMPOS_LOGIN = {
   token: 'token',
 }
 
-// Cuerpo de la correccion a partir de lo que llena el arbitro en el modal.
-// `embolsadas` es { numeroDeBola: nombreDeTronera }.
-export const armarCorreccion = ({ jugadorId, primeraBola, embolsadas, motivo }) => {
+/**
+ * Construye el payload para la corrección de tiro.
+ * El backend espera:
+ * - eventId: string con prefijo "CORRECCION:" + timestamp
+ * - versionEsperada: cantidad de tiros actual de la partida (para optimistic locking)
+ * - jugadorId, primeraBolaTocada, bolasEmbolsadas, troneras, duracionSegundos, motivo
+ * 
+ * @param {Object} params - { jugadorId, primeraBola, embolsadas, motivo, versionEsperada }
+ * @returns {Object} Payload listo para enviar al backend
+ */
+export const armarCorreccion = ({ jugadorId, primeraBola, embolsadas, motivo, versionEsperada }) => {
   const numeros = Object.keys(embolsadas).map(Number).sort((a, b) => a - b)
   return {
+    // eventId único para la corrección (requerido por backend)
+    eventId: `CORRECCION:${Date.now()}`,
     jugadorId,
     primeraBolaTocada: primeraBola,
     bolasEmbolsadas: numeros,
     troneras: numeros.map((n) => embolsadas[n]),
     duracionSegundos: 5,
     motivo,
+    versionEsperada // Obligatorio para validación de concurrencia
   }
 }

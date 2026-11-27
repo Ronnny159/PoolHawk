@@ -59,19 +59,25 @@ const guardar = async () => {
       jugadorId: jugadorId.value,
       primeraBola: primeraBola.value === '' ? null : Number(primeraBola.value),
       embolsadas: embolsadas.value,
-      motivo: motivo.value.trim()
+      motivo: motivo.value.trim(),
+      versionEsperada: props.partida.cantidadTiros // Obligatorio para optimistic locking
     })
-    toast.success('Tiro corregido')
+    toast.success('Tiro corregido correctamente')
     emit('corregido')
     emit('cerrar')
   } catch (error) {
     const estado = error.response?.status
+    const mensaje = error.response?.data?.message || error.message
     if (estado === 404 || estado === 405) {
       toast.error('El servidor aún no tiene habilitada la corrección de tiros')
     } else if (estado === 401 || estado === 403) {
       toast.error('No tienes permiso para corregir tiros')
+    } else if (estado === 409) {
+      toast.error('Conflicto: ' + mensaje)
+    } else if (estado === 400) {
+      toast.error('Datos inválidos: ' + mensaje)
     } else {
-      toast.error('No se pudo guardar la corrección')
+      toast.error('No se pudo guardar la corrección: ' + mensaje)
     }
   } finally {
     enviando.value = false

@@ -27,9 +27,10 @@ export async function uploadVideo(file, onProgress = null) {
   formData.append('file', file)
 
   const config = {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
+    // Timeout de 120 segundos para videos grandes
+    timeout: 120000,
+    // No establecer Content-Type manualmente; Axios lo hace automáticamente con FormData
+    // incluyendo el boundary necesario
   }
 
   if (onProgress) {

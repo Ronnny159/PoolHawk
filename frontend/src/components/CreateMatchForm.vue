@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { crearPartida } from '../api/matches'
+import CameraSelectionModal from './CameraSelectionModal.vue'
 
 const emit = defineEmits(['partidaIniciada'])
 
@@ -16,6 +17,10 @@ const jugador4 = ref('')
 
 const cargando = ref(false)
 const error = ref('')
+
+// Estado para el modal de selección de cámara
+const mostrarModalCamara = ref(false)
+const partidaCreada = ref(null)
 
 const medidasMesa = {
   '7': { ancho: 198, alto: 99 },
@@ -70,12 +75,22 @@ const crear = async () => {
       altoMesa: medidas.alto
     })
 
-    emit('partidaIniciada', partida)
+    // Guardar la partida creada y mostrar modal de cámara
+    partidaCreada.value = partida
+    mostrarModalCamara.value = true
+    
   } catch (e) {
     error.value = e.response?.data?.message || e.message
   } finally {
     cargando.value = false
   }
+}
+
+const alSeleccionarCamara = (datos) => {
+  // Emitir la partida creada junto con la config de cámara
+  emit('partidaIniciada', { ...partidaCreada.value, cameraConfig: datos.config })
+  mostrarModalCamara.value = false
+  partidaCreada.value = null
 }
 </script>
 
@@ -208,6 +223,13 @@ const crear = async () => {
         {{ cargando ? 'CREANDO...' : 'INICIAR PARTIDA' }}
       </button>
     </div>
+
+    <!-- Modal de selección de cámara -->
+    <CameraSelectionModal
+      v-model="mostrarModalCamara"
+      :match-id="partidaCreada?.id"
+      @camaraSeleccionada="alSeleccionarCamara"
+    />
   </div>
 </template>
 
