@@ -1,1 +1,9 @@
-{"eventId":"CORRECCION:1234567890","jugadorId":"6e128b72-675e-414e-82fd-15d915974df3","primeraBolaTocada":1,"bolasEmbolsadas":[1,9],"troneras":["TOP_LEFT","BOTTOM_RIGHT"],"duracionSegundos":5,"versionEsperada":1}
+{
+    "eventId":"CORRECCION:1234567890",
+    "jugadorId":"6e128b72-675e-414e-82fd-15d915974df3",
+    "primeraBolaTocada":1,
+    "bolasEmbolsadas":[1,9],
+    "troneras":["TOP_LEFT","BOTTOM_RIGHT"],
+    "duracionSegundos":5,
+    "versionEsperada":1
+}

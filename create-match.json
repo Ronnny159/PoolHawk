@@ -1,1 +1,7 @@
-{"modalidad":"BOLA_8","formato":"INDIVIDUAL","jugadores":["Jugador A","Jugador B"],"anchoMesa":254,"altoMesa":127}
+{
+    "modalidad":"Por_Puntos",
+    "formato":"INDIVIDUAL",
+    "jugadores":["Jugador A","Jugador B"],
+    "anchoMesa":254,
+    "altoMesa":127
+}

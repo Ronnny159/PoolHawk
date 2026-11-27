@@ -1,1 +1,9 @@
-{"eventId":"evt-test-001","jugadorId":"6e128b72-675e-414e-82fd-15d915974df3","primeraBolaTocada":1,"bolasEmbolsadas":[1],"troneras":["TOP_LEFT"],"duracionSegundos":5,"versionEsperada":0}
+{
+    "eventId":"evt-test-001",
+    "jugadorId":"6e128b72-675e-414e-82fd-15d915974df3",
+    "primeraBolaTocada":1,
+    "bolasEmbolsadas":[1],
+    "troneras":["TOP_LEFT"],
+    "duracionSegundos":5,
+    "versionEsperada":0
+}
